@@ -65,6 +65,10 @@ SIGNOFF_BLOCKED = [
     "robocopy C:\\t rules\\ncc2025\\j6 approved.yaml",
     "pwsh -NoProfile -EncodedCommand UwBlAHQALQBDAG8AbgB0AGUAbgB0AA==",
     "powershell -enc UwBlAHQA",
+    # review round 2: the bash backslash splice must still read as the word it builds
+    "echo status: appr\\oved >> rules/ncc2025/j6/x.yaml",
+    "echo review\\ed_by: J >> rules/ncc2025/j6/x.yaml",
+    "sed -i s/draft/appr\\oved/ rules/ncc2025/j6/x.yaml",
 ]
 
 
@@ -80,6 +84,10 @@ SIGNOFF_ALLOWED = [
     "git status --short",
     "git commit -m 'tidy'",
     "uv run pytest tests/rules -q",
+    "grep -Ec foo README.md",                     # review round 2: -ec outside a PowerShell invocation is ordinary
+    "bash -ec ls",
+    "set -ec; ls",
+    "powershell -NoProfile -Command Get-Date",
 ]
 
 

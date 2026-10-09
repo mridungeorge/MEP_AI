@@ -21,7 +21,7 @@ ALL_CHECKS = {
     "input_files", "spec_readable", "step_solid", "step_planar_faces", "step_length", "step_vertex_count",
     "step_inlet_cap", "step_outlet_cap", "step_outlet_offset", "step_bbox_xy", "dxf_loads", "dxf_layers",
     "dxf_units", "dxf_entities", "cut_closed_single", "cut_no_zero_length", "cut_no_self_intersection",
-    "net_connected", "net_no_self_intersection", "edge_lengths_match_3d", "rulings_on_net",
+    "net_connected", "net_no_self_intersection", "edge_lengths_match_3d", "rulings_on_net", "net_handedness",
     "net_area_matches_lateral_area", "net_inlet_perimeter",
     "net_outlet_perimeter", "seam_allowance", "connection_allowance", "title_block",
 }

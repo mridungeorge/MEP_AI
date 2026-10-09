@@ -1,6 +1,7 @@
 # Status
 
-Sprint: 2 (prove the data) built; review round 3 blocker fixed but not re-reviewed; local gate green. Sprints 0 and 1 closed on the local Linux gate (see Tags); GitHub CI still pending, no remote.
+Sprint: 2 (prove the data) rebuilt and finished after the 2026-10-09 recovery; two review rounds done (see "Sprint 2 finish");
+local devcontainer gate is the reference (tag `sprint-2-gate`). GitHub CI has never run (no remote CI evidence).
 Updated: 2026-10-09 (recovery after a device change; see "Recovery 2026-10-09")
 
 ## Recovery 2026-10-09
@@ -28,6 +29,38 @@ Updated: 2026-10-09 (recovery after a device change; see "Recovery 2026-10-09")
   done as root had it, and copying that `node_modules` into the clean checkout worked.
 - **Host note:** the Claude Stop hook runs the host Python 3.14 (no uv/pint), so it reports a false failure outside the
   devcontainer. The devcontainer is the gate environment.
+
+## Sprint 2 finish (2026-10-09, after the recovery)
+Rebuilt because the snapshot did not hold it. Reviewed in two rounds by the adversarial reviewer (round 1: no blockers, ten
+should-fix; round 2: no blockers, four should-fix, all fixed; the fixes in the last commit before the tag have had no third review).
+- **Hooks:** every hook that matches Bash also matches PowerShell (`Bash|PowerShell`); the sign-off guard reads a command two ways
+  (backslash deleted for bash, backslash as a path separator for Windows) and knows the PowerShell and .NET write verbs;
+  `-EncodedCommand` to a PowerShell invocation is blocked; the shared-database guard also blocks any `supabase_db*` container and
+  `PGPORT`. `tests/rules/test_hooks_powershell.py` runs both guards on blocked and benign commands (a crashing hook fails the
+  benign ones). Still tripwires, not locks: string concatenation and variable indirection get through.
+- **Sign-off base:** `scripts/check_signoff_changes.py --base-tag` (newest `*-gate` or `restore-*` tag that is an ancestor of
+  HEAD, fail closed with none) runs in `ci.sh` and in the CI `signoff` job on every push. **Open:** anyone who can push a tag with such a
+  name moves the base forward and empties the diff. Needs GitHub tag protection (a ruleset on `*-gate` and `restore-*`) before CI is relied on.
+- **Database:** migration 0005 adds `system.tag`; `gate1_confirm(kind, ids, revision)` now writes the ledger row in the same
+  transaction and checks the rows belong to the revision it ledgers; a client may keep a provenance label only while the value
+  and unit it describes are unchanged. `apps/api/mep/api/pg.py` implements both repositories as the signed-in user
+  (`set local role authenticated` + JWT claims), so RLS and the triggers apply; an Excel import is the one write that is
+  'extracted', so it goes through the service connection after the designer check, scoped to the user's firm and revision.
+- **Confirmation:** one transaction for all kinds; each row names the etag (hash of its confirmable columns) the designer was shown and a
+  changed row is refused; Gate 1 inputs get the schedule's checks (name in the edition, pint unit conversion, system type domain);
+  an edit withdraws the confirmation and keeps `extracted` on untouched values; the IFC GUID is never client-writable.
+- **Auth:** `mep/api/auth.py` verifies HS256 tokens (exp, aud, sub required) and reads firm and role from `app_user`; the public
+  Supabase demo secret is refused unless `MEP_ALLOW_DEMO_JWT_SECRET=1`.
+- **Rule assignment:** `engine/assignment.py` assigns a system the selected rules whose own YAML names its type, from the CONFIRMED
+  `system_type` input; rules naming no system type are listed as unassigned in the report.
+- **UI + e2e:** Confirm for project facts, building parts, spaces and schedule rows (designer only; the server enforces it and
+  ledgers it), report view with the DRAFT banner, citations, causes and unassigned rules. Playwright (`pnpm --filter @mep/web run e2e`) runs a real Next build,
+  the real API on the local Supabase and Chromium: IFC -> health score -> confirm everything -> cited DRAFT report, and for each of
+  project facts / building part / space / schedule row one unconfirmed item blocks the run (API 409 with the engine's code) until confirmed.
+  The web app is pinned to TypeScript 5.9 (Next 14 cannot load TypeScript 7) and `@/` is aliased in `next.config.mjs`.
+- **Known limits:** the e2e uses one representative row per kind and a single designer (no checker path in the browser); the schedule
+  has no UI to create a system (import or API); `etag` ignores `project.building_class` (the run requires building parts anyway);
+  the web token lives in localStorage.
 
 ## Gate record
 - 2026-10-07: **local Linux gate passed, GitHub CI pending.** `scripts/ci.sh` ran green inside the devcontainer
@@ -103,23 +136,22 @@ Updated: 2026-10-09 (recovery after a device change; see "Recovery 2026-10-09")
   part withdraws every part confirmation; the API shows the project facts, derives facts provenance from the recorded
   confirmation and refuses a missing approval date. **These round-3 fixes have NOT had a confirming review** (stopped on
   the user's request to limit token use); the next session should run one before relying on them.
-- Open from round 3 (deferred): the PreToolUse hooks match only `Bash` and `Edit|Write|MultiEdit`, so a PowerShell tool call
-  bypasses guard_signoff_bash and guard_review_db (needs a settings.json decision by the user); the CI `signoff` job is
-  skipped on a direct push to main (needs branch protection); the Bash hook stays a text heuristic (a post-command diff
-  check would be stronger); several false positives on read-only commands; `invalid_data` reasons include exception text.
-- Open should-fix from round 2 (deferred): confirm-by-id has no version check, so a confirmation can land on a value
-  changed after the designer's GET (S3); the DB guards decide "client" by `current_user in (anon, authenticated)`, so a
-  login role that inherits authenticated without `set role` is not covered (S4, not reachable via PostgREST);
-  `space`/`system`/`equipment` writes (0001 policies) are still open to checker/approver and `system` rows have no
-  confirmation tracking (S8); the DXF extents check is skipped when the bounding box fails and label/polyline counts are
-  uncapped (S7); an override together with an unknown rule is not audited (S6); the Bash hook is a heuristic; the web UI
-  has no Confirm for building parts or project facts yet (the server refuses the run with `gate1_required` and the UI
-  shows it); no DB-backed repositories exist yet (test fakes only), so system-to-rules/part mapping is unbuilt.
+- Round 3 / round 2 items that the 2026-10-09 finish ADDRESSED (details in "Sprint 2 finish"): PowerShell coverage of the hooks;
+  CI `signoff` job on pushes to main; confirm-by-id without a version check (now an etag per row); DB-backed repositories and
+  system-to-rule assignment; Confirm for building parts and project facts in the UI.
+- Still open from before: the Bash/PowerShell hooks remain text heuristics (a post-command diff check would be stronger);
+  the DB guards decide "client" by `current_user in (anon, authenticated)`, so a login role that inherits authenticated
+  without `set role` is not covered (not reachable via PostgREST); `space`/`system`/`equipment` writes (0001 policies) are
+  still open to checker/approver (the new provenance trigger limits what they can label, not whether they can write);
+  the DXF extents check is skipped when the bounding box fails and label/polyline counts are uncapped; an override
+  together with an unknown rule is not audited; `invalid_data` reasons include exception text.
 - Decisions for the engineer: (1) a mixed-use run refuses wholesale if any part is refused: should allowed parts run?
   (2) system_input `dimensionless` unit convention; (3) pilot-firm Revit/Archicad exports needed to verify profiles and
   measure real accuracy; (4) the real PDF vision model/renderer to wire (pypdf cannot rasterise pages).
-- Not built (deferred): DB-backed repositories for the Gate 1 and schedule APIs (routers take an injected repository),
-  authentication wiring, ceiling-void sources in the profiles, legacy POLYLINE/HATCH in DXF, IFC zip.
+- Not built (deferred): sign-in screen and token issuing (the API verifies Supabase-style HS256 tokens; the web app reads one
+  from localStorage `mep_access_token`), multi-part mapping (a system cannot yet name its building part, so a project with
+  more than one part refuses to run), ceiling-void sources in the profiles, legacy POLYLINE/HATCH in DXF, IFC zip, an upload
+  endpoint for IFC/DXF (ingest runs through `store_ingest`; the e2e seeds it that way).
 
 ## Tags (what each points at, and what passed the Linux/3.12 gate)
 - `sprint-0` and `sprint-1` both point at `c0a62ee`: this commit **passed** the Linux gate (earlier run, 2026-10-07).

@@ -206,3 +206,64 @@ def test_a_failed_publish_leaves_no_partial_output(tmp_path):
     r = _run_cli(good, out, "0")
     assert r.returncode == 4, r.stderr
     assert sorted(p.name for p in out.iterdir()) == ["O-01.dxf"]
+
+
+# ---- review round 2 fixes: NaN, nesting, readable text, a failed rebuild keeps the last good build --------------------
+@pytest.mark.parametrize("field", ["sheet_thickness_mm", "geometry.width_mm", "geometry.offset_x_mm", "seam.allowance_mm"])
+def test_nan_and_infinity_are_refused_as_a_rejected_spec(build_mod, field):
+    spec = _spec("rect_offset")
+    target = spec
+    *path, last = field.split(".")
+    for key in path:
+        target = target[key]
+    target[last] = float("nan")
+    with pytest.raises(build_mod.SpecError, match="not a number"):
+        build_mod.normalise_spec(spec)
+
+
+def test_nan_and_deep_nesting_in_the_json_file_exit_2(tmp_path):
+    for name, text in (("nan.json", '{"spec_version": "1", "sheet_thickness_mm": NaN}'),
+                       ("inf.json", '{"sheet_thickness_mm": Infinity}'),
+                       ("deep.json", "[" * 100000)):
+        f = tmp_path / name
+        f.write_text(text, encoding="utf-8")
+        r = _run_cli(f, tmp_path / "out", "0")
+        assert r.returncode == 2 and "Traceback" not in r.stderr, (name, r.stderr[-300:])
+
+
+def test_a_thickness_that_would_print_as_zero_is_refused(build_mod):
+    spec = _spec("rect_offset")
+    spec["sheet_thickness_mm"] = 1e-7
+    with pytest.raises(build_mod.SpecError, match="sheet_thickness_mm"):
+        build_mod.normalise_spec(spec)
+
+
+@pytest.mark.parametrize("bad", [chr(0x202E), chr(0x2028), chr(0x200B), chr(0xFEFF)])
+def test_invisible_and_direction_override_characters_are_refused_in_free_text(build_mod, bad):
+    spec = _spec("rect_offset")
+    spec["material"] = "GALV" + bad
+    with pytest.raises(build_mod.SpecError, match="material"):
+        build_mod.normalise_spec(spec)
+
+
+def test_a_failed_rebuild_puts_the_previous_build_back(build_mod, tmp_path, monkeypatch):
+    out = tmp_path / "out"
+    first = build_mod.build(_spec("rect_offset"), out)
+    before = {p.name: p.read_bytes() for p in out.iterdir()}
+    assert sorted(before) == ["O-01.dxf", "O-01.step", "manifest.json"]
+    real_replace = os.replace
+
+    def failing(src, dst):                       # the DXF cannot be moved into place (for example the disk is full)
+        if str(dst).endswith("O-01.dxf") and ".stage." in str(src):
+            raise OSError(28, "No space left on device")
+        return real_replace(src, dst)
+
+    monkeypatch.setattr(os, "replace", failing)
+    spec = _spec("rect_offset")
+    spec["geometry"]["length_mm"] += 100         # a different build, so a mix of old and new files would show
+    with pytest.raises(OSError):
+        build_mod.build(spec, out)
+    monkeypatch.undo()
+    after = {p.name: p.read_bytes() for p in out.iterdir()}
+    assert after == before                       # the last good build is intact; no stage or backup files left over
+    assert json.loads(after["manifest.json"])["spec_sha256"] == first["spec_sha256"]

@@ -14,6 +14,7 @@ import copy
 import importlib.util
 import json
 import math
+import os
 import sys
 import tempfile
 from importlib import metadata
@@ -63,6 +64,7 @@ def load_schema() -> dict[str, Any]:
 
 def normalise_spec(spec: dict[str, Any]) -> dict[str, Any]:
     """Validate against the schema, apply defaults, run the semantic checks. Returns a new dict."""
+    _require_finite(spec)
     errors = sorted(jsonschema.Draft202012Validator(load_schema()).iter_errors(spec), key=lambda e: list(e.path))
     if errors:
         raise SpecError("; ".join(f"{'/'.join(map(str, e.path)) or '<root>'}: {e.message}" for e in errors))
@@ -82,6 +84,20 @@ def normalise_spec(spec: dict[str, Any]) -> dict[str, Any]:
     elif kind == "rect_offset" and abs(g["offset_x_mm"]) < DEGENERATE_MM and abs(g["offset_y_mm"]) < DEGENERATE_MM:
         raise SpecError("offset is zero in both directions: this is a straight duct, not an offset")
     return out
+
+
+def _require_finite(node: Any, path: str = "<root>", depth: int = 0) -> None:
+    """NaN and Infinity pass the JSON Schema range checks and would reach the title block and the manifest."""
+    if depth > 20:
+        raise SpecError(f"{path}: nested too deeply")
+    if isinstance(node, float) and not math.isfinite(node):
+        raise SpecError(f"{path}: {node} is not a number a spec card may hold")
+    if isinstance(node, dict):
+        for k, v in node.items():
+            _require_finite(v, f"{path}/{k}", depth + 1)
+    elif isinstance(node, list):
+        for i, v in enumerate(node):
+            _require_finite(v, f"{path}/{i}", depth + 1)
 
 
 def alignment_offset(g: dict[str, Any]) -> tuple[float, float]:
@@ -344,18 +360,43 @@ def build(spec_in: dict[str, Any], out_dir: Path) -> dict[str, Any]:
 
 
 def _publish(out_dir: Path, files: list[tuple[str, bytes]]) -> None:
-    """Write the files one by one (each atomically, the manifest last). If any write fails, the files this call already
-    put there are removed again, so an output folder never holds half a build."""
+    """Stage every file next to its destination, then move them into place (the manifest last). If anything fails, the files
+    this call placed are removed and the previous build's files are put back: the folder never holds half of a build, and a
+    failed rebuild never destroys the last good one."""
     out_dir.mkdir(parents=True, exist_ok=True)
-    done: list[Path] = []
+    staged: list[tuple[Path, Path]] = []
+    backups: list[tuple[Path, Path]] = []
+    placed: list[Path] = []
     try:
         for name, data in files:
-            cadkit.write_atomic(out_dir / name, data)
-            done.append(out_dir / name)
+            final = out_dir / name
+            if final.exists() and not final.is_file():
+                raise OSError(f"{final} exists and is not a file")
+            fd, tmp = tempfile.mkstemp(dir=out_dir, prefix=name + ".stage.")
+            with os.fdopen(fd, "wb") as fh:
+                fh.write(data)
+            staged.append((final, Path(tmp)))
+        for final, tmp in staged:
+            if final.exists():
+                backup = final.with_name(final.name + ".previous")
+                os.replace(final, backup)
+                backups.append((final, backup))
+            os.replace(tmp, final)
+            placed.append(final)
     except BaseException:
-        for p in done:
-            p.unlink(missing_ok=True)
+        for final in placed:
+            final.unlink(missing_ok=True)
+        for final, backup in backups:
+            os.replace(backup, final)
+        for _, tmp in staged:
+            tmp.unlink(missing_ok=True)
         raise
+    for _, backup in backups:
+        backup.unlink(missing_ok=True)
+
+
+def _reject_constant(name: str) -> None:
+    raise ValueError(f"{name} is not allowed in a spec card")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -364,8 +405,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", required=True, type=Path)
     args = ap.parse_args(argv)
     try:
-        spec = json.loads(args.spec.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as exc:        # includes JSONDecodeError and bad UTF-8
+        spec = json.loads(args.spec.read_text(encoding="utf-8"), parse_constant=_reject_constant)
+    except (OSError, ValueError, RecursionError) as exc:        # includes JSONDecodeError, bad UTF-8, NaN, deep nesting
         print(f"spec rejected: {exc}", file=sys.stderr)
         return 2
     try:

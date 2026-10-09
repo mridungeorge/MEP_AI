@@ -14,7 +14,7 @@ import copy
 import hashlib
 import json
 import math
-import re
+from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -28,6 +28,10 @@ TOUCH_MM = 1e-4  # non-adjacent segments closer than this are touching
 PARALLEL_SIN = 1e-4  # sin of the angle below which two segments are parallel
 APPID = "MEPFAB"
 LAYERS = ("CUT", "BEND", "ANNOTATION")
+LAYER_STYLE = {"CUT": (1, "CONTINUOUS"), "BEND": (5, "DASHED"), "ANNOTATION": (3, "CONTINUOUS")}  # ACI colour, linetype
+TITLES = {"rect_to_round": "RECTANGULAR TO ROUND TRANSITION", "rect_reducer": "RECTANGULAR REDUCER",
+          "rect_offset": "RECTANGULAR OFFSET"}
+MIN_TEXT_HEIGHT_MM = 1.0
 ROLES = ("inlet", "outlet", "seam_start", "seam_end", "ruling")
 
 Pt = tuple[float, float]
@@ -224,6 +228,7 @@ class _Step:
     vertices: list[tuple[float, float, float]]
     edge_lengths: list[float]
     lateral_area: float
+    edges: list[tuple[tuple[float, float, float], tuple[float, float, float]]] = field(default_factory=list)
 
 
 @dataclass
@@ -276,6 +281,8 @@ def _read_step(path: Path) -> _Step:
         vertices=pts,
         edge_lengths=[float(e.Length()) for e in solid.Edges()],
         lateral_area=lateral,
+        edges=[((float(e.startPoint().x), float(e.startPoint().y), float(e.startPoint().z)),
+                (float(e.endPoint().x), float(e.endPoint().y), float(e.endPoint().z))) for e in solid.Edges()],
     )
 
 
@@ -302,6 +309,7 @@ class _Dxf:
             s, t = e.dxf.start, e.dxf.end
             self.bend.append(_BendLine((float(s.x), float(s.y)), (float(t.x), float(t.y)), role, index))
         self.texts = [str(e.dxf.text) for e in msp.query("TEXT") if e.dxf.layer == "ANNOTATION"]
+        self.text_heights = [float(e.dxf.height) for e in msp.query("TEXT") if e.dxf.layer == "ANNOTATION"]
 
     def cut_polyline(self) -> Any:
         if len(self.cut_entities) != 1 or self.cut_entities[0].dxftype() != "LWPOLYLINE":
@@ -527,25 +535,62 @@ def chk_dxf_loads(ctx: _Ctx) -> Outcome:
 
 
 def chk_dxf_layers(ctx: _Ctx) -> Outcome:
-    have = ctx.dxf.layers
-    missing = [name for name in LAYERS if name not in have]
-    return not missing, list(LAYERS), {"missing": missing}
+    doc = ctx.dxf.doc
+    problems: list[str] = []
+    for name in LAYERS:
+        if name not in ctx.dxf.layers:
+            problems.append(f"{name}: missing")
+            continue
+        layer = doc.layers.get(name)
+        colour, linetype = LAYER_STYLE[name]
+        if layer.dxf.color != colour or str(layer.dxf.linetype).upper() != linetype:
+            problems.append(f"{name}: colour/linetype {layer.dxf.color}/{layer.dxf.linetype}, expected {colour}/{linetype}")
+        if not layer.is_on() or layer.is_frozen():
+            problems.append(f"{name}: switched off or frozen")
+    return not problems, {name: LAYER_STYLE[name] for name in LAYERS}, {"problems": problems}
+
+
+def chk_dxf_units(ctx: _Ctx) -> Outcome:
+    header = ctx.dxf.doc.header
+    units, measurement = header.get("$INSUNITS"), header.get("$MEASUREMENT")
+    return units == 4 and measurement == 1, "$INSUNITS = 4 (millimetres), $MEASUREMENT = 1 (metric)", {
+        "insunits": units, "measurement": measurement}
 
 
 ALLOWED_ENTITIES = {("BEND", "LINE"), ("CUT", "LWPOLYLINE"), ("ANNOTATION", "LINE"), ("ANNOTATION", "TEXT"),
                     ("ANNOTATION", "LWPOLYLINE")}
 
 
-def chk_dxf_units(ctx: _Ctx) -> Outcome:
-    units = ctx.dxf.doc.header.get("$INSUNITS")
-    return units == 4, "$INSUNITS = 4 (millimetres)", {"insunits": units}
-
-
 def chk_dxf_entities(ctx: _Ctx) -> Outcome:
-    """Nothing on the sheet but what the skill draws: a stray circle or a line on layer 0 would reach the shop."""
-    found = sorted({(str(e.dxf.layer), e.dxftype()) for e in ctx.dxf.doc.modelspace()})
-    extra = [f"{layer}:{kind}" for layer, kind in found if (layer, kind) not in ALLOWED_ENTITIES]
-    return not extra, "only BEND lines, one CUT polyline and ANNOTATION lines/text", {"unexpected": extra}
+    """Nothing on the sheet but what the skill draws, drawn where it says: no stray entity, no second outline, no entity
+    that CAD would draw somewhere else (extrusion, elevation, arcs) or in another colour/linetype than its layer."""
+    doc = ctx.dxf.doc
+    problems: list[str] = []
+    kinds = Counter()
+    for e in doc.modelspace():
+        layer, kind = str(e.dxf.layer), e.dxftype()
+        kinds[(layer, kind)] += 1
+        if (layer, kind) not in ALLOWED_ENTITIES:
+            problems.append(f"{layer}:{kind} is not allowed")
+            continue
+        if tuple(float(v) for v in e.dxf.get("extrusion", (0, 0, 1))) != (0.0, 0.0, 1.0):
+            problems.append(f"{layer}:{kind} has a non-default extrusion (CAD would mirror it)")
+        if (e.dxf.get("color", 256) != 256 or str(e.dxf.get("linetype", "BYLAYER")).upper() != "BYLAYER"
+                or e.dxf.get("lineweight", -1) != -1 or abs(float(e.dxf.get("thickness", 0.0))) > 1e-9):
+            problems.append(f"{layer}:{kind} overrides its layer's colour, linetype, lineweight or thickness")
+        if kind == "LINE" and (abs(float(e.dxf.start.z)) > 1e-9 or abs(float(e.dxf.end.z)) > 1e-9):
+            problems.append(f"{layer}:LINE is not at z = 0")
+        if kind == "LWPOLYLINE":
+            if abs(float(e.dxf.get("elevation", 0.0))) > 1e-9:
+                problems.append(f"{layer}:LWPOLYLINE has an elevation")
+            if any(abs(float(p[2])) > 1e-12 for p in e.get_points("xyb")):
+                problems.append(f"{layer}:LWPOLYLINE has arc segments (bulge)")
+    if kinds[("ANNOTATION", "LWPOLYLINE")] > 1:
+        problems.append("more than one closed outline on ANNOTATION (only the title frame is expected)")
+    for layout in doc.layouts:
+        if layout.name != "Model" and len(layout) > 0:
+            problems.append(f"paper space layout {layout.name!r} holds entities")
+    return not problems, "only the entities the skill draws, in model space, on their layers", {"problems": problems[:10]}
 
 
 def chk_cut_closed_single(ctx: _Ctx) -> Outcome:
@@ -611,21 +656,83 @@ def chk_edge_lengths(ctx: _Ctx) -> Outcome:
                      "seam_start_vs_end_mm": _r(seam_dev)}
 
 
-def chk_rulings_on_net(ctx: _Ctx) -> Outcome:
-    """Fold lines are the shop instruction: each ruling must join a vertex of the inlet chain to a vertex of the outlet
-    chain of the net outline (the lengths alone cannot tell a fold line moved sideways from a correct one)."""
+def _snap(pt: Pt, pts: list[Pt]) -> int | None:
+    best = min(range(len(pts)), key=lambda i: _len(_sub(pt, pts[i])))
+    return best if _len(_sub(pt, pts[best])) <= TOL_MM else None
+
+
+def _ruling_pairs(ctx: _Ctx) -> tuple[list[tuple[int, int, float]], list[int | None], int, int]:
+    """Each ruling as (inlet vertex index, outlet vertex index, length); the lines that join no such pair; the chain sizes."""
     net = ctx.net_strict
     inlet = [ln.p for ln in net.inlet] + [net.inlet[-1].q]
     outlet = [ln.p for ln in net.outlet] + [net.outlet[-1].q]
+    pairs: list[tuple[int, int, float]] = []
+    bad: list[int | None] = []
+    for ln in (x for x in ctx.dxf.bend if x.role == "ruling"):
+        a_in, a_out, b_in, b_out = _snap(ln.p, inlet), _snap(ln.p, outlet), _snap(ln.q, inlet), _snap(ln.q, outlet)
+        if a_in is not None and b_out is not None:
+            pairs.append((a_in, b_out, ln.length))
+        elif a_out is not None and b_in is not None:
+            pairs.append((b_in, a_out, ln.length))
+        else:
+            bad.append(ln.index)
+    return pairs, bad, len(inlet), len(outlet)
 
-    def near(pt: Pt, pts: list[Pt]) -> bool:
-        return any(_len(_sub(pt, q)) <= TOL_MM for q in pts)
 
-    rulings = [ln for ln in ctx.dxf.bend if ln.role == "ruling"]
-    bad = [ln.index for ln in rulings
-           if not ((near(ln.p, inlet) and near(ln.q, outlet)) or (near(ln.p, outlet) and near(ln.q, inlet)))]
-    return not bad, "every ruling joins an inlet vertex to an outlet vertex of the net", {
-        "rulings": len(rulings), "misplaced": bad[:10]}
+def chk_rulings_on_net(ctx: _Ctx) -> Outcome:
+    """Fold lines are the shop instruction. Each must join an inlet vertex to an outlet vertex of the net outline, no two may
+    join the same pair (a fold drawn twice hides a fold left out), every vertex must carry one, and none may cross."""
+    pairs, bad, n_in, n_out = _ruling_pairs(ctx)
+    net = ctx.net_strict
+    inlet = [ln.p for ln in net.inlet] + [net.inlet[-1].q]
+    outlet = [ln.p for ln in net.outlet] + [net.outlet[-1].q]
+    keys = Counter((i, j) for i, j, _ in pairs)
+    duplicated = sorted(k for k, c in keys.items() if c > 1)
+    used_in = {i for i, _, _ in pairs} | {0, n_in - 1}          # the seam lines carry the two end vertices
+    used_out = {j for _, j, _ in pairs} | {0, n_out - 1}
+    unused = [("inlet", i) for i in range(n_in) if i not in used_in] + [("outlet", j) for j in range(n_out) if j not in used_out]
+    crossing = []
+    for a in range(len(pairs)):
+        for b in range(a + 1, len(pairs)):
+            (i1, j1, _), (i2, j2, _) = pairs[a], pairs[b]
+            if i1 == i2 or j1 == j2:
+                continue
+            p, q, r, t = inlet[i1], outlet[j1], inlet[i2], outlet[j2]
+            if _orient(p, q, r) * _orient(p, q, t) < 0 and _orient(r, t, p) * _orient(r, t, q) < 0:
+                crossing.append([(i1, j1), (i2, j2)])
+    ok = not (bad or duplicated or unused or crossing)
+    return ok, "every ruling joins its own inlet vertex to an outlet vertex; none repeated, missing or crossing", {
+        "rulings": len(pairs), "misplaced": bad[:10], "duplicated": duplicated[:10], "vertices_without_fold": unused[:10],
+        "crossing": crossing[:5]}
+
+
+def chk_net_handedness(ctx: _Ctx) -> Outcome:
+    """The pattern is drawn as seen from outside: going round the net (inlet left to right) is counter-clockwise, and the
+    fold lines at each inlet corner must be the ones the solid has at the same corner. A mirrored drawing fails
+    whenever the fitting is not mirror-symmetric (an offset, for example), and that part would fold up the wrong hand."""
+    net, step = ctx.net_strict, ctx.solid_ok
+    area = _signed_area(net.polygon)
+    pairs, _, n_in, _ = _ruling_pairs(ctx)
+    last = n_in - 1
+    seam = net.seam_start.length
+    net_sig: dict[int, list[float]] = {k: [] for k in range(4)}
+    for i, _, length in pairs:
+        net_sig[0 if i in (0, last) else i].append(length)
+    net_sig[0].append(seam)
+    solid_sig: dict[int, list[float]] = {k: [] for k in range(4)}
+    for a, b in step.edges:
+        if abs(a[2] - b[2]) < 1e-3:
+            continue
+        low = a if a[2] < b[2] else b
+        corner = 0 if (low[0] > 0 and low[1] > 0) else 1 if (low[0] < 0 and low[1] > 0) else 2 if (low[0] < 0 and low[1] < 0) else 3
+        solid_sig[corner].append(math.dist(a, b))
+    mismatched = []
+    for k in range(4):
+        x, y = sorted(net_sig[k]), sorted(solid_sig[k])
+        if len(x) != len(y) or any(abs(u - v) > TOL_MM for u, v in zip(x, y, strict=True)):
+            mismatched.append(k)
+    return area > 0 and not mismatched, "counter-clockwise net; folds at corners 0-3 match the solid's edges", {
+        "signed_area_mm2": _r(area, 1), "corners_that_differ": mismatched}
 
 
 def chk_net_area(ctx: _Ctx) -> Outcome:
@@ -731,6 +838,13 @@ def chk_connection_allowance(ctx: _Ctx) -> Outcome:
         "segments_without_offset_edge": missing}
 
 
+def _as_float(text: str) -> float | None:
+    try:
+        return float(text)
+    except ValueError:
+        return None
+
+
 def chk_title_block(ctx: _Ctx) -> Outcome:
     spec = ctx.spec
     g, kind = spec["geometry"], spec["fitting"]
@@ -745,23 +859,28 @@ def chk_title_block(ctx: _Ctx) -> Outcome:
     else:
         size = f"SIZE: {_num(g['width_mm'])} x {_num(g['height_mm'])}  LENGTH: {_num(g['length_mm'])}"
         extra = f"OFFSET: X {_num(g['offset_x_mm'])} Y {_num(g['offset_y_mm'])}"
-    wanted = {
-        "size": size,
-        "extra": extra,
-        "units": "UNITS: mm   VIEW: OUTSIDE   DEVELOPMENT: TRIANGULATION",
-        "scope": "GEOMETRY ONLY - NOT A COMPLIANCE CHECK",
-        "mark": f"MARK: {spec['mark']}",
-        "thickness": f"SHEET t={_num(spec['sheet_thickness_mm'])} mm",
-        "seam": f"SEAM: {spec['seam']['type']} +{_num(spec['seam']['allowance_mm'])} mm",
-        "connection": f"CONN: {spec['connection']['type']} +{_num(spec['connection']['allowance_mm'])} mm",
-    }
+    sheet = f"SHEET t={_num(spec['sheet_thickness_mm'])} mm" + (f"  MATERIAL: {spec['material']}" if spec.get("material") else "")
+    wanted = [
+        f"{TITLES[kind]}   MARK: {spec['mark']}", size, extra, sheet,
+        f"SEAM: {spec['seam']['type']} +{_num(spec['seam']['allowance_mm'])} mm",
+        f"CONN: {spec['connection']['type']} +{_num(spec['connection']['allowance_mm'])} mm (inlet and outlet)",
+        "UNITS: mm   VIEW: OUTSIDE   DEVELOPMENT: TRIANGULATION", "GEOMETRY ONLY - NOT A COMPLIANCE CHECK",
+    ] + ([f"NOTES: {spec['notes']}"] if spec.get("notes") else [])
     texts = ctx.dxf.texts
-    missing = {}
-    for key, s in wanted.items():
-        pat = re.compile(r"(?<!\S)" + re.escape(s) + r"(?!\S)")
-        if not any(pat.search(t) for t in texts):
-            missing[key] = s
-    return not missing, list(wanted.values()), {"missing": missing, "text_lines": len(texts)}
+    numbers = [v for v in (_as_float(t) for t in texts) if v is not None]
+    lines = [t for t in texts if _as_float(t) is None]
+    problems: dict[str, Any] = {}
+    if sorted(lines) != sorted(wanted):                       # every title line exactly once, nothing else
+        problems["lines"] = {"missing": [w for w in wanted if w not in lines], "unexpected": [t for t in lines if t not in wanted]}
+    cut_pts = ctx.dxf.cut_points()
+    xs, ys = [p[0] for p in cut_pts], [p[1] for p in cut_pts]
+    expected = sorted([max(xs) - min(xs), max(ys) - min(ys), ctx.net_strict.seam_start.length])
+    if len(numbers) != 3 or any(abs(a - b) > 0.06 for a, b in zip(sorted(numbers), expected, strict=True)):
+        problems["dimension_values"] = {"expected": _r(expected, 1), "found": sorted(numbers)}
+    small = [h for h in ctx.dxf.text_heights if h < MIN_TEXT_HEIGHT_MM]
+    if small:
+        problems["unreadable_text_heights"] = small[:5]
+    return not problems, wanted, {"problems": problems, "text_lines": len(texts)}
 
 
 def chk_manifest(ctx: _Ctx, supplied: dict[str, Path]) -> Outcome:
@@ -840,6 +959,7 @@ def validate(spec: dict[str, Any], files: list[Path]) -> ValidationResult:
     run("net_no_self_intersection", TOUCH_MM, lambda: chk_net_self_intersection(ctx))
     run("edge_lengths_match_3d", t, lambda: chk_edge_lengths(ctx))
     run("rulings_on_net", t, lambda: chk_rulings_on_net(ctx))
+    run("net_handedness", t, lambda: chk_net_handedness(ctx))
     run("net_area_matches_lateral_area", "0.1%", lambda: chk_net_area(ctx))
     run("net_inlet_perimeter", t, lambda: chk_inlet_perimeter(ctx))
     run("net_outlet_perimeter", t, lambda: chk_outlet_perimeter(ctx))

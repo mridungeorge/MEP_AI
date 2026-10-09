@@ -396,3 +396,57 @@ def test_gate1_inputs_get_the_same_checks_as_the_schedule(admin, client, pack):
     assert ok.status_code == 200 and ok.json()["unit"] == "K" and ok.json()["provenance"] == "default"
     assert client.post(url, headers=h, json={"system": "no-such", "name": "control_deadband", "value": 3,
                                              "unit": "K"}).status_code == 422
+
+
+# ---- review round 2 fixes ---------------------------------------------------------------------------------------
+
+@pytest.mark.parametrize("role", ["designer", "checker"])
+def test_a_client_cannot_edit_a_value_and_keep_its_old_label(admin, role):
+    f = seed(admin)
+    with psycopg.connect(DB_URL, autocommit=True) as conn:
+        store_ingest(conn, firm_id=f["firm"], revision_id=f["revision"],
+                     result=read_ifc(ROOT / "tests/fixtures/ifc/bsi-arch-ifc4.ifc"))
+    space = admin.execute("select id from space where revision_id = %s limit 1", (f["revision"],)).fetchone()[0]
+    with as_user(f[role]) as cur:                       # a direct write, as supabase-js would do it
+        cur.execute("update space set name = 'renamed' where id = %s", (space,))      # the label is kept: value untouched
+        assert cur.rowcount == 1
+    with as_user(f[role]) as cur, pytest.raises(Exception, match="cannot keep its label"):
+        cur.execute("update space set area_m2_value = 999 where id = %s", (space,))
+    with as_user(f[role]) as cur, pytest.raises(Exception, match="may only be set to default"):
+        cur.execute("update space set area_m2_provenance = 'engineer_confirmed' where id = %s", (space,))
+    with as_user(f[role]) as cur:                       # the honest edit: value and label change together
+        cur.execute("update space set area_m2_value = 999, area_m2_provenance = 'default' where id = %s", (space,))
+        assert cur.rowcount == 1
+
+
+def test_row_versions_differ_when_a_value_moves_between_columns(admin):
+    from mep.api.pg import PgRepository as R
+    f = seed(admin)
+    sid = uid()
+    admin.execute("insert into space (id, firm_id, revision_id, name, use, storey, area_m2_value, area_m2_provenance)"
+                  " values (%s, %s, %s, 'A', NULL, 'L1', 300, 'default')", (sid, f["firm"], f["revision"]))
+    etag = f"select {R._SPACE_ETAG} from space where id = %s"
+    one = admin.execute(etag, (sid,)).fetchone()[0]
+    admin.execute("update space set area_m2_value = NULL, area_m2_provenance = NULL, ceiling_void_mm_value = 300,"
+                  " ceiling_void_mm_provenance = 'default' where id = %s", (sid,))
+    two = admin.execute(etag, (sid,)).fetchone()[0]
+    admin.execute("update space set ceiling_void_mm_value = NULL, ceiling_void_mm_provenance = NULL, name = 'A|B', use = NULL"
+                  " where id = %s", (sid,))
+    three = admin.execute(etag, (sid,)).fetchone()[0]
+    admin.execute("update space set name = 'A', use = 'B' where id = %s", (sid,))
+    four = admin.execute(etag, (sid,)).fetchone()[0]
+    assert len({one, two, three, four}) == 4
+
+
+def test_the_public_demo_jwt_secret_is_refused_unless_explicitly_allowed(monkeypatch):
+    from mep.api.server import DEMO_JWT_SECRET, app_from_env
+    monkeypatch.setenv("MEP_DB_URL", DB_URL)
+    monkeypatch.setenv("MEP_JWT_SECRET", DEMO_JWT_SECRET)
+    monkeypatch.delenv("MEP_ALLOW_DEMO_JWT_SECRET", raising=False)
+    with pytest.raises(RuntimeError, match="public demo secret"):
+        app_from_env()
+    monkeypatch.setenv("MEP_ALLOW_DEMO_JWT_SECRET", "1")
+    assert app_from_env() is not None
+    monkeypatch.setenv("MEP_JWT_SECRET", "a-private-secret-of-at-least-32-bytes!!")
+    monkeypatch.delenv("MEP_ALLOW_DEMO_JWT_SECRET")
+    assert app_from_env() is not None

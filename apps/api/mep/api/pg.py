@@ -111,15 +111,17 @@ class PgRepository:
 
     # `etag` fingerprints the values a designer confirms: a confirmation names the etag it was shown, and the store
     # refuses it if the row has changed since (a stale screen can never confirm a value nobody looked at)
-    _SPACE_ETAG = ("md5(concat_ws('|', ifc_guid, name, use, storey, area_m2_value, ceiling_void_mm_value))")
+    # (jsonb_build_array keeps NULL positions and quotes strings, so no two different rows share an etag)
+    _SPACE_ETAG = ("md5(jsonb_build_array(ifc_guid, name, use, storey, area_m2_value, area_m2_unit,"
+                   " ceiling_void_mm_value, ceiling_void_mm_unit)::text)")
     _SPACE_SQL = ("select id, ifc_guid, name, use, storey, area_m2_value, area_m2_provenance, ceiling_void_mm_value,"
                   f" ceiling_void_mm_provenance, confirmed_by, {_SPACE_ETAG} as etag from space")
-    _INPUT_ETAG = "md5(concat_ws('|', i.name, i.value_number, i.value_text, i.value_bool, i.unit))"
+    _INPUT_ETAG = "md5(jsonb_build_array(i.name, i.value_number, i.value_text, i.value_bool, i.unit)::text)"
     _INPUT_SQL = ("select i.id, s.tag, i.name, i.value_number, i.value_text, i.value_bool, i.unit, i.provenance::text"
                   f" as provenance, i.confirmed_by, {_INPUT_ETAG} as etag"
                   " from system_input i join system s on s.id = i.system_id")
-    _PART_ETAG = "md5(concat_ws('|', position, building_class, storeys, area_m2_value))"
-    _PROJECT_ETAG = "md5(concat_ws('|', state, ncc_edition, climate_zone, approval_date))"
+    _PART_ETAG = "md5(jsonb_build_array(position, building_class, storeys, area_m2_value, area_m2_unit)::text)"
+    _PROJECT_ETAG = "md5(jsonb_build_array(state, ncc_edition, climate_zone, approval_date)::text)"
 
     # ---- Gate1Repository --------------------------------------------------------------------------------------
     def get_gate1_view(self, revision_id: UUID, firm_id: UUID) -> dict[str, Any] | None:
@@ -173,7 +175,7 @@ class PgRepository:
                         "insert into building_part (firm_id, project_id, position, building_class, storeys,"
                         " area_m2_value, area_m2_provenance) values (%s, %s, %s, %s, %s, %s, 'default')"
                         " returning id, building_class, storeys, area_m2_value, confirmed_by,"
-                        " md5(concat_ws('|', position, building_class, storeys, area_m2_value)) as etag",
+                        " md5(jsonb_build_array(position, building_class, storeys, area_m2_value, area_m2_unit)::text) as etag",
                         (firm_id, rev["project_id"], pos, p["building_class"], p["storeys"], p["area_m2"])).fetchone())
         except psycopg.errors.RaiseException as exc:
             if _frozen(exc):
@@ -291,6 +293,10 @@ class PgRepository:
                                           firm_id, revision_id, firm_id)).fetchone()
                 if row is None:
                     return None
+                if data["name"] == "system_type" and isinstance(value, str):
+                    # keep the label column in step with the input the rules are assigned from
+                    conn.execute("update system set type = %s where firm_id = %s and id = (select system_id from"
+                                 " system_input where id = %s)", (value, firm_id, row["id"]))
                 out = conn.execute(self._INPUT_SQL + " where i.id = %s and i.firm_id = %s",
                                    (row["id"], firm_id)).fetchone()
         except psycopg.errors.RaiseException as exc:
@@ -328,6 +334,8 @@ class PgRepository:
                     conn.execute("select gate1_confirm(%s, %s::uuid[], %s)", (kind, uuids, revision_id))
         except psycopg.errors.InsufficientPrivilege as exc:
             raise ConfirmRefused(str(exc).splitlines()[0]) from None
+        except (psycopg.errors.DeadlockDetected, psycopg.errors.SerializationFailure):
+            raise ConfirmRefused("another confirmation is running on the same rows: retry") from None
         except psycopg.errors.RaiseException as exc:
             if _frozen(exc):
                 raise RevisionFrozenError from None

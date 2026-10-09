@@ -76,9 +76,16 @@ declare k text; v text;
 begin
   if current_user in ('anon', 'authenticated') then
     for k, v in select key, value from jsonb_each_text(to_jsonb(new)) where key like '%\_provenance' loop
-      if v is not null and v <> 'default'
-         and (tg_op = 'INSERT' or v is distinct from (to_jsonb(old) ->> k)) then
-        raise exception '% may only be set to default by a client (set by the API)', k;
+      if v is not null and v <> 'default' then
+        if tg_op = 'INSERT' or v is distinct from (to_jsonb(old) ->> k) then
+          raise exception '% may only be set to default by a client (set by the API)', k;
+        end if;
+        -- a label may be kept only while the value and unit it describes are unchanged (else an edit would inherit
+        -- the label of the value it replaced): '<x>_provenance' describes '<x>_value' and '<x>_unit'
+        if (to_jsonb(new) ->> (left(k, -11) || '_value')) is distinct from (to_jsonb(old) ->> (left(k, -11) || '_value'))
+           or (to_jsonb(new) ->> (left(k, -11) || '_unit')) is distinct from (to_jsonb(old) ->> (left(k, -11) || '_unit')) then
+          raise exception '% cannot keep its label when the value changes: set it to default', k;
+        end if;
       end if;
     end loop;
   end if;

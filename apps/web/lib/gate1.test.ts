@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyEdit, canConfirm, canRun, hasValue, rowState, unconfirmedRefs, validatePart } from "./gate1";
+import { applyEdit, canConfirm, canRun, hasValue, rowState, unconfirmedRefs, validatePart, withEtags } from "./gate1";
 import type { BuildingPart, ProjectFacts, SpaceRow, SystemInputRow } from "./types";
 
 const space = (o: Partial<SpaceRow> = {}): SpaceRow => ({
@@ -93,5 +93,15 @@ describe("building parts and project facts", () => {
     expect(refs.map((r) => `${r.kind}:${r.id}`).sort()).toEqual(
       ["building_part:p1", "project:pr1", "space:s2", "system_input:i1"]);
     expect(unconfirmedRefs([space(done)], [input(done)], [part({ confirmed: true })], project({ confirmed: true }))).toEqual([]);
+  });
+});
+
+describe("withEtags", () => {
+  it("copies the version of the row being shown to each selected ref", () => {
+    const refs = withEtags(
+      [{ kind: "space", id: "s1" }, { kind: "system_input", id: "i1" }, { kind: "building_part", id: "p1" },
+       { kind: "project", id: "pr1" }, { kind: "space", id: "gone" }],
+      [space({ etag: "e-s" })], [input({ etag: "e-i" })], [part({ etag: "e-p" })], project({ etag: "e-pr" }));
+    expect(refs.map((r) => r.etag)).toEqual(["e-s", "e-i", "e-p", "e-pr", undefined]);   // a row not shown has no version
   });
 });

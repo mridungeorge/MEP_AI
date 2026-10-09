@@ -24,15 +24,35 @@ WRITERS = re.compile(
     r"|sc|ac|ni|cpi|mi|ren|iex|copy|move|rni|xcopy|robocopy|streamwriter|filestream)\b|(?<![.\w])py\b"
     r"|>>?|<<|-replace\b|\b(write|append)(all)?(text|lines|bytes)\b|\[(system\.)?io\.file\]", re.IGNORECASE)
 # an encoded command hides what it runs from every check here; an agent has no need for one
-ENCODED = re.compile(r"(?<![\w-])-(enc|encodedcommand|ec)\b", re.IGNORECASE)
+ENCODED = re.compile(r"\b(pwsh|powershell)(\.exe)?\b[^|;&\n]*\s-(e|ec|enc|encodedcommand)\b", re.IGNORECASE)
 GOLDEN_PROOF = re.compile(r"golden.*(data_agreement|meta\.yaml)|(data_agreement|meta\.yaml).*golden", re.IGNORECASE | re.DOTALL)
 OVERRIDE = re.compile(r"MEP_HUMAN_SIGNOFF", re.IGNORECASE)
 
 
-def _plain(command: str) -> str:
-    """The command with quotes and empty-string splices removed (so `appr''oved` and `core.hooks""Path` read as the words
-    they build) and Windows path separators turned into `/` (so a path under rules with backslashes reads as a rules path)."""
-    return re.sub(r"[\"'`]", "", command).replace("\\", "/")
+def _variants(command: str) -> list[str]:
+    """The command read two ways, because the two shells disagree about a backslash: bash deletes it (a backslash
+    inside the word approved still spells approved), Windows uses it as a path separator (a path under rules). Quotes and empty-string splices
+    are removed in both (`appr''oved`, `core.hooks""Path`). A rule must hold under NEITHER reading to let a command through."""
+    unquoted = re.sub(r"[\"'`]", "", command)
+    return [unquoted.replace("\\", ""), unquoted.replace("\\", "/")]
+
+
+def verdict(command: str) -> str | None:
+    """The reason a command is blocked, or None."""
+    for text in _variants(command):
+        if SKIP_HOOKS.search(text):
+            return "do not skip or redirect git hooks (--no-verify, core.hooksPath)."
+        if GOLDEN_PROOF.search(text) and WRITERS.search(text):
+            return ("what makes a golden project REAL (meta.yaml, data_agreement files) is supplied by a human with the pilot "
+                    "firm, not written from the shell.")
+        if ENCODED.search(text):
+            return "-EncodedCommand hides the command from the sign-off and database guards; pass the command as plain text."
+        if OVERRIDE.search(text):
+            return "MEP_HUMAN_SIGNOFF is for the human engineer's own shell; an agent must not set it."
+        if (TOUCHES_RULES.search(text) or RULE_FILE.search(text)) and FIELD.search(text) and WRITERS.search(text):
+            return ("do not write sign-off or approval fields into rule YAML from the shell. Only the human engineer fills "
+                    "reviewed_by, reviewed_on, reviewer_registration_no, checked_by, checked_on or sets status: approved.")
+    return None
 
 
 def main() -> None:
@@ -41,27 +61,9 @@ def main() -> None:
     except json.JSONDecodeError:
         sys.exit(0)
     command = (data.get("tool_input") or {}).get("command", "")
-    command = _plain(command)
-    if SKIP_HOOKS.search(command):
-        print("Blocked by project guardrail: do not skip or redirect git hooks (--no-verify, core.hooksPath).",
-              file=sys.stderr)
-        sys.exit(2)
-    if GOLDEN_PROOF.search(command) and WRITERS.search(command):
-        print("Blocked by project guardrail: what makes a golden project REAL (meta.yaml, data_agreement files) is "
-              "supplied by a human with the pilot firm, not written from the shell.", file=sys.stderr)
-        sys.exit(2)
-    if ENCODED.search(command):
-        print("Blocked by project guardrail: -EncodedCommand hides the command from the sign-off and database guards; "
-              "pass the command as plain text.", file=sys.stderr)
-        sys.exit(2)
-    if OVERRIDE.search(command):
-        print("Blocked by project guardrail: MEP_HUMAN_SIGNOFF is for the human engineer's own shell; an agent must "
-              "not set it.", file=sys.stderr)
-        sys.exit(2)
-    if (TOUCHES_RULES.search(command) or RULE_FILE.search(command)) and FIELD.search(command) and WRITERS.search(command):
-        print("Blocked by project guardrail: do not write sign-off or approval fields into rule YAML from the shell. "
-              "Only the human engineer fills reviewed_by, reviewed_on, reviewer_registration_no, checked_by, checked_on "
-              "or sets status: approved.", file=sys.stderr)
+    reason = verdict(command if isinstance(command, str) else "")
+    if reason:
+        print(f"Blocked by project guardrail: {reason}", file=sys.stderr)
         sys.exit(2)
     sys.exit(0)
 

@@ -394,6 +394,128 @@ def manifest_stale_dxf(env: Env) -> list[Path]:
     return [env.good["step"], target, env.good["manifest"]]
 
 
+# ---- review round 2: the attacks that passed the first version of rulings_on_net and the entity/title checks ----------
+def ruling_drawn_twice(env: Env) -> list[Path]:
+    """One fold line deleted and another drawn over its neighbour: lengths and endpoints still look plausible."""
+    def edit(doc: Any) -> None:
+        a, b = _bend(doc, "ruling", 0), _bend(doc, "ruling", 1)
+        b.dxf.start, b.dxf.end = a.dxf.start, a.dxf.end
+
+    return _step_dxf(env, _edit_dxf(env, "ruling_twice", edit))
+
+
+def mirrored_drawing(env: Env) -> list[Path]:
+    """The whole pattern mirrored about x: it would fold up the wrong hand (the title says VIEW: OUTSIDE)."""
+    def edit(doc: Any) -> None:
+        for e in doc.modelspace():
+            if e.dxftype() == "LINE":
+                (x0, y0, z0), (x1, y1, z1) = e.dxf.start, e.dxf.end
+                e.dxf.start, e.dxf.end = (-x0, y0, z0), (-x1, y1, z1)
+            elif e.dxftype() == "LWPOLYLINE":
+                e.set_points([(-x, y) for x, y in e.get_points("xy")], format="xy")
+            elif e.dxftype() == "TEXT":
+                x, y, z = e.dxf.insert
+                e.dxf.insert = (-x, y, z)
+
+    return _step_dxf(env, _edit_dxf(env, "mirrored", edit))
+
+
+def cut_mirrored_by_extrusion(env: Env) -> list[Path]:
+    def edit(doc: Any) -> None:
+        _cut(doc).dxf.extrusion = (0, 0, -1)
+
+    return _step_dxf(env, _edit_dxf(env, "cut_ocs", edit))
+
+
+def cut_elevated(env: Env) -> list[Path]:
+    def edit(doc: Any) -> None:
+        _cut(doc).dxf.elevation = 500
+
+    return _step_dxf(env, _edit_dxf(env, "cut_elev", edit))
+
+
+def cut_with_arcs(env: Env) -> list[Path]:
+    def edit(doc: Any) -> None:
+        pl = _cut(doc)
+        pl.set_points([(x, y, 0, 0, 0.3) for x, y in pl.get_points("xy")], format="xyseb")
+
+    return _step_dxf(env, _edit_dxf(env, "cut_bulge", edit))
+
+
+def bend_line_raised(env: Env) -> list[Path]:
+    def edit(doc: Any) -> None:
+        line = _bend(doc, "ruling", 0)
+        x, y, _ = line.dxf.start
+        line.dxf.start = (x, y, 250.0)
+
+    return _step_dxf(env, _edit_dxf(env, "bend_z", edit))
+
+
+def bend_colour_override(env: Env) -> list[Path]:
+    def edit(doc: Any) -> None:
+        _bend(doc, "ruling", 0).dxf.color = 1
+
+    return _step_dxf(env, _edit_dxf(env, "bend_colour", edit))
+
+
+def bend_thickness_override(env: Env) -> list[Path]:
+    def edit(doc: Any) -> None:
+        _bend(doc, "ruling", 0).dxf.thickness = 100
+
+    return _step_dxf(env, _edit_dxf(env, "bend_thickness", edit))
+
+
+def second_outline_on_annotation(env: Env) -> list[Path]:
+    def edit(doc: Any) -> None:
+        pts = [(x + 5, y + 5) for x, y in _cut(doc).get_points("xy")]
+        doc.modelspace().add_lwpolyline(pts, close=True, dxfattribs={"layer": "ANNOTATION"})
+
+    return _step_dxf(env, _edit_dxf(env, "annotation_outline", edit))
+
+
+def cut_layer_frozen(env: Env) -> list[Path]:
+    def edit(doc: Any) -> None:
+        doc.layers.get("CUT").freeze()
+
+    return _step_dxf(env, _edit_dxf(env, "cut_frozen", edit))
+
+
+def bend_layer_recoloured(env: Env) -> list[Path]:
+    def edit(doc: Any) -> None:
+        layer = doc.layers.get("BEND")
+        layer.dxf.color, layer.dxf.linetype = 1, "Continuous"
+
+    return _step_dxf(env, _edit_dxf(env, "bend_layer", edit))
+
+
+def title_conflicting_extra_line(env: Env) -> list[Path]:
+    def edit(doc: Any) -> None:
+        doc.modelspace().add_text("SHEET t=3 mm", dxfattribs={"layer": "ANNOTATION", "height": 5, "insert": (0, 0)})
+
+    return _step_dxf(env, _edit_dxf(env, "title_extra", edit))
+
+
+def dimension_values_wrong(env: Env) -> list[Path]:
+    def edit(doc: Any) -> None:
+        for t in doc.modelspace().query("TEXT"):
+            try:
+                float(t.dxf.text)
+            except ValueError:
+                continue
+            t.dxf.text = "999.9"
+
+    return _step_dxf(env, _edit_dxf(env, "dims_wrong", edit))
+
+
+def title_text_unreadable(env: Env) -> list[Path]:
+    def edit(doc: Any) -> None:
+        for t in doc.modelspace().query("TEXT"):
+            if "NOT A COMPLIANCE CHECK" in t.dxf.text:
+                t.dxf.height = 1e-6
+
+    return _step_dxf(env, _edit_dxf(env, "title_tiny", edit))
+
+
 MUTATIONS: dict[str, Mutation] = {
     "cut_open": Mutation(cut_open, ("cut_closed_single",)),
     "cut_duplicate_vertex": Mutation(cut_duplicate_vertex, ("cut_no_zero_length",)),
@@ -410,6 +532,20 @@ MUTATIONS: dict[str, Mutation] = {
     "stray_line_on_layer_0": Mutation(stray_line_on_layer_0, ("dxf_entities",)),
     "title_size_wrong": Mutation(title_size_wrong, ("title_block",)),
     "title_scope_deleted": Mutation(title_scope_deleted, ("title_block",)),
+    "ruling_drawn_twice": Mutation(ruling_drawn_twice, ("rulings_on_net",)),
+    "mirrored_drawing": Mutation(mirrored_drawing, ("net_handedness",)),
+    "cut_mirrored_by_extrusion": Mutation(cut_mirrored_by_extrusion, ("dxf_entities",)),
+    "cut_elevated": Mutation(cut_elevated, ("dxf_entities",)),
+    "cut_with_arcs": Mutation(cut_with_arcs, ("dxf_entities",)),
+    "bend_line_raised": Mutation(bend_line_raised, ("dxf_entities",)),
+    "bend_colour_override": Mutation(bend_colour_override, ("dxf_entities",)),
+    "bend_thickness_override": Mutation(bend_thickness_override, ("dxf_entities",)),
+    "second_outline_on_annotation": Mutation(second_outline_on_annotation, ("dxf_entities",)),
+    "cut_layer_frozen": Mutation(cut_layer_frozen, ("dxf_layers",)),
+    "bend_layer_recoloured": Mutation(bend_layer_recoloured, ("dxf_layers",)),
+    "title_conflicting_extra_line": Mutation(title_conflicting_extra_line, ("title_block",)),
+    "dimension_values_wrong": Mutation(dimension_values_wrong, ("title_block",)),
+    "title_text_unreadable": Mutation(title_text_unreadable, ("title_block",)),
     "dxf_garbage": Mutation(dxf_garbage, ("dxf_loads", "dxf_layers", "cut_closed_single", "net_connected")),
     "seam_dropped": Mutation(seam_dropped, ("seam_allowance", "title_block")),
     "connection_wrong": Mutation(connection_wrong, ("connection_allowance", "title_block")),

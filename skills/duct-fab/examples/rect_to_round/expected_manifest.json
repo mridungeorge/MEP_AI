@@ -87,6 +87,7 @@
       "net_no_self_intersection",
       "edge_lengths_match_3d",
       "rulings_on_net",
+      "net_handedness",
       "net_area_matches_lateral_area",
       "net_inlet_perimeter",
       "net_outlet_perimeter",

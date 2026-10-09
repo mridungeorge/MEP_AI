@@ -20,14 +20,14 @@
     "units": { "const": "mm" },
     "sheet_thickness_mm": {
       "type": "number",
-      "exclusiveMinimum": 0,
+      "minimum": 0.05,
       "maximum": 10,
       "description": "Engineer input (no AS 4254 gauge table is encoded). Recorded in the manifest and title block; not used as a bend deduction in v1."
     },
     "material": {
       "type": "string",
       "maxLength": 40,
-      "pattern": "^[^\\u0000-\\u001f\\u007f]*$",
+      "pattern": "^[^\\u0000-\\u001f\\u007f\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2069\\ufeff]*$",
       "description": "Free-text label for the title block, e.g. a firm material code. Optional."
     },
     "seam": {
@@ -59,7 +59,7 @@
       }
     },
     "geometry": { "type": "object" },
-    "notes": { "type": "string", "maxLength": 200, "pattern": "^[^\\u0000-\\u001f\\u007f]*$" }
+    "notes": { "type": "string", "maxLength": 200, "pattern": "^[^\\u0000-\\u001f\\u007f\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2069\\ufeff]*$" }
   },
   "allOf": [
     {
