@@ -141,3 +141,36 @@ def test_only_a_designer_assigns_a_part_and_another_firm_cannot(admin, client, p
                       headers=h.auth(other["designer"])).status_code == 404
     assert client.put(f"{h.base(f)}/gate1/systems/ahu-1/part", json={"part": "0"},
                       headers=h.auth(f["designer"])).status_code == 422
+
+
+def test_a_malformed_part_value_written_outside_the_api_is_refused_never_coerced(admin, client, pack):
+    f = ready(client, pack, admin, ["5", "6"], tags=("ahu-1",))
+    assert assign(client, f, "ahu-1", 0).status_code == 200
+    assert h.confirm(client, f, h.rows_to_confirm(client, f)).status_code == 200
+    assert run(client, f).status_code == 200
+    good = "value_number = 0, value_text = null, value_bool = null, unit = 'dimensionless'"
+    for bad in ("value_number = 1.7", "value_number = null, value_bool = true", "value_number = null, value_text = 'x'",
+                "unit = 'm'", "value_number = -3"):
+        # a direct write by a service role that also re-stamps the confirmation (a different confirmer keeps it confirmed)
+        admin.execute(f"update system_input set {bad}, confirmed_by = %s, confirmed_at = now(), provenance = 'engineer_confirmed' "
+                      "where name = 'building_part' and firm_id = %s", (f["checker"], f["firm"]))
+        r = run(client, f)
+        assert r.status_code == 409 and r.json()["code"] == "gate1_required", (bad, r.text)
+        assert any("does not exist" in reason for reason in r.json()["reasons"]), bad
+        admin.execute(f"update system_input set {good}, confirmed_by = %s, confirmed_at = now(), provenance = 'engineer_confirmed' "
+                      "where name = 'building_part' and firm_id = %s", (f["designer"], f["firm"]))
+    assert run(client, f).status_code == 200
+
+
+def test_changing_a_parts_class_directly_withdraws_the_assignments_too(admin, client, pack):
+    from tests.rls.conftest import as_user
+    f = ready(client, pack, admin, ["5", "6"])
+    assign(client, f, "ahu-1", 0)
+    assign(client, f, "ahu-2", 1)
+    assert h.confirm(client, f, h.rows_to_confirm(client, f)).status_code == 200
+    with as_user(f["designer"]) as cur:                     # a direct UPDATE, not the replace-all the API does
+        cur.execute("select count(*) from system_input where name = 'building_part' and confirmed_by is not null")
+        assert cur.fetchone()[0] == 2
+        cur.execute("update building_part set building_class = '7a' where project_id = %s and position = 0", (f["project"],))
+        cur.execute("select count(*) from system_input where name = 'building_part' and confirmed_by is not null")
+        assert cur.fetchone()[0] == 0

@@ -9,6 +9,10 @@ from typing import Any
 SOURCE_KINDS = ("ifc", "dxf", "pdf", "xlsx")
 
 
+class IngestRefused(ValueError):
+    """The reader refuses the file on purpose (too complex, unsupported): the message is safe to show the user."""
+
+
 @dataclass(frozen=True)
 class SpaceRecord:
     """One room/space read from a model or drawing."""
@@ -22,6 +26,7 @@ class SpaceRecord:
     source_kind: str = "ifc"
     provenance: str = "extracted"
     notes: tuple[str, ...] = ()       # reader remarks (e.g. 'area from geometry, not from a Qto')
+    centroid_m: tuple[float, float] | None = None   # plan position in metres, where the reader can tell (revision matching)
 
 
 @dataclass(frozen=True)
@@ -63,3 +68,18 @@ class IngestResult:
     extractions: list[ExtractionRecord] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)      # exporter, schema, units, scale ...
     problems: list[str] = field(default_factory=list)           # things the reader could not read
+
+
+def result_to_json(result: IngestResult) -> dict[str, Any]:
+    """A plain-JSON form of a reader's result (used to pass it out of the sandboxed reader process)."""
+    from dataclasses import asdict
+    return asdict(result)
+
+
+def result_from_json(data: dict[str, Any]) -> IngestResult:
+    spaces = [SpaceRecord(**{**s, "notes": tuple(s.get("notes", ())),
+                             "centroid_m": None if s.get("centroid_m") is None else tuple(s["centroid_m"])})
+              for s in data.get("spaces", [])]
+    extractions = [ExtractionRecord(**e) for e in data.get("extractions", [])]
+    return IngestResult(data["source_kind"], data["source_name"], data["source_sha256"], spaces, extractions,
+                        dict(data.get("metadata", {})), list(data.get("problems", [])))

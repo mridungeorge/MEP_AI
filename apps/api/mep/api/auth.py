@@ -25,6 +25,28 @@ MIN_SECRET_BYTES = 32
 ASYMMETRIC = ("ES256", "RS256")
 
 
+class _RateLimitedJWKS(PyJWKClient):
+    """PyJWKClient refetches the key set on every unknown `kid`, so an unauthenticated caller could make the API send one outbound
+    request per request. Refetch at most once per `cooldown` seconds."""
+
+    cooldown = 30.0
+
+    def get_signing_key(self, kid: str) -> Any:
+        import time
+        try:
+            return self.__dict__["_known"][kid]
+        except KeyError:
+            pass
+        now = time.monotonic()
+        if now - self.__dict__.get("_fetched", -1e9) < self.cooldown and "_known" in self.__dict__:
+            raise jwt.PyJWKClientError(f"Unable to find a signing key that matches: {kid}")
+        keys = {k.key_id: k for k in self.get_signing_keys(refresh=True)}
+        self.__dict__["_known"], self.__dict__["_fetched"] = keys, now
+        if kid not in keys:
+            raise jwt.PyJWKClientError(f"Unable to find a signing key that matches: {kid}")
+        return keys[kid]
+
+
 def _unauthenticated(message: str) -> HTTPException:
     return HTTPException(status_code=401, detail={"code": "unauthenticated", "message": message})
 
@@ -32,7 +54,7 @@ def _unauthenticated(message: str) -> HTTPException:
 def make_current_user(dsn: str, jwt_secret: str, jwks_url: str | None = None) -> Callable[..., CurrentUser]:
     if len(jwt_secret.encode()) < MIN_SECRET_BYTES:
         raise ValueError("the JWT secret must be at least 32 bytes")
-    jwks = PyJWKClient(jwks_url, cache_keys=True, lifespan=600, timeout=5) if jwks_url else None
+    jwks = _RateLimitedJWKS(jwks_url, cache_keys=True, lifespan=600, timeout=5) if jwks_url else None
 
     def decode(token: str) -> dict[str, Any]:
         alg = jwt.get_unverified_header(token).get("alg")
@@ -55,7 +77,7 @@ def make_current_user(dsn: str, jwt_secret: str, jwks_url: str | None = None) ->
         try:
             claims = decode(token.strip())
             user_id = uuid.UUID(str(claims["sub"]))
-        except (jwt.PyJWTError, ValueError):
+        except (jwt.PyJWTError, ValueError, TypeError):          # TypeError: a key of the wrong type for the algorithm
             raise _unauthenticated("the token is invalid or expired") from None
         with psycopg.connect(dsn, autocommit=True) as conn:
             row = conn.execute("select firm_id, role::text from app_user where id = %s", (user_id,)).fetchone()

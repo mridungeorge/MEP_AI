@@ -91,6 +91,23 @@ def _geometry_area(settings: Any, element: Any) -> float | None:
     return area if math.isfinite(area) and area > 0 else None
 
 
+def _geometry_centroid(element: Any) -> tuple[float, float] | None:
+    """Plan position (metres, model coordinates) of the middle of the space's bounding box, or None if it cannot be computed."""
+    import ifcopenshell.geom
+
+    if element.Representation is None:
+        return None
+    try:
+        settings = ifcopenshell.geom.settings()
+        settings.set("use-world-coords", True)
+        verts = ifcopenshell.geom.create_shape(settings, element).geometry.verts
+        xs, ys = list(verts[0::3]), list(verts[1::3])
+        x, y = (min(xs) + max(xs)) / 2.0, (min(ys) + max(ys)) / 2.0
+    except Exception:  # noqa: BLE001 - a space without a computable position is matched by GUID or name only
+        return None
+    return (round(x, 3), round(y, 3)) if math.isfinite(x) and math.isfinite(y) else None
+
+
 def _positive(value: Any) -> float | None:
     try:
         number = float(value)
@@ -170,7 +187,7 @@ def read_ifc(path: str | Path) -> IngestResult:
             key=str(element.GlobalId), name=None if name is None else str(name),
             area_m2=None if area is None else round(area, 6), use=None if use is None else str(use), storey=storey,
             ceiling_void_mm=None if void is None else void * length_scale * 1000.0,
-            source_kind="ifc", notes=tuple(notes)))
+            source_kind="ifc", notes=tuple(notes), centroid_m=_geometry_centroid(element)))
     total = len(result.spaces)
     meta.update({
         "spaces_total": total,

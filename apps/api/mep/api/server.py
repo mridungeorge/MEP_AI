@@ -40,6 +40,7 @@ def create_pg_app(dsn: str, jwt_secret: str, pack: RulePack, cors_origins: list[
 
     app.dependency_overrides[gate1.get_repository] = repository
     app.include_router(uploads.router)
+    app.add_middleware(uploads.UploadGuard)
     app.include_router(me_api.router)
     app.dependency_overrides[me_api.current_user] = current_user
     app.dependency_overrides[me_api.get_repository] = repository

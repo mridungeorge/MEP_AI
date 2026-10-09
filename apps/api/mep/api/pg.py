@@ -46,6 +46,13 @@ def _num(v: Decimal | float | None) -> float | int | None:
     return int(f) if f.is_integer() and abs(f) < 1e15 else f
 
 
+def _part_index(row: dict[str, Any]) -> int:
+    """The building part a system names, read STRICTLY: a whole number with the unit 'dimensionless'. Anything else (a fraction,
+    a flag, text, another unit: possible through a direct database write) is -1, which the run refuses as a part that does not exist."""
+    v = row["value"]
+    return v if type(v) is int and row["unit"] == "dimensionless" and v >= 0 else -1
+
+
 def _row_provenance(confirmed_by: Any, *provs: str | None) -> str:
     if confirmed_by is not None:
         return "engineer_confirmed"
@@ -389,7 +396,7 @@ class PgRepository:
                           and r["provenance"] == "engineer_confirmed"), None)
             rules = [] if self._pack is None or typed is None else rules_for_system_type(
                 self._pack, proj["ncc_edition"], proj["state"], str(typed))
-            part = next((int(r["value"]) for r in rows if r["name"] == "building_part" and r["confirmed_by"] is not None
+            part = next((_part_index(r) for r in rows if r["name"] == "building_part" and r["confirmed_by"] is not None
                          and r["provenance"] == "engineer_confirmed"), None)
             run_systems.append({"id": s["tag"] or str(s["id"]), "rules": rules, "part": part, "inputs": rows})
         building_class: Any = [{"building_class": p["building_class"], "storeys": p["storeys"],

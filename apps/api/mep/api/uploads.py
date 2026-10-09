@@ -5,6 +5,7 @@ and only a designer of the revision's firm may upload. The service behind it (in
 in Supabase Storage under the firm and runs the ingest and health score. Nothing uploaded is trusted: every value read from
 the file lands as provenance 'extracted' and cannot reach the engine until a designer confirms it at Gate 1.
 """
+import json
 import re
 from typing import Annotated, Any, Protocol
 from uuid import UUID
@@ -16,7 +17,60 @@ from mep.api.schedule import CurrentUser
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024        # the storage bucket's own limit (migration 0007) is the same
 UPLOAD_ROLES = frozenset({"designer"})
 
+BODY_MARGIN = 1024 * 1024                  # multipart framing around the file
 router = APIRouter()
+_UPLOAD_PATH = re.compile(r"^/revisions/[0-9A-Fa-f-]{36}/uploads$")
+
+
+class UploadGuard:
+    """ASGI middleware for the upload route: FastAPI reads a whole multipart body before it looks at the token, so refuse
+    here, first, anything unauthenticated and anything too large (by Content-Length, and by counting chunked bodies)."""
+
+    def __init__(self, app: Any) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+        if scope["type"] != "http" or scope["method"] != "POST" or not _UPLOAD_PATH.match(scope["path"]):
+            await self.app(scope, receive, send)
+            return
+        headers = {k.decode("latin-1").lower(): v.decode("latin-1") for k, v in scope["headers"]}
+        limit = MAX_UPLOAD_BYTES + BODY_MARGIN
+        if not headers.get("authorization", "").lower().startswith("bearer "):
+            await self._reply(send, 401, "unauthenticated", "a bearer token is required")
+            return
+        declared = headers.get("content-length", "")
+        if declared.isdigit() and int(declared) > limit:
+            await self._reply(send, 413, "too_large", "the upload is too large")
+            return
+        seen = 0
+        exceeded = replied = False
+
+        async def counting_receive() -> Any:
+            nonlocal seen, exceeded
+            message = await receive()
+            if message["type"] == "http.request":
+                seen += len(message.get("body", b""))
+                if seen > limit:                       # stop feeding the parser; whatever it answers is replaced below
+                    exceeded = True
+                    return {"type": "http.request", "body": b"", "more_body": False}
+            return message
+
+        async def guarded_send(message: Any) -> None:
+            nonlocal replied
+            if not exceeded:
+                await send(message)
+            elif not replied:
+                replied = True
+                await self._reply(send, 413, "too_large", "the upload is too large")
+
+        await self.app(scope, counting_receive, guarded_send)
+
+    @staticmethod
+    async def _reply(send: Any, status: int, code: str, message: str) -> None:
+        body = json.dumps({"detail": {"code": code, "message": message}}).encode()
+        await send({"type": "http.response.start", "status": status,
+                    "headers": [(b"content-type", b"application/json"), (b"content-length", str(len(body)).encode())]})
+        await send({"type": "http.response.body", "body": body})
 
 
 class UploadRefused(Exception):

@@ -23,11 +23,12 @@ import hashlib
 import math
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
 
 import ezdxf
 from ezdxf import bbox
 
-from mep.ingest.records import IngestResult, SpaceRecord
+from mep.ingest.records import IngestRefused, IngestResult, SpaceRecord
 
 DEFAULT_LAYER_PATTERNS = ("space", "room", "area", "zone")
 UNIT_FACTORS = {4: ("mm", 0.001), 5: ("cm", 0.01), 6: ("m", 1.0)}
@@ -39,6 +40,14 @@ Point = tuple[float, float]
 
 MAX_BYTES = 200 * 1024 * 1024
 MAX_VERTICES = 2000          # per polyline: the self-intersection test is quadratic
+# Complexity budget: a small file can still ask for hours of work (nested block references multiply, polygon x label tests
+# are quadratic). Past any of these the drawing is refused with a message; the upload path also runs the reader in a
+# sandboxed process with CPU, memory and wall-clock limits (ingest/sandbox.py).
+MAX_MODEL_ENTITIES = 500_000       # entities directly in model space
+MAX_EXPANDED_ENTITIES = 2_000_000  # entities after expanding block references (INSERT) everywhere
+MAX_SPACE_POLYLINES = 5_000        # closed polylines on space layers
+MAX_LABELS = 2_000                 # TEXT / MTEXT entities (each is tested against each polygon)
+MAX_TOTAL_VERTICES = 100_000       # vertices over all space polylines
 
 
 def refuse_dwg(path: str | Path) -> None:
@@ -85,6 +94,50 @@ def _self_intersects(pts: Sequence[Point]) -> bool:
     return False
 
 
+def _centroid(pts: Sequence[Point]) -> Point:
+    """Area-weighted centroid of a simple polygon (falls back to the vertex mean for a degenerate one)."""
+    a2 = cx = cy = 0.0
+    for (x1, y1), (x2, y2) in zip(pts, [*pts[1:], pts[0]], strict=True):
+        cross = x1 * y2 - x2 * y1
+        a2 += cross
+        cx += (x1 + x2) * cross
+        cy += (y1 + y2) * cross
+    if abs(a2) < 1e-12:
+        return sum(p[0] for p in pts) / len(pts), sum(p[1] for p in pts) / len(pts)
+    return cx / (3.0 * a2), cy / (3.0 * a2)
+
+
+def _expanded_entity_count(doc: ezdxf.document.Drawing) -> int:
+    """Entities in model space after expanding every block reference, counted once per block (memoised), so a nest of
+    references that would multiply out to billions is measured, never expanded. A circular reference is refused."""
+    memo: dict[str, int] = {}
+    visiting: set[str] = set()
+
+    def count(layout: Any) -> int:
+        name = layout.name
+        if name in memo:
+            return memo[name]
+        if name in visiting:
+            raise IngestRefused("the drawing has a block that contains itself")
+        visiting.add(name)
+        total = 0
+        for e in layout:
+            total += 1
+            if e.dxftype() == "INSERT":
+                block = doc.blocks.get(e.dxf.name, None)
+                if block is not None:
+                    times = max(1, int(e.dxf.get("row_count", 1))) * max(1, int(e.dxf.get("column_count", 1)))
+                    total += times * count(block)
+            if total > MAX_EXPANDED_ENTITIES:
+                raise IngestRefused(f"the drawing is too complex: nested block references expand to more than "
+                                    f"{MAX_EXPANDED_ENTITIES:,} entities")
+        visiting.discard(name)
+        memo[name] = total
+        return total
+
+    return count(doc.modelspace())
+
+
 def _vertex_key(pts: Sequence[Point]) -> tuple[Point, ...]:
     return tuple(sorted((round(x, _ROUND), round(y, _ROUND)) for x, y in pts))
 
@@ -100,6 +153,9 @@ def read_dxf(
     res = IngestResult("dxf", path.name, hashlib.sha256(data).hexdigest())
     doc = ezdxf.readfile(path)
     msp = doc.modelspace()
+    if len(msp) > MAX_MODEL_ENTITIES:
+        raise IngestRefused(f"the drawing is too complex: {len(msp):,} entities in model space (limit {MAX_MODEL_ENTITIES:,})")
+    _expanded_entity_count(doc)
 
     code = int(doc.header.get("$INSUNITS", 0))
     if code in UNIT_FACTORS:
@@ -126,7 +182,9 @@ def read_dxf(
             ins = e.dxf.insert
             labels.append(((float(ins.x), float(ins.y)), text))
 
-    closed = opened = dups = crossing = curved = labelled = 0
+    if len(labels) > MAX_LABELS:
+        raise IngestRefused(f"the drawing has {len(labels):,} text labels (limit {MAX_LABELS:,}); remove unrelated annotation")
+    closed = opened = dups = crossing = curved = labelled = vertices = 0
     seen: set[tuple[Point, ...]] = set()
     space_layers: set[str] = set()
     for e in msp.query("LWPOLYLINE"):
@@ -141,6 +199,11 @@ def read_dxf(
             opened += 1
             continue
         closed += 1
+        if closed > MAX_SPACE_POLYLINES:
+            raise IngestRefused(f"more than {MAX_SPACE_POLYLINES:,} closed polylines on space layers")
+        vertices += len(pts)
+        if vertices > MAX_TOTAL_VERTICES:
+            raise IngestRefused(f"the space polylines have more than {MAX_TOTAL_VERTICES:,} vertices in total")
         if e.closed is False:
             pts = pts[:-1]  # drop the repeated closing vertex
         if len(pts) < 3:
@@ -168,7 +231,9 @@ def read_dxf(
         if area <= 0.0 or not math.isfinite(area):
             res.problems.append(f"polyline {e.dxf.handle}: zero area, skipped")
             continue
-        inside = [t for p, t in labels if _point_in_polygon(p, pts)]
+        lo_x, hi_x = min(p[0] for p in pts), max(p[0] for p in pts)
+        lo_y, hi_y = min(p[1] for p in pts), max(p[1] for p in pts)
+        inside = [t for p, t in labels if lo_x <= p[0] <= hi_x and lo_y <= p[1] <= hi_y and _point_in_polygon(p, pts)]
         notes = ["area from polyline geometry"]
         if len(inside) > 1:
             notes.append(f"{len(inside)} labels inside; first used: {inside}")
@@ -176,7 +241,8 @@ def read_dxf(
             labelled += 1
         res.spaces.append(SpaceRecord(
             key=e.dxf.handle, name=inside[0] if inside else None, area_m2=area,
-            source_kind="dxf", notes=tuple(notes)))
+            source_kind="dxf", notes=tuple(notes), centroid_m=(round(_centroid(pts)[0] * factor, 3),
+                                                                 round(_centroid(pts)[1] * factor, 3))))
 
     # Scale sanity: drawing extents against a plausible building size.
     extents_m: list[float] | None = None

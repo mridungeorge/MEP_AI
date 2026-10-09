@@ -18,24 +18,24 @@ import psycopg
 from mep.api.pg import health_view
 from mep.api.schedule import CurrentUser
 from mep.api.uploads import UploadRefused
-from mep.ingest.records import IngestResult
+from mep.ingest.records import IngestRefused, IngestResult
+from mep.ingest.sandbox import read_isolated
 from mep.ingest.store import AlreadyIngested, store_ingest
 
 BUCKET = "uploads"
 
 
 def read_file(kind: str, name: str, data: bytes) -> IngestResult:
-    """Parse the uploaded bytes with the reader for `kind`. Any failure to read is a 422, never a 500."""
-    from mep.ingest.dxf import read_dxf
-    from mep.ingest.ifc import read_ifc
-
+    """Parse the uploaded bytes with the reader for `kind`, in a child process with CPU, memory and wall-clock limits (a small
+    file can ask for hours of work). Any failure to read is a 422, never a 500, and never stalls the API."""
     with tempfile.TemporaryDirectory() as td:
         path = Path(td) / f"{Path(name).stem or 'upload'}.{kind}"
         path.write_bytes(data)
         try:
-            return read_ifc(path) if kind == "ifc" else read_dxf(path)
-        except Exception as exc:  # noqa: BLE001 - the readers raise many types for a damaged file
-            raise UploadRefused(422, "unreadable_file", f"the file could not be read as {kind.upper()} ({type(exc).__name__})") from None
+            return read_isolated(kind, path)
+        except IngestRefused as exc:
+            code = "too_complex" if "too complex" in str(exc) or "too" in str(exc).split(":")[0] else "unreadable_file"
+            raise UploadRefused(422, code, str(exc)) from None
 
 
 class PgUploads:
@@ -51,11 +51,21 @@ class PgUploads:
             raise UploadRefused(502, "storage_unavailable", "the file store could not be reached") from None
         if r.status_code in (200, 201):
             return
-        if r.status_code == 409 or "Duplicate" in r.text:       # same bytes stored earlier (a retry): the path is the hash
+        if r.status_code == 409 or "Duplicate" in r.text:       # something is stored at this path: prove it is THESE bytes
+            self._verify(token, path, data)
             return
         if r.status_code in (400, 401, 403):
             raise UploadRefused(403, "storage_refused", "the file store refused this upload for your account")
         raise UploadRefused(502, "storage_failed", "the file could not be stored")
+
+    def _verify(self, token: str, path: str, data: bytes) -> None:
+        try:
+            got = httpx.get(f"{self._url}/storage/v1/object/{BUCKET}/{path}", timeout=120,
+                            headers={"apikey": self._anon, "Authorization": f"Bearer {token}"})
+        except httpx.HTTPError:
+            raise UploadRefused(502, "storage_unavailable", "the file store could not be reached") from None
+        if got.status_code != 200 or hashlib.sha256(got.content).digest() != hashlib.sha256(data).digest():
+            raise UploadRefused(409, "storage_conflict", "a different file is already stored under this file's name")
 
     def ingest(self, *, user: CurrentUser, token: str, revision_id: UUID, name: str, kind: str, data: bytes) -> dict[str, Any]:
         sha = hashlib.sha256(data).hexdigest()

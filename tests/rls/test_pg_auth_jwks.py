@@ -10,9 +10,9 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 import jwt
 import pytest
 from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from fastapi.testclient import TestClient
-from jwt.algorithms import ECAlgorithm
+from jwt.algorithms import ECAlgorithm, RSAAlgorithm
 from mep.api.server import create_pg_app
 from mep.engine.loader import load_pack
 
@@ -36,10 +36,14 @@ def jwks_server(keys):
     good = keys[0]
     jwk = json.loads(ECAlgorithm.to_jwk(good.public_key()))
     jwk.update(kid=KID, alg="ES256", use="sig")
-    body = json.dumps({"keys": [jwk]}).encode()
+    rsa_jwk = json.loads(RSAAlgorithm.to_jwk(rsa.generate_private_key(public_exponent=65537, key_size=2048).public_key()))
+    rsa_jwk.update(kid="rsa-1", alg="RS256", use="sig")
+    body = json.dumps({"keys": [jwk, rsa_jwk]}).encode()
+    hits: list[int] = []
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):          # http.server calls this name
+            hits.append(1)
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
@@ -50,7 +54,9 @@ def jwks_server(keys):
 
     server = HTTPServer(("127.0.0.1", 0), Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
-    yield f"http://127.0.0.1:{server.server_port}"
+    base = f"http://127.0.0.1:{server.server_port}"
+    _SERVERS[base] = hits
+    yield base
     server.shutdown()
 
 
@@ -130,3 +136,27 @@ def test_an_unreachable_key_service_is_a_503_not_a_401(admin, keys):
     c = app("http://127.0.0.1:9")                       # nothing listens there
     r = c.get("/me", headers=bearer(es256(f["designer"], keys[0])))
     assert r.status_code == 503 and r.json()["detail"]["code"] == "auth_unavailable"
+
+
+def test_a_key_of_the_wrong_type_for_the_algorithm_is_a_401_not_a_500(admin, jwks_server, keys):
+    f = h.seed(admin)
+    c = app(jwks_server)
+    wrong_type = es256(f["designer"], keys[0], kid="rsa-1")           # the kid names an RSA key; the token claims ES256
+    assert c.get("/me", headers=bearer(wrong_type)).status_code == 401
+
+
+def test_unknown_key_ids_do_not_make_the_api_refetch_the_key_set_every_time(admin, jwks_server, keys):
+    f = h.seed(admin)
+    c = app(jwks_server)
+    assert c.get("/me", headers=bearer(es256(f["designer"], keys[0]))).status_code == 200      # fetches and caches the keys
+    before = len(jwks_server_hits(jwks_server))
+    for n in range(8):
+        assert c.get("/me", headers=bearer(es256(f["designer"], keys[0], kid=f"unknown-{n}"))).status_code == 401
+    assert len(jwks_server_hits(jwks_server)) - before <= 1                                       # at most one refetch in the cooldown
+
+
+_SERVERS: dict[str, list[int]] = {}
+
+
+def jwks_server_hits(base: str) -> list[int]:
+    return _SERVERS[base]
