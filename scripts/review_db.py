@@ -35,13 +35,31 @@ grant anon, authenticated to reviewer_attack;
 """
 
 
+# The Supabase Postgres image has no `storage` schema (the Storage service creates it at start-up). Migrations that add a bucket
+# and policies need the two tables, so a minimal stand-in is created where they are missing (the image may carry part of the schema).
+STORAGE_STUB = """
+create schema if not exists storage;
+create table if not exists storage.buckets (id text primary key, name text not null, public boolean default false,
+                                            file_size_limit bigint, allowed_mime_types text[]);
+create table if not exists storage.objects (id uuid primary key default gen_random_uuid(), bucket_id text references storage.buckets(id),
+                                            name text, owner uuid);
+alter table storage.buckets owner to postgres;
+alter table storage.objects owner to postgres;
+alter table storage.objects enable row level security;
+grant usage on schema storage to anon, authenticated;
+grant select, insert on storage.objects to authenticated;
+"""
+
+
 def docker(*args: str, stdin: str | None = None, check: bool = True) -> subprocess.CompletedProcess[str]:
     return subprocess.run(["docker", *args], input=stdin, capture_output=True, text=True, check=check)
 
 
 def psql(name: str, sql: str, user: str = "postgres") -> None:
-    docker("exec", "-i", name, "psql", "-U", user, "-d", "postgres", "-v", "ON_ERROR_STOP=1", "-q", "-f", "-",
-           stdin=sql)
+    try:
+        docker("exec", "-i", name, "psql", "-U", user, "-d", "postgres", "-v", "ON_ERROR_STOP=1", "-q", "-f", "-", stdin=sql)
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError(f"psql failed: {(exc.stderr or '').strip()[-600:]}") from None
 
 
 def up() -> dict[str, str | int]:
@@ -64,6 +82,7 @@ def up() -> dict[str, str | int]:
             time.sleep(1)
         else:
             raise RuntimeError("disposable database did not become ready")
+        psql(name, STORAGE_STUB, user="supabase_admin")      # the storage schema belongs to the image's admin role
         for migration in sorted((ROOT / "supabase" / "migrations").glob("*.sql")):
             psql(name, migration.read_text(encoding="utf-8"))
         psql(name, ROLES_SQL)
