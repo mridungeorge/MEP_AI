@@ -84,6 +84,7 @@ class RevisionMethods:
         edition = report["project"]["ncc_edition"]
         try:
             with self._as_service() as conn:
+                conn.execute("select 1 from revision where id = %s and firm_id = %s for share", (revision_id, firm_id))
                 live = conn.execute("select live_inputs_hash(%s) as h", (revision_id,)).fetchone()["h"]
                 if inputs_hash is not None and live != inputs_hash:
                     raise InputsChangedError
@@ -151,8 +152,8 @@ class RevisionMethods:
 
     def confirm_diff(self, revision_id: UUID, diff_hash: str) -> None:
         try:
-            with self._as_user() as conn:
-                conn.execute("select confirm_revision_diff(%s, %s)", (revision_id, diff_hash))
+            with self._as_service() as conn:      # the user is verified by the API; the DB function re-checks the role
+                conn.execute("select confirm_revision_diff_as(%s, %s, %s)", (self._user.user_id, revision_id, diff_hash))
         except psycopg.errors.InsufficientPrivilege as exc:
             raise ConfirmRefused(str(exc).splitlines()[0]) from None
         except psycopg.errors.RaiseException as exc:

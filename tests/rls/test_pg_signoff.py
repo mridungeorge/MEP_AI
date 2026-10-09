@@ -442,3 +442,25 @@ def test_a_client_cannot_make_a_child_revision(admin):
     for role in ("designer", "checker"):
         refused(f[role], "insert into revision (firm_id, project_id, architect_rev, parent_revision_id) values (%s, %s, 'B', %s)",
                 (f["firm"], f["project"], f["revision"]), "upload service")
+
+
+# ---- Phase 3 review round 2 (migration 0012) -----------------------------------------------------------------------
+
+def test_the_input_fingerprint_tells_apart_values_that_a_naive_concatenation_would_confuse(admin):
+    f = seed(admin, results=1)
+    admin.execute("insert into space (id, firm_id, revision_id, name, area_m2_value, area_m2_provenance)"
+                  " values (%s, %s, %s, 'R', 50, 'default')", (f["results"][0], f["firm"], f["revision"]))
+    before = admin.execute("select live_inputs_hash(%s)", (f["revision"],)).fetchone()[0]
+    admin.execute("update space set area_m2_value = null, area_m2_provenance = null, ceiling_void_mm_value = 50,"
+                  " ceiling_void_mm_provenance = 'default' where id = %s", (f["results"][0],))
+    assert admin.execute("select live_inputs_hash(%s)", (f["revision"],)).fetchone()[0] != before
+    other = seed(admin, results=1)
+    assert call(other["designer"], "select live_inputs_hash(%s)", (f["revision"],))[0][0] is None          # another firm's: nothing
+
+
+def test_the_diff_can_only_be_confirmed_through_the_service_and_created_from_is_not_writable(admin):
+    f = frozen(admin, results=1)
+    refused(f["designer"], "select confirm_revision_diff(%s, %s)", (f["revision"], "a" * 64), "permission denied")
+    with pytest.raises(psycopg.errors.InsufficientPrivilege, match="only a designer"):
+        admin.execute("select confirm_revision_diff_as(%s, %s, %s)", (f["checker"], f["revision"], "a" * 64))
+    refused(f["designer"], "update revision set created_from_sha256 = 'x' where id = %s", (f["revision"],), "")

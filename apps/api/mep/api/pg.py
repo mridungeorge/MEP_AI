@@ -370,6 +370,8 @@ class PgRepository(RevisionMethods):
             rev = self._revision(conn, revision_id, firm_id)
             if rev is None:
                 raise LookupError("revision not found")
+            # the fingerprint is taken BEFORE the reads: an edit that lands during them changes the live hash, so the save is refused
+            inputs_hash = conn.execute("select live_inputs_hash(%s) as h", (revision_id,)).fetchone()["h"]
             proj = conn.execute("select state, ncc_edition, climate_zone, building_class, approval_date, confirmed_by"
                                 " from project where id = %s and firm_id = %s", (rev["project_id"], firm_id)).fetchone()
             if proj is None:
@@ -386,7 +388,6 @@ class PgRepository(RevisionMethods):
                 " i.provenance::text as provenance, i.confirmed_by from system_input i join system s on s.id ="
                 " i.system_id where s.revision_id = %s and i.firm_id = %s order by i.name",
                 (revision_id, firm_id)).fetchall()
-            inputs_hash = conn.execute("select live_inputs_hash(%s) as h", (revision_id,)).fetchone()["h"]
         by_system: dict[Any, list[dict[str, Any]]] = {}
         for i in inputs:
             value = i["value_number"] if i["value_number"] is not None else (
