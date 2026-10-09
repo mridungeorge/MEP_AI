@@ -152,7 +152,9 @@ def test_every_line_needs_a_reason_and_a_new_decision_supersedes_the_old(admin):
 
 def test_gate2_cannot_be_signed_until_every_current_result_is_approved(admin):
     f = frozen(admin, results=3)
-    refused(f["checker"], "select sign_gate(%s, 'gate2')", (f["revision"],), "3 result(s)")
+    refused(f["checker"], "select sign_gate(%s, 'gate2')", (f["revision"],), "have not reviewed anything")
+    call(f["checker"], "select gate2_review(%s, 'approve', 'checked against the clause')", (f["results"][0],))
+    refused(f["checker"], "select sign_gate(%s, 'gate2')", (f["revision"],), "2 result(s)")
     review_all(f)
     call(f["checker"], "select gate2_review(%s, 'request_changes', 'airflow looks high for this zone')", (f["results"][1],))
     refused(f["checker"], "select sign_gate(%s, 'gate2')", (f["revision"],), "1 result(s)")
@@ -500,3 +502,61 @@ def test_the_ledger_backfill_bypass_is_gone_and_the_end_of_the_chain_is_protecte
     finally:
         admin.execute("alter table ledger_event enable trigger ledger_event_no_update")
     assert result[0] is False and "end of the ledger" in result[3]
+
+
+# ---- Phase 4a review round 2 (migration 0014) ----------------------------------------------------------------------
+
+def test_a_rejection_outside_the_sample_cannot_be_laundered_by_re_approving_inside_it(admin):
+    f = frozen(admin, results=12)
+    sample = call(f["checker"], "select gate2_prepare_bulk(%s)", (f["revision"],))[0][0]
+    picked = [str(r[0]) for r in admin.execute("select unnest(sample_ids) from review_sample where id = %s", (sample,))]
+    refused(f["checker"], "select gate2_review(%s, 'reject', 'this one is wrong', null)", (picked[0],), "decide it as part of the sample")
+    call(f["checker"], "select gate2_review(%s, 'reject', 'this one is wrong', %s)", (picked[0], sample))
+    for rid in picked[1:]:
+        call(f["checker"], "select gate2_review(%s, 'approve', 'examined in the spot check', %s)", (rid, sample))
+    call(f["checker"], "select gate2_review(%s, 'approve', 'changed my mind, it is fine', %s)", (picked[0], sample))
+    refused(f["checker"], "select gate2_bulk_approve(%s)", (sample,), "found")
+
+
+def test_a_stuck_sample_closes_itself_when_the_clean_set_changes(admin):
+    f = frozen(admin, results=12)
+    sample = call(f["checker"], "select gate2_prepare_bulk(%s)", (f["revision"],))[0][0]
+    cand = [str(r[0]) for r in admin.execute("select unnest(candidate_ids) from review_sample where id = %s", (sample,))]
+    picked = {str(r[0]) for r in admin.execute("select unnest(sample_ids) from review_sample where id = %s", (sample,))}
+    other = next(r for r in cand if r not in picked)
+    call(f["checker"], "select gate2_review(%s, 'approve', 'reviewed line by line instead', null)", (other,))
+    refused(f["checker"], "select gate2_bulk_approve(%s)", (sample,), "changed since the sample")
+    again = call(f["checker"], "select gate2_prepare_bulk(%s)", (f["revision"],))[0][0]
+    assert again != sample and admin.execute("select used_at is not null from review_sample where id = %s", (sample,)).fetchone()[0]
+
+
+def test_separation_of_duties_between_freezing_reviewing_and_approving(admin):
+    f = frozen(admin, results=2)
+    admin.execute("update app_user set role = 'checker' where id = %s", (f["designer"],))        # the person who froze it is now a checker
+    refused(f["designer"], "select gate2_review(%s, 'approve', 'my own work is fine')", (f["results"][0],), "signed Gate 1")
+    admin.execute("update app_user set role = 'designer' where id = %s", (f["designer"],))
+    refused(f["checker"], "select sign_gate(%s, 'gate2')", (f["revision"],), "have not reviewed anything")      # nothing reviewed by this signer
+    review_all(f)
+    call(f["checker"], "select sign_gate(%s, 'gate2')", (f["revision"],))
+    admin.execute("update app_user set role = 'approver', registration_no = 'RPEQ 777' where id = %s", (f["designer"],))
+    other = h_user(admin, f)
+    admin.execute("update app_user set role = 'approver', registration_no = 'RPEQ 888' where id = %s", (other,))
+    call(other, "select sign_gate(%s, 'gate3', 'RPEQ 888')", (f["revision"],))
+
+
+def h_user(admin, f):
+    u = uid()
+    admin.execute("insert into auth.users (id, email) values (%s, %s)", (u, f"extra-{u}@test.invalid"))
+    admin.execute("insert into app_user (id, firm_id, role) values (%s, %s, 'checker')", (u, f["firm"]))
+    return u
+
+
+def test_a_bulk_approval_stops_standing_if_the_result_stops_being_a_clean_pass(admin):
+    f = frozen(admin, results=12)
+    sample = call(f["checker"], "select gate2_prepare_bulk(%s)", (f["revision"],))[0][0]
+    for r in admin.execute("select unnest(sample_ids) from review_sample where id = %s", (sample,)).fetchall():
+        call(f["checker"], "select gate2_review(%s, 'approve', 'examined in the spot check', %s)", (str(r[0]), sample))
+    call(f["checker"], "select gate2_bulk_approve(%s)", (sample,))
+    victim = admin.execute("select rule_result_id from review where sample_id = %s and bulk limit 1", (sample,)).fetchone()[0]
+    admin.execute("update rule_result set review_class = 'near_miss' where id = %s", (victim,))   # e.g. a stricter classifier next time
+    refused(f["checker"], "select sign_gate(%s, 'gate2')", (f["revision"],), "not approved")

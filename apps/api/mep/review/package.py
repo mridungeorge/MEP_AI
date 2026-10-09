@@ -18,6 +18,8 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
+from mep.review.classifier import classify
+
 PACKAGE_VERSION = 1
 DRAFT_BANNER = "DRAFT RULES: NOT ENGINEER-APPROVED"
 GATES = ("gate1", "gate2", "gate3")
@@ -33,6 +35,14 @@ def _json(v: Any) -> Any:
     if isinstance(v, (list, tuple)):
         return [_json(x) for x in v]
     return v
+
+
+def _reasons(r: dict[str, Any]) -> list[str]:
+    """The stored reasons; for a revision signed before they were stored, a live classification (nothing else exists to show)."""
+    if r["review_reasons"] is not None:
+        return list(r["review_reasons"])
+    return list(classify({"outcome": r["outcome"], "stale": r["stale"], "near_miss": r["near_miss"], "causes": r["causes"],
+                          "inputs_used": r["inputs"]}).reasons)
 
 
 def assemble(conn: psycopg.Connection[Any], firm_id: UUID, revision_id: UUID) -> dict[str, Any] | None:
@@ -74,7 +84,7 @@ def assemble(conn: psycopg.Connection[Any], firm_id: UUID, revision_id: UUID) ->
     for r in results:
         lines.append({
             "subject": r["subject_id"], "rule_id": r["rule_id"], "part": r["part"], "outcome": r["outcome"],
-            "citation": r["citation"], "review_class": r["review_class"], "reasons": list(r["review_reasons"] or []), "stale": r["stale"],
+            "citation": r["citation"], "review_class": r["review_class"], "reasons": _reasons(r), "stale": r["stale"],
             "decision": r["decision"], "reason": r["reason"], "bulk": bool(r["bulk"]), "spot_check": bool(r["spot_check"]),
             "reviewed_by": r["reviewer"], "reviewed_at": r["reviewed_at"], "fix_hypotheses": r["fix_hypotheses"]})
     counts: dict[str, int] = {}

@@ -105,7 +105,7 @@ class PgReview:
         for r in rows:
             lines.append({
                 "id": str(r["id"]), "subject_id": r["subject_id"], "rule_id": r["rule_id"], "part": r["part"], "outcome": r["outcome"],
-                "citation": r["citation"], "review_class": r["review_class"], "reasons": list(r["review_reasons"] or []), "stale": r["stale"],
+                "citation": r["citation"], "review_class": r["review_class"], "reasons": pkg._reasons(r), "stale": r["stale"],
                 "fix_hypotheses": r["fix_hypotheses"], "decision": r["decision"], "reason": r["reason"],
                 "bulk": bool(r["bulk"]), "spot_check": bool(r["spot_check"]),
                 "reviewed_by_me": r["user_id"] == self._user.user_id if r["decision"] else None,
