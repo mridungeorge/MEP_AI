@@ -9,13 +9,16 @@ from datetime import date
 from pathlib import Path
 
 import jwt
+import psycopg
 import pytest
 from fastapi.testclient import TestClient
 from mep.api.auth import mint_token
 from mep.api.server import create_pg_app
 from mep.engine.loader import load_pack
+from mep.ingest.ifc import read_ifc
+from mep.ingest.store import store_ingest
 
-from tests.rls.conftest import DB_URL, uid
+from tests.rls.conftest import DB_URL, as_user, uid
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -71,10 +74,10 @@ def populate(client, pack, f, tag="ahu-1"):
 
 def rows_to_confirm(client, f):
     v = client.get(f"{base(f)}/gate1", headers=auth(f["designer"])).json()
-    return ([{"kind": "project", "id": v["project"]["id"]}]
-            + [{"kind": "building_part", "id": p["id"]} for p in v["parts"]]
-            + [{"kind": "space", "id": s["id"]} for s in v["spaces"]]
-            + [{"kind": "system_input", "id": i["id"]} for i in v["inputs"]])
+    return ([{"kind": "project", "id": v["project"]["id"], "etag": v["project"]["etag"]}]
+            + [{"kind": "building_part", "id": p["id"], "etag": p["etag"]} for p in v["parts"]]
+            + [{"kind": "space", "id": x["id"], "etag": x["etag"]} for x in v["spaces"]]
+            + [{"kind": "system_input", "id": i["id"], "etag": i["etag"]} for i in v["inputs"]])
 
 
 def confirm(client, f, rows):
@@ -167,7 +170,7 @@ def test_an_excel_import_is_extracted_until_a_designer_confirms_it(admin, client
                     files={"file": ("s.xlsx", data, "application/octet-stream")})
     assert r.status_code == 403
     # confirming turns them into engineer_confirmed, with the confirming user recorded
-    ids = [{"kind": "system_input", "id": i["id"]} for i in v["inputs"]]
+    ids = [{"kind": "system_input", "id": i["id"], "etag": i["etag"]} for i in v["inputs"]]
     assert confirm(client, f, ids).status_code == 200
     after = client.get(f"{base(f)}/gate1", headers=h).json()
     assert {i["provenance"] for i in after["inputs"]} == {"engineer_confirmed"}
@@ -212,6 +215,21 @@ def test_an_edit_withdraws_the_confirmation(admin, client, pack):
     client.put(f"{base(f)}/gate1/parts", headers=h, json={"parts": [{"building_class": "5", "storeys": 3, "area_m2": 1200.5}]})
     after = client.get(f"{base(f)}/gate1", headers=h).json()
     assert not any(p["confirmed"] for p in after["parts"])
+    refused = client.post(f"{base(f)}/run-rules", headers=h)
+    assert refused.status_code == 409 and refused.json()["code"] == "gate1_required"
+
+
+def test_editing_a_schedule_input_withdraws_its_confirmation(admin, client, pack):
+    f = seed(admin)
+    populate(client, pack, f)
+    assert confirm(client, f, rows_to_confirm(client, f)).status_code == 200
+    h = auth(f["designer"])
+    inputs = client.get(f"{base(f)}/gate1", headers=h).json()["inputs"]
+    target = next(i for i in inputs if isinstance(i["value"], bool))
+    r = client.put(f"{base(f)}/gate1/inputs/{target['id']}", headers=h,
+                   json={"name": target["name"], "value": not target["value"]})
+    assert r.status_code == 200 and r.json()["provenance"] == "default"
+    assert client.post(f"{base(f)}/run-rules", headers=h).status_code == 409
 
 
 def test_project_facts_that_are_incomplete_cannot_be_confirmed(admin, client):
@@ -282,3 +300,99 @@ def test_the_run_is_in_the_firms_scope_only(admin, client, pack):
     a, b = seed(admin), seed(admin)
     populate(client, pack, a)
     assert client.post(f"{base(a)}/run-rules", headers=auth(b["designer"])).status_code == 404
+
+
+# ---- review round 1 fixes ---------------------------------------------------------------------------------------
+
+def test_a_confirmation_naming_an_old_row_version_is_refused(admin, client, pack):
+    f = seed(admin)
+    populate(client, pack, f)
+    stale = rows_to_confirm(client, f)                      # what designer A was shown
+    h = auth(f["designer"])
+    space = next(r for r in stale if r["kind"] == "space")
+    assert client.put(f"{base(f)}/gate1/spaces/{space['id']}", headers=h, json={"name": "Changed by B"}).status_code == 200
+    r = confirm(client, f, stale)
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "cannot_confirm"
+    assert "changed since you loaded" in r.json()["detail"]["message"]
+    v = client.get(f"{base(f)}/gate1", headers=h).json()
+    assert v["project"]["confirmed"] is False and not any(p["confirmed"] for p in v["parts"])     # all or nothing
+    assert admin.execute("select count(*) from ledger_event where kind = 'gate1_confirm' and firm_id = %s",
+                         (f["firm"],)).fetchone()[0] == 0
+    assert confirm(client, f, rows_to_confirm(client, f)).status_code == 200        # a fresh view confirms
+
+
+def test_a_confirmation_without_the_row_version_is_refused(admin, client, pack):
+    f = seed(admin)
+    populate(client, pack, f)
+    bare = [{"kind": r["kind"], "id": r["id"]} for r in rows_to_confirm(client, f)]
+    assert confirm(client, f, bare).status_code == 409
+
+
+def test_confirmation_is_all_or_nothing_across_kinds(admin, client, pack):
+    f = seed(admin)
+    populate(client, pack, f)
+    admin.execute("update project set approval_date = null where id = %s", (f["project"],))
+    r = confirm(client, f, rows_to_confirm(client, f))
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "cannot_confirm"
+    v = client.get(f"{base(f)}/gate1", headers=auth(f["designer"])).json()
+    assert {s["provenance"] for s in v["spaces"]} == {"default"}        # the spaces were NOT confirmed behind the error
+    assert admin.execute("select count(*) from ledger_event where kind = 'gate1_confirm' and firm_id = %s",
+                         (f["firm"],)).fetchone()[0] == 0
+
+
+def test_the_database_function_checks_that_rows_belong_to_the_ledgered_revision(admin, client, pack):
+    a, b = seed(admin), seed(admin)
+    populate(client, pack, a)
+    space = client.get(f"{base(a)}/gate1", headers=auth(a["designer"])).json()["spaces"][0]["id"]
+    same_firm_other_revision = uid()
+    admin.execute("insert into revision (id, firm_id, project_id, architect_rev) values (%s, %s, %s, 'B')",
+                  (same_firm_other_revision, a["firm"], a["project"]))
+    with as_user(a["designer"]) as cur, pytest.raises(Exception, match="not found"):
+        cur.execute("select gate1_confirm('space', %s::uuid[], %s)", ([space], same_firm_other_revision))
+    with as_user(a["designer"]) as cur, pytest.raises(Exception, match="revision not found in your firm"):
+        cur.execute("select gate1_confirm('space', %s::uuid[], %s)", ([space], b["revision"]))
+    with as_user(a["designer"]) as cur:
+        cur.execute("select gate1_confirm('space', %s::uuid[], %s)", ([space], a["revision"]))
+        assert cur.fetchone()[0] == 1
+
+
+def test_an_untouched_extracted_value_stays_extracted_when_another_field_is_edited(admin, client):
+    f = seed(admin)
+    with psycopg.connect(DB_URL, autocommit=True) as conn:
+        store_ingest(conn, firm_id=f["firm"], revision_id=f["revision"],
+                     result=read_ifc(ROOT / "tests/fixtures/ifc/bsi-arch-ifc4.ifc"))
+    h = auth(f["designer"])
+    space = client.get(f"{base(f)}/gate1", headers=h).json()["spaces"][0]
+    assert space["provenance"] == "extracted"
+    r = client.put(f"{base(f)}/gate1/spaces/{space['id']}", headers=h, json={"name": "Renamed"})
+    assert r.status_code == 200 and r.json()["provenance"] == "extracted" and r.json()["name"] == "Renamed"
+    r = client.put(f"{base(f)}/gate1/spaces/{space['id']}", headers=h, json={"area_m2": 99})
+    assert r.json()["area_m2"] == 99                       # the edited value is now the designer's own ('default')
+    raw = admin.execute("select area_m2_provenance::text, ceiling_void_mm_provenance::text from space where id = %s",
+                        (space["id"],)).fetchone()
+    assert raw[0] == "default"
+
+
+def test_a_client_cannot_set_or_clear_the_ifc_guid(admin, client):
+    f = seed(admin)
+    h = auth(f["designer"])
+    r = client.post(f"{base(f)}/gate1/spaces", headers=h, json={"name": "Hand", "area_m2": 5, "storey": "L1",
+                                                                "ifc_guid": "0xY$LvXaDEswJDk_VU74C_"})
+    assert r.status_code == 200 and r.json()["ifc_guid"] is None and r.json()["manual_trace"] is True
+
+
+def test_gate1_inputs_get_the_same_checks_as_the_schedule(admin, client, pack):
+    f = seed(admin)
+    populate(client, pack, f)
+    h = auth(f["designer"])
+    url = f"{base(f)}/gate1/inputs"
+    r = client.post(url, headers=h, json={"system": "ahu-1", "name": "not_an_input_of_the_edition", "value": 1, "unit": "K"})
+    assert r.status_code == 422 and r.json()["detail"]["code"] == "invalid_input"
+    r = client.post(url, headers=h, json={"system": "ahu-1", "name": "system_type", "value": "air_conditionning"})
+    assert r.status_code == 422 and "must be one of" in r.json()["detail"]["message"]
+    r = client.post(url, headers=h, json={"system": "ahu-1", "name": "control_deadband", "value": 3, "unit": "kg"})
+    assert r.status_code == 422 and r.json()["detail"]["code"] == "invalid_input"
+    ok = client.post(url, headers=h, json={"system": "ahu-1", "name": "control_deadband", "value": 3, "unit": "K"})
+    assert ok.status_code == 200 and ok.json()["unit"] == "K" and ok.json()["provenance"] == "default"
+    assert client.post(url, headers=h, json={"system": "no-such", "name": "control_deadband", "value": 3,
+                                             "unit": "K"}).status_code == 422

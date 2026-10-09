@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ApiError, api } from "@/lib/api";
-import { applyEdit, canConfirm, canRun, unconfirmedRefs } from "@/lib/gate1";
+import { applyEdit, canConfirm, canRun, unconfirmedRefs, withEtags } from "@/lib/gate1";
 import type { Gate1State, Report, RowKind, RowRef, SpaceInput } from "@/lib/types";
 import { HealthPanel } from "./HealthPanel";
 import { PartsEditor } from "./PartsEditor";
@@ -56,18 +56,24 @@ export function Gate1Screen({ revisionId }: { revisionId: string }) {
     guard(async () => {
       // Edit withdraws confirmation locally; the server trigger does the same.
       setState((s) => s && { ...s, spaces: s.spaces.map((r) => (r.id === id ? applyEdit(r, patch) : r)) });
-      await api.updateSpace(revisionId, id, patch);
-      await reload();
+      try {
+        await api.updateSpace(revisionId, id, patch);
+      } finally {
+        await reload();   // success or refusal: show what the server holds, never the optimistic edit
+      }
     });
 
   const confirm = () =>
     guard(async () => {
-      await api.confirm(revisionId, selected);
-      setSel(EMPTY);
-      await reload();
+      try {
+        await api.confirm(revisionId, withEtags(selected, state.spaces, state.inputs, state.parts, state.project));
+        setSel(EMPTY);
+      } finally {
+        await reload();   // a refused confirmation may still have changed what is shown (another user's edit)
+      }
     });
 
-  const isDesigner = state.role === undefined || state.role === "designer";
+  const isDesigner = state.role === "designer";   // fail closed; the server enforces it too
   const run = canRun(state.spaces, state.inputs, state.parts, state.project);
   const confirmOk = isDesigner && canConfirm(state.spaces, state.inputs, selected, state.parts, state.project);
   const lowHealth = state.health === null || state.health.below_threshold;

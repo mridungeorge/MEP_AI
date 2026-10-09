@@ -9,7 +9,7 @@ import json
 import re
 import sys
 
-PATTERN = re.compile(r"54322|supabase_db_mep|127\.0\.0\.1:5432\b|localhost:5432\b")
+PATTERN = re.compile(r"54322|supabase_db|127\.0\.0\.1:5432\b|localhost:5432\b|\bPGPORT\b", re.IGNORECASE)
 
 
 def main() -> None:

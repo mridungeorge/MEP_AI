@@ -78,17 +78,18 @@ class InMemoryRepo:
     def upsert_input(self, rev, firm, input_id, data):
         return self._write(self.inputs, input_id, data, {"system": "ahu"})
 
-    def confirm(self, kind, ids, user_id, revision_id=None):
-        self.confirm_calls.append((kind, ids, user_id))
-        for i in ids:
-            if kind == "project":
-                self.confirm_project = True
-                continue
-            if kind == "building_part":
-                next(x for x in self.parts if x["id"] == i)["confirmed_by"] = user_id
-                continue
-            row = (self.spaces if kind == "space" else self.inputs)[i]
-            row.update(provenance="engineer_confirmed", confirmed_by=user_id)
+    def confirm(self, groups, user_id, revision_id=None, etags=None):
+        for kind, ids in groups.items():
+            self.confirm_calls.append((kind, ids, user_id))
+            for i in ids:
+                if kind == "project":
+                    self.confirm_project = True
+                    continue
+                if kind == "building_part":
+                    next(x for x in self.parts if x["id"] == i)["confirmed_by"] = user_id
+                    continue
+                row = (self.spaces if kind == "space" else self.inputs)[i]
+                row.update(provenance="engineer_confirmed", confirmed_by=user_id)
 
     def load_run_inputs(self, rev, firm):
         parts = self.parts or [{"id": "seed", "building_class": self.cls, "storeys": 3, "area_m2": 900.0,

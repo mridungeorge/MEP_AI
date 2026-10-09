@@ -17,6 +17,8 @@ export interface BuildingPart {
   storeys: number;
   area_m2: number;
   confirmed?: boolean;
+  /** Version of the row the server showed; confirming names it so a changed row is refused. */
+  etag?: string;
 }
 
 /** A space row. Null value fields mean "no value yet". Provenance is per row (applies to each value). */
@@ -33,6 +35,7 @@ export interface SpaceRow {
   provenance: Provenance;
   /** True when the designer added this by hand because ingest health was low. */
   manual_trace: boolean;
+  etag?: string;
 }
 
 /** A system schedule input (name, value, unit) of the system with this schedule tag. */
@@ -44,6 +47,7 @@ export interface SystemInputRow {
   value: number | string | boolean | null;
   unit: string | null;
   provenance: Provenance;
+  etag?: string;
 }
 
 /** Ingest health, computed by the API. The UI only displays it. */
@@ -65,6 +69,7 @@ export interface ProjectFacts {
   climate_zone: number | null;
   approval_date: string | null;
   confirmed: boolean;
+  etag?: string;
 }
 
 /** GET /revisions/{id}/gate1 */
@@ -85,6 +90,8 @@ export type RowKind = "space" | "system_input" | "building_part" | "project";
 export interface RowRef {
   kind: RowKind;
   id: string;
+  /** The row version the designer was shown (copied from the row). */
+  etag?: string;
 }
 
 /** POST /revisions/{id}/gate1/confirm body. */
@@ -125,6 +132,9 @@ export interface ReportResult {
 export interface Report {
   banner: string | null;
   draft_rules?: string[];
+  /** Rules selected for the project but run on no system (the engine lists them). */
+  unassigned_rules?: string[];
+  jurisdiction?: { decision?: string; notes?: string[]; warnings?: string[]; refused_by?: string[] };
   results: ReportResult[];
 }
 

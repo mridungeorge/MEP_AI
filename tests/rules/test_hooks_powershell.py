@@ -56,6 +56,15 @@ SIGNOFF_BLOCKED = [
     "git config core.hooksPath C:\\empty",
     "Set-Content evals/golden/syn-a/meta.yaml 'data_agreement: signed'",
     "Set-Content rules/ncc2025/j6/x.yaml 'revie`wed_by: Jane'",      # a PowerShell backtick splice
+    # review round 1 bypasses: Windows separators, aliases, .NET writers, the python launcher, encoded commands
+    "Get-ChildItem rules\\ncc2025 -Recurse | % { (gc $_.FullName) -replace 'status: draft','status: approved' | sc $_.FullName }",
+    "copy C:\\t\\approved.yaml rules\\ncc2025\\j6\\x.yaml",
+    "[System.IO.File]::AppendAllText('rules/ncc2025/j6/x.yaml','reviewed_by: J')",
+    "$w=[System.IO.StreamWriter]::new('rules/ncc2025/j6/x.yaml'); $w.WriteLine('checked_by: J')",
+    "py -c \"open('rules/ncc2025/j6/x.yaml','a').write('reviewed_by: J')\"",
+    "robocopy C:\\t rules\\ncc2025\\j6 approved.yaml",
+    "pwsh -NoProfile -EncodedCommand UwBlAHQALQBDAG8AbgB0AGUAbgB0AA==",
+    "powershell -enc UwBlAHQA",
 ]
 
 
@@ -85,6 +94,8 @@ DB_BLOCKED = [
     "Invoke-Sqlcmd -ConnectionString 'host=127.0.0.1:5432'",
     "$env:DATABASE_URL = 'postgresql://postgres:postgres@localhost:5432/postgres'; python x.py",
     "psql postgresql://postgres:postgres@127.0.0.1:54322/postgres -c 'select 1'",
+    "docker exec $(docker ps -qf name=supabase_db) psql -U postgres",       # review round 1: any supabase_db container
+    "$env:PGPORT = '5432'; psql",
 ]
 
 

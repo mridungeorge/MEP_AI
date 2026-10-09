@@ -21,15 +21,18 @@ SKIP_HOOKS = re.compile(r"--no-ve(r(i(f(y)?)?)?)?\b|hookspath|\bgit\b[^|;&\n]*\b
 WRITERS = re.compile(
     r"\b(sed|awk|perl|tee|python3?|ruby|node|cat|echo|printf|cp|mv|git\s+(apply|checkout|restore|stash)"
     r"|set-content|add-content|out-file|copy-item|move-item|rename-item|new-item|clear-content|invoke-expression"
-    r"|sc|ac|ni|cpi|mi|ren|iex)\b|>>?|<<|-replace\b|\bwrite(all)?(text|lines|bytes)\b|\[io\.file\]", re.IGNORECASE)
+    r"|sc|ac|ni|cpi|mi|ren|iex|copy|move|rni|xcopy|robocopy|streamwriter|filestream)\b|(?<![.\w])py\b"
+    r"|>>?|<<|-replace\b|\b(write|append)(all)?(text|lines|bytes)\b|\[(system\.)?io\.file\]", re.IGNORECASE)
+# an encoded command hides what it runs from every check here; an agent has no need for one
+ENCODED = re.compile(r"(?<![\w-])-(enc|encodedcommand|ec)\b", re.IGNORECASE)
 GOLDEN_PROOF = re.compile(r"golden.*(data_agreement|meta\.yaml)|(data_agreement|meta\.yaml).*golden", re.IGNORECASE | re.DOTALL)
 OVERRIDE = re.compile(r"MEP_HUMAN_SIGNOFF", re.IGNORECASE)
 
 
 def _plain(command: str) -> str:
-    """The command with quotes, backslashes and empty-string splices removed, so `appr''oved` and `core.hooks""Path`
-    read as the words they build."""
-    return re.sub(r"[\"'`\\]", "", command)
+    """The command with quotes and empty-string splices removed (so `appr''oved` and `core.hooks""Path` read as the words
+    they build) and Windows path separators turned into `/` (so a path under rules with backslashes reads as a rules path)."""
+    return re.sub(r"[\"'`]", "", command).replace("\\", "/")
 
 
 def main() -> None:
@@ -46,6 +49,10 @@ def main() -> None:
     if GOLDEN_PROOF.search(command) and WRITERS.search(command):
         print("Blocked by project guardrail: what makes a golden project REAL (meta.yaml, data_agreement files) is "
               "supplied by a human with the pilot firm, not written from the shell.", file=sys.stderr)
+        sys.exit(2)
+    if ENCODED.search(command):
+        print("Blocked by project guardrail: -EncodedCommand hides the command from the sign-off and database guards; "
+              "pass the command as plain text.", file=sys.stderr)
         sys.exit(2)
     if OVERRIDE.search(command):
         print("Blocked by project guardrail: MEP_HUMAN_SIGNOFF is for the human engineer's own shell; an agent must "

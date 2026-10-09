@@ -78,11 +78,25 @@ export function unconfirmedRefs(
   spaces: SpaceRow[], inputs: SystemInputRow[], parts: BuildingPart[], project: ProjectFacts | undefined,
 ): RowRef[] {
   return [
-    ...(project && !project.confirmed ? [{ kind: "project", id: project.id } as RowRef] : []),
-    ...parts.filter((p) => !p.confirmed).map((p): RowRef => ({ kind: "building_part", id: p.id })),
-    ...spaces.filter((s) => rowState(s) !== "confirmed").map((s): RowRef => ({ kind: "space", id: s.id })),
-    ...inputs.filter((i) => rowState(i) !== "confirmed").map((i): RowRef => ({ kind: "system_input", id: i.id })),
+    ...(project && !project.confirmed ? [{ kind: "project", id: project.id, etag: project.etag } as RowRef] : []),
+    ...parts.filter((p) => !p.confirmed).map((p): RowRef => ({ kind: "building_part", id: p.id, etag: p.etag })),
+    ...spaces.filter((s) => rowState(s) !== "confirmed").map((s): RowRef => ({ kind: "space", id: s.id, etag: s.etag })),
+    ...inputs.filter((i) => rowState(i) !== "confirmed").map((i): RowRef => ({ kind: "system_input", id: i.id, etag: i.etag })),
   ];
+}
+
+/** Attach the row version the screen is showing to each selected ref (the server refuses a changed row). */
+export function withEtags(
+  refs: RowRef[], spaces: SpaceRow[], inputs: SystemInputRow[], parts: BuildingPart[], project: ProjectFacts | undefined,
+): RowRef[] {
+  return refs.map((r) => {
+    const row =
+      r.kind === "space" ? spaces.find((s) => s.id === r.id)
+      : r.kind === "system_input" ? inputs.find((i) => i.id === r.id)
+      : r.kind === "building_part" ? parts.find((p) => p.id === r.id)
+      : project?.id === r.id ? project : undefined;
+    return { ...r, etag: row?.etag };
+  });
 }
 
 /** Client-side input sanity only (the API re-validates). Returns an error message or null. */

@@ -22,7 +22,7 @@ export default defineConfig({
       url: `${API}/openapi.json`,
       timeout: 60_000,
       reuseExistingServer: false,
-      env: { ...(process.env as Record<string, string>), MEP_DB_URL: DB_URL, MEP_JWT_SECRET: SECRET, MEP_CORS_ORIGINS: WEB },
+      env: { ...(process.env as Record<string, string>), MEP_DB_URL: DB_URL, MEP_JWT_SECRET: SECRET, MEP_CORS_ORIGINS: WEB, MEP_ALLOW_DEMO_JWT_SECRET: "1" },
     },
     {
       command: "pnpm exec next build && pnpm exec next start -H 127.0.0.1 -p 3100",

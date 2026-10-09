@@ -64,7 +64,7 @@ test("fixture IFC -> health score -> confirm everything -> engine run -> cited D
   await expect(rows.first()).toBeVisible();
   expect(await rows.count()).toBeGreaterThan(0);
   for (const text of await rows.allInnerTexts()) {
-    expect(text).toMatch(/NCC 2025 Volume One NCC2025, J6\S.* \((draft|approved)\)$/);
+    expect(text).toMatch(/NCC 2025 Volume One NCC2025, J6\S.* \((draft|approved)\)\t/);
   }
 });
 

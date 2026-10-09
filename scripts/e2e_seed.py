@@ -72,10 +72,10 @@ def main() -> None:
                 r = client.post(f"{base}/schedule/systems", headers=h, json=e2e_lib.form_system(pack, EDITION, "ahu-1", AC))
                 assert r.status_code == 200, r.text
                 v = client.get(f"{base}/gate1", headers=h).json()
-                rows = ([{"kind": "project", "id": v["project"]["id"]}]
-                        + [{"kind": "building_part", "id": p["id"]} for p in v["parts"]]
-                        + [{"kind": "space", "id": s["id"]} for s in v["spaces"]]
-                        + [{"kind": "system_input", "id": i["id"]} for i in v["inputs"]])
+                rows = ([{"kind": "project", "id": v["project"]["id"], "etag": v["project"]["etag"]}]
+                        + [{"kind": "building_part", "id": p["id"], "etag": p["etag"]} for p in v["parts"]]
+                        + [{"kind": "space", "id": s["id"], "etag": s["etag"]} for s in v["spaces"]]
+                        + [{"kind": "system_input", "id": i["id"], "etag": i["etag"]} for i in v["inputs"]])
                 left = name.removeprefix("refuse-")
                 # leave exactly ONE row of the kind unconfirmed
                 skip = next(r for r in rows if r["kind"] == left)

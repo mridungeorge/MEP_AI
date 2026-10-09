@@ -6,9 +6,14 @@ export function RunReport({ report }: { report: Report }) {
     <section aria-label="Report">
       <h2>Report</h2>
       {report.banner && <p role="status" data-testid="draft-banner" style={{ background: "#fef3c7", padding: 8 }}>{report.banner}</p>}
+      {report.unassigned_rules && report.unassigned_rules.length > 0 && (
+        <p data-testid="unassigned-rules">Rules selected for this project but run on no system: {report.unassigned_rules.join(", ")}</p>
+      )}
+      {report.jurisdiction?.warnings?.map((w, i) => <p key={`w${i}`} role="alert" data-testid="jurisdiction-warning">{w}</p>)}
+      {report.jurisdiction?.notes?.map((n, i) => <p key={`n${i}`} data-testid="jurisdiction-note">{n}</p>)}
       <table>
         <thead>
-          <tr><th>System</th><th>Rule</th><th>Outcome</th><th>Citation</th></tr>
+          <tr><th>System</th><th>Rule</th><th>Outcome</th><th>Citation</th><th>Causes</th></tr>
         </thead>
         <tbody>
           {report.results.map((r, i) => (
@@ -17,6 +22,7 @@ export function RunReport({ report }: { report: Report }) {
               <td>{r.rule_id}</td>
               <td>{r.outcome}</td>
               <td>{r.citation.document} {r.citation.edition}, {r.citation.clause} ({r.citation.rule_status})</td>
+              <td>{(r.causes ?? []).join("; ")}</td>
             </tr>
           ))}
         </tbody>

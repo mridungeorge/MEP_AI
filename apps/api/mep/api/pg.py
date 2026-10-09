@@ -17,19 +17,21 @@ import json
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from decimal import Decimal
-from typing import Any
+from typing import Any, ClassVar
 from uuid import UUID
 
 import psycopg
 from psycopg.rows import dict_row
 
-from mep.api.gate1 import ConfirmRefused, UnknownSystemError
+from mep.api.gate1 import ConfirmRefused, InvalidInputError, UnknownSystemError
 from mep.api.schedule import CurrentUser, RevisionFrozenError, SystemModel
 from mep.engine.assignment import rules_for_system_type
 from mep.engine.ledger import PostgresLedger
 from mep.engine.loader import RulePack
+from mep.ingest.schedule import CellError, normalise_value, schedule_inputs, system_types
 
-SPACE_FIELDS = ("ifc_guid", "name", "use", "storey", "area_m2", "ceiling_void_mm")
+# ifc_guid is never client-writable: it comes from the IFC ingest only
+SPACE_FIELDS = ("name", "use", "storey", "area_m2", "ceiling_void_mm")
 
 
 def _frozen(exc: Exception) -> bool:
@@ -89,7 +91,7 @@ class PgRepository:
     @staticmethod
     def _part(r: dict[str, Any]) -> dict[str, Any]:
         return {"id": str(r["id"]), "building_class": r["building_class"], "storeys": r["storeys"],
-                "area_m2": _num(r["area_m2_value"]), "confirmed": r["confirmed_by"] is not None}
+                "area_m2": _num(r["area_m2_value"]), "confirmed": r["confirmed_by"] is not None, "etag": r["etag"]}
 
     @staticmethod
     def _space(r: dict[str, Any]) -> dict[str, Any]:
@@ -97,7 +99,7 @@ class PgRepository:
                 "use": r["use"], "storey": r["storey"], "ceiling_void_mm": _num(r["ceiling_void_mm_value"]),
                 "provenance": _row_provenance(r["confirmed_by"], r["area_m2_provenance"],
                                               r["ceiling_void_mm_provenance"]),
-                "manual_trace": r["ifc_guid"] is None}
+                "manual_trace": r["ifc_guid"] is None, "etag": r["etag"]}
 
     @staticmethod
     def _input(r: dict[str, Any]) -> dict[str, Any]:
@@ -105,12 +107,19 @@ class PgRepository:
             r["value_text"] if r["value_text"] is not None else r["value_bool"])
         return {"id": str(r["id"]), "system": r["tag"], "name": r["name"],
                 "value": _num(value) if isinstance(value, Decimal) else value, "unit": r["unit"],
-                "provenance": _row_provenance(r["confirmed_by"], r["provenance"])}
+                "provenance": _row_provenance(r["confirmed_by"], r["provenance"]), "etag": r["etag"]}
 
+    # `etag` fingerprints the values a designer confirms: a confirmation names the etag it was shown, and the store
+    # refuses it if the row has changed since (a stale screen can never confirm a value nobody looked at)
+    _SPACE_ETAG = ("md5(concat_ws('|', ifc_guid, name, use, storey, area_m2_value, ceiling_void_mm_value))")
     _SPACE_SQL = ("select id, ifc_guid, name, use, storey, area_m2_value, area_m2_provenance, ceiling_void_mm_value,"
-                  " ceiling_void_mm_provenance, confirmed_by from space")
+                  f" ceiling_void_mm_provenance, confirmed_by, {_SPACE_ETAG} as etag from space")
+    _INPUT_ETAG = "md5(concat_ws('|', i.name, i.value_number, i.value_text, i.value_bool, i.unit))"
     _INPUT_SQL = ("select i.id, s.tag, i.name, i.value_number, i.value_text, i.value_bool, i.unit, i.provenance::text"
-                  " as provenance, i.confirmed_by from system_input i join system s on s.id = i.system_id")
+                  f" as provenance, i.confirmed_by, {_INPUT_ETAG} as etag"
+                  " from system_input i join system s on s.id = i.system_id")
+    _PART_ETAG = "md5(concat_ws('|', position, building_class, storeys, area_m2_value))"
+    _PROJECT_ETAG = "md5(concat_ws('|', state, ncc_edition, climate_zone, approval_date))"
 
     # ---- Gate1Repository --------------------------------------------------------------------------------------
     def get_gate1_view(self, revision_id: UUID, firm_id: UUID) -> dict[str, Any] | None:
@@ -118,13 +127,13 @@ class PgRepository:
             rev = self._revision(conn, revision_id, firm_id)
             if rev is None:
                 return None
-            proj = conn.execute("select id, state, ncc_edition, climate_zone, approval_date, confirmed_by is not null"
-                                " as confirmed from project where id = %s and firm_id = %s",
+            proj = conn.execute(f"select id, state, ncc_edition, climate_zone, approval_date, confirmed_by is not null"
+                                f" as confirmed, {self._PROJECT_ETAG} as etag from project where id = %s and firm_id = %s",
                                 (rev["project_id"], firm_id)).fetchone()
             if proj is None:
                 return None
-            parts = conn.execute("select id, building_class, storeys, area_m2_value, confirmed_by from building_part"
-                                 " where project_id = %s and firm_id = %s order by position",
+            parts = conn.execute(f"select id, building_class, storeys, area_m2_value, confirmed_by, {self._PART_ETAG} as etag"
+                                 " from building_part where project_id = %s and firm_id = %s order by position",
                                  (rev["project_id"], firm_id)).fetchall()
             spaces = conn.execute(self._SPACE_SQL + " where revision_id = %s and firm_id = %s order by name, id",
                                   (revision_id, firm_id)).fetchall()
@@ -141,7 +150,7 @@ class PgRepository:
         return {"project": {"id": str(proj["id"]), "state": proj["state"], "ncc_edition": proj["ncc_edition"],
                             "climate_zone": proj["climate_zone"],
                             "approval_date": None if proj["approval_date"] is None else proj["approval_date"].isoformat(),
-                            "confirmed": proj["confirmed"]},
+                            "confirmed": proj["confirmed"], "etag": proj["etag"]},
                 "parts": [self._part(p) for p in parts], "spaces": [self._space(s) for s in spaces],
                 "inputs": [self._input(i) for i in inputs], "health": health, "ncc_edition": proj["ncc_edition"]}
 
@@ -163,7 +172,8 @@ class PgRepository:
                     rows.append(conn.execute(
                         "insert into building_part (firm_id, project_id, position, building_class, storeys,"
                         " area_m2_value, area_m2_provenance) values (%s, %s, %s, %s, %s, %s, 'default')"
-                        " returning id, building_class, storeys, area_m2_value, confirmed_by",
+                        " returning id, building_class, storeys, area_m2_value, confirmed_by,"
+                        " md5(concat_ws('|', position, building_class, storeys, area_m2_value)) as etag",
                         (firm_id, rev["project_id"], pos, p["building_class"], p["storeys"], p["area_m2"])).fetchone())
         except psycopg.errors.RaiseException as exc:
             if _frozen(exc):
@@ -200,10 +210,11 @@ class PgRepository:
                     sid = UUID(space_id)
                     # any edit resets EVERY provenance on the row to 'default' (a client may write nothing else), and
                     # the database trigger withdraws the confirmation
+                    # an untouched value keeps 'extracted' (it was never looked at); anything else becomes 'default'
                     resets = {
-                        "area_m2_provenance": "case when area_m2_value is null then null else 'default'::provenance end",
-                        "ceiling_void_mm_provenance": "case when ceiling_void_mm_value is null then null"
-                                                      " else 'default'::provenance end"}
+                        f"{f}_provenance": (f"case when {f}_value is null then null when {f}_provenance = 'extracted'"
+                                            f" then {f}_provenance else 'default'::provenance end")
+                        for f in ("area_m2", "ceiling_void_mm")}
                     sets = ", ".join([f"{c} = %s" for c in cols]
                                      + [f"{c} = {sql}" for c, sql in resets.items() if c not in cols])
                     done = conn.execute(f"update space set {sets} where id = %s and revision_id = %s"
@@ -227,13 +238,36 @@ class PgRepository:
             return value, None, None
         return None, value, None
 
+    def _checked_value(self, conn: psycopg.Connection[dict[str, Any]], revision_id: UUID, firm_id: UUID,
+                       data: dict[str, Any]) -> tuple[Any, str | None]:
+        """The same checks as the schedule: the name is an input of the project's edition, the unit is converted to the
+        rule's declared unit (pint), and a system type is one the rules know."""
+        if self._pack is None:
+            return data.get("value"), data.get("unit")
+        row = conn.execute("select p.ncc_edition from revision r join project p on p.id = r.project_id and"
+                           " p.firm_id = r.firm_id where r.id = %s and r.firm_id = %s", (revision_id, firm_id)).fetchone()
+        edition = str(row["ncc_edition"]) if row else ""
+        spec = schedule_inputs(self._pack, edition).get(data["name"])
+        if spec is None:
+            raise InvalidInputError(f"{data['name']} is not an input of {edition}")
+        try:
+            value, unit = normalise_value(spec, data.get("value"), data.get("unit"))
+        except CellError as exc:
+            raise InvalidInputError(f"{data['name']}: {exc}") from None
+        types = system_types(self._pack, edition)
+        if data["name"] == "system_type" and types is not None and value not in types:
+            raise InvalidInputError(f"system_type must be one of {list(types)}")
+        return value, unit
+
     def upsert_input(self, revision_id: UUID, firm_id: UUID, input_id: str | None,
                      data: dict[str, Any]) -> dict[str, Any] | None:
-        number, text, boolean = self._value_columns(data.get("value"))
         try:
             with self._as_user() as conn:
                 if self._revision(conn, revision_id, firm_id) is None:
                     return None
+                value, unit = self._checked_value(conn, revision_id, firm_id, data)
+                number, text, boolean = self._value_columns(value)
+                data = {**data, "unit": unit}
                 if input_id is None:
                     tag = data.get("system")
                     system = None if not tag else conn.execute(
@@ -265,12 +299,33 @@ class PgRepository:
             raise
         return None if out is None else self._input(out)
 
-    def confirm(self, kind: str, ids: list[str], user_id: UUID, revision_id: UUID | None = None) -> None:
+    _ETAG_SQL: ClassVar[dict[str, str]] = {
+        "space": f"select id::text as id, {_SPACE_ETAG} as etag from space where id = any(%s) and firm_id = %s for update",
+        "system_input": (f"select i.id::text as id, {_INPUT_ETAG} as etag from system_input i"
+                         " where i.id = any(%s) and i.firm_id = %s for update"),
+        "building_part": (f"select id::text as id, {_PART_ETAG} as etag from building_part"
+                          " where id = any(%s) and firm_id = %s for update"),
+        "project": f"select id::text as id, {_PROJECT_ETAG} as etag from project where id = any(%s) and firm_id = %s for update",
+    }
+
+    def confirm(self, groups: dict[str, list[str]], user_id: UUID, revision_id: UUID | None = None,
+                etags: dict[str, str | None] | None = None) -> None:
+        """Confirm every kind in ONE transaction (all or nothing). Each row must name the etag the designer was shown;
+        a row changed since then is refused, so a stale screen cannot confirm a value nobody looked at."""
         if user_id != self._user.user_id:           # the database confirms as the JWT subject: never as someone else
             raise ConfirmRefused("a confirmation is recorded for the signed-in user only")
+        seen = etags or {}
         try:
             with self._as_user() as conn:
-                conn.execute("select gate1_confirm(%s, %s::uuid[], %s)", (kind, [UUID(i) for i in ids], revision_id))
+                for kind, ids in groups.items():
+                    uuids = [UUID(i) for i in ids]
+                    current = {r["id"]: r["etag"] for r in conn.execute(
+                        self._ETAG_SQL[kind], (uuids, self._user.firm_id)).fetchall()}
+                    stale = [i for i in ids if seen.get(f"{kind}:{i}") is None or current.get(i) != seen[f"{kind}:{i}"]]
+                    if stale:
+                        raise ConfirmRefused(f"{len(stale)} {kind} row(s) changed since you loaded the screen"
+                                             " (or were not shown): reload and review before confirming")
+                    conn.execute("select gate1_confirm(%s, %s::uuid[], %s)", (kind, uuids, revision_id))
         except psycopg.errors.InsufficientPrivilege as exc:
             raise ConfirmRefused(str(exc).splitlines()[0]) from None
         except psycopg.errors.RaiseException as exc:

@@ -4,6 +4,7 @@
     MEP_JWT_SECRET    the HS256 secret that signs access tokens (at least 32 bytes)
     MEP_CORS_ORIGINS  comma-separated web origins allowed to call the API (default: none)
     MEP_RULES_DIR     rule pack folder (default: <repo>/rules)
+    MEP_ALLOW_DEMO_JWT_SECRET=1   local runs only: accept the public Supabase demo secret
 
 Run:  uvicorn --factory mep.api.server:app_from_env --port 8000
 """
@@ -22,6 +23,7 @@ from mep.api.schedule import CurrentUser
 from mep.engine.loader import RulePack, load_pack
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
+DEMO_JWT_SECRET = "super-secret-jwt-token-with-at-least-32-characters-long"   # `supabase start` default
 
 
 def create_pg_app(dsn: str, jwt_secret: str, pack: RulePack, cors_origins: list[str] | None = None) -> FastAPI:
@@ -43,6 +45,9 @@ def app_from_env() -> FastAPI:
     dsn, secret = os.environ.get("MEP_DB_URL", ""), os.environ.get("MEP_JWT_SECRET", "")
     if not dsn or not secret:
         raise RuntimeError("MEP_DB_URL and MEP_JWT_SECRET must be set")
+    if secret == DEMO_JWT_SECRET and os.environ.get("MEP_ALLOW_DEMO_JWT_SECRET") != "1":
+        # the local Supabase's published secret: anyone could sign a token for any user id
+        raise RuntimeError("MEP_JWT_SECRET is the public demo secret; set MEP_ALLOW_DEMO_JWT_SECRET=1 for local runs only")
     origins = [o.strip() for o in os.environ.get("MEP_CORS_ORIGINS", "").split(",") if o.strip()]
     rules = Path(os.environ.get("MEP_RULES_DIR") or REPO_ROOT / "rules")
     return create_pg_app(dsn, secret, load_pack(rules), origins)

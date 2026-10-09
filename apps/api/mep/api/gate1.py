@@ -43,6 +43,10 @@ class UnknownSystemError(Exception):
     """An input names a system tag that does not exist in this revision (or names none)."""
 
 
+class InvalidInputError(Exception):
+    """A Gate 1 input is not one the project's edition declares, or its unit/value does not fit the declaration."""
+
+
 class ConfirmRefused(Exception):
     """The store refused a confirmation (for example the project facts are incomplete). The message is shown."""
 
@@ -66,9 +70,10 @@ class Gate1Repository(Protocol):
     def upsert_input(self, revision_id: UUID, firm_id: UUID, input_id: str | None,
                      data: dict[str, Any]) -> dict[str, Any] | None: ...
 
-    def confirm(self, kind: str, ids: list[str], user_id: UUID, revision_id: UUID | None = None) -> None:
-        """Mark rows engineer_confirmed and record confirmed_by, and ledger the confirmation. Only called for a
-        designer. Raises ConfirmRefused when the store refuses."""
+    def confirm(self, groups: dict[str, list[str]], user_id: UUID, revision_id: UUID | None = None,
+                etags: dict[str, str | None] | None = None) -> None:
+        """Mark rows engineer_confirmed (kind -> ids), record confirmed_by and ledger it, ALL in one transaction. `etags`
+        maps "kind:id" to the version the designer was shown. Only called for a designer. Raises ConfirmRefused."""
 
     def load_run_inputs(self, revision_id: UUID, firm_id: UUID) -> dict[str, Any]:
         """{project: {state, ncc_edition, climate_zone, building_class, approval_date, confirmed_by}, spaces: [{id, provenance,
@@ -169,6 +174,7 @@ class RowRefModel(BaseModel):
 
     kind: Literal["space", "system_input", "building_part", "project"]
     id: Annotated[str, Field(min_length=1, max_length=64)]
+    etag: Annotated[str, Field(max_length=64)] | None = None      # the row version the designer was shown
 
 
 class ConfirmRequest(BaseModel):
@@ -224,6 +230,8 @@ def _write(repo: Gate1Repository, revision_id: UUID, user: CurrentUser, kind: st
         raise _err(409, "revision_frozen", "revision is frozen") from None
     except UnknownSystemError as exc:
         raise _err(422, "unknown_system", str(exc) or "name the schedule tag of an existing system") from None
+    except InvalidInputError as exc:
+        raise _err(422, "invalid_input", str(exc)) from None
     if row is None:
         raise _err(404, "not_found", f"{kind} not found")
     return row
@@ -267,16 +275,16 @@ def confirm(revision_id: UUID, body: ConfirmRequest, user: User, repo: Repo) -> 
     for r in body.rows:
         if r.id not in known[r.kind]:
             raise _err(404, "not_found", f"{r.kind} {r.id} not found in this revision")
-    for kind in ("space", "system_input", "building_part", "project"):
-        ids = sorted({r.id for r in body.rows if r.kind == kind})
-        if ids:
-            try:
-                repo.confirm(kind, ids, user.user_id, revision_id)
-            except ConfirmRefused as exc:
-                raise _err(409, "cannot_confirm", str(exc)) from None
-            except RevisionFrozenError:
-                raise _err(409, "revision_frozen", "revision is frozen") from None
-    return {"confirmed": [r.model_dump() for r in body.rows]}
+    groups = {kind: sorted({r.id for r in body.rows if r.kind == kind})
+              for kind in ("space", "system_input", "building_part", "project")}
+    groups = {k: v for k, v in groups.items() if v}
+    try:
+        repo.confirm(groups, user.user_id, revision_id, {f"{r.kind}:{r.id}": r.etag for r in body.rows})
+    except ConfirmRefused as exc:
+        raise _err(409, "cannot_confirm", str(exc)) from None
+    except RevisionFrozenError:
+        raise _err(409, "revision_frozen", "revision is frozen") from None
+    return {"confirmed": [r.model_dump(exclude={"etag"}) for r in body.rows]}
 
 
 def _refuse(code: str, reasons: list[str]) -> JSONResponse:
