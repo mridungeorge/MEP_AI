@@ -5,18 +5,32 @@ local devcontainer gate is the reference (tag `sprint-2-gate`). GitHub CI has ne
 Updated: 2026-10-09 (recovery after a device change; see "Recovery 2026-10-09")
 
 ## Resume here (updated 2026-10-10)
-Unattended multi-phase build. Order: PHASE 2.5 -> PHASE 3 (revision diff) -> PHASE 4a (review, sign-off, deliverable); STOP after 4a.
-A phase is done when its `*-gate` tag exists. **Done: 2.5 (`sprint-2.5-gate`), 3 (`sprint-3-gate`).** **Current phase: 4a.**
-Phase 4a built so far (committed): classifier (`review/classifier.py`), migration 0010 (Gate 2 review functions with the random
-spot-check bulk approval, `sign_gate` state machine, ledger hash chain + `verify_ledger` + audit triggers, share links), API
-(`api/review.py`, `review_pg.py`, `review/package.py` PDF + validator), DB tests `tests/rls/test_pg_signoff.py`, API tests
-`tests/rls/test_pg_review_api.py`. Still to do: UI (Gate 2 worksheet, bulk spot-check, sign-off screens, share-link creation, public
-`/share/[token]` page; `Shell` must treat `/share/` as public), Playwright designer -> checker -> approver -> signed package -> share
-link, approver registration numbers are set by the service only (no UI), 4a review (max two rounds), gate, tag `sprint-4a-gate`, STOP
-and report. Do NOT start 4b.
-Notes: the local Supabase signs tokens with ES256 (JWKS). Mail for magic links goes to Mailpit (`http://127.0.0.1:54324`). Run everything
-in the devcontainer; `~/ws` is a synced work copy (never `uv sync` there); clean gates run from `git clone` copies (`~/gate3`).
-Existing open revisions have results without an input fingerprint (`inputs_hash` NULL): they must be re-run once before they can be frozen.
+Unattended multi-phase build: **Phases 2.5, 3 and 4a are done** (`sprint-2.5-gate`, `sprint-3-gate`, `sprint-4a-gate`). The prompt says STOP
+after 4a: **do not start 4b until the user replies to the 4a report.**
+Notes: the local Supabase signs tokens with ES256 (JWKS). Mail for magic links goes to Mailpit (`http://127.0.0.1:54324`). Run everything in
+the devcontainer; `~/ws` is a synced work copy (never `uv sync` there); clean gates run from `git clone` copies (`~/gate3`). On the Windows
+host put `AppData/Local/Python/bin` (under the user profile) first on PATH (the WindowsApps `python` stub fails).
+Existing open revisions have results without an input fingerprint (`inputs_hash` NULL): re-run once before freezing.
+
+## Phase 4a (2026-10-10): done, tag `sprint-4a-gate`
+- Built: exception classifier (`review/classifier.py`; 7 exception classes + clean pass; reasons stored with the result); migration 0010
+  (Gate 2 `gate2_review` / `gate2_prepare_bulk` / `gate2_bulk_approve` with a random spot-check, `sign_gate` state machine: gate order,
+  frozen-before-sign, one signer per gate, approver registration number, signed revision immutable; ledger hash chain with per-firm
+  sequence, `verify_ledger`, audit triggers on review/signoff/diff/sample/artifact; certifier share links stored as hashes); API
+  (`api/review.py`, `review_pg.py`), signed package JSON + deterministic PDF with validator (`review/package.py`, artifact row, released
+  only when all gates are signed and the ledger verifies); UI (review worksheet, bulk spot-check, sign-off, package view, public
+  `/share/[token]`); Playwright designer -> checker -> approver -> signed package -> share link -> revoke (11 e2e tests).
+- Review: round 1 found 2 blockers (a failed spot-check could be undone; a failed-validator PDF was still returned) + 9 should-fix, all
+  fixed (0013). Round 2 found 2 blockers (rejection outside the sample could be laundered; one person could check and approve) + 4
+  should-fix, all fixed (0014). **The round-2 fixes had no third review**; covered by `tests/rls/test_pg_signoff.py` (last section).
+- Policies worth the user's attention: (a) the Gate 1 signer, the Gate 2 reviewers and the Gate 3 approver must be three different people
+  (a one-person firm cannot sign off); (b) a checker may approve a FAIL (shown as "accepted FAIL" in the package); (c) approver registration
+  numbers are set by the service only (no UI); (d) rules remain `draft`, so every package carries the DRAFT banner.
+- Ledger honesty: the chain detects edits and deletions by anyone who cannot also disable triggers and rewrite `ledger_head`; it is not
+  proof against the database owner (hashes are unkeyed). The PDF prints the ledger position fixed at the last sign-off; keeping the live
+  head outside the database (e.g. a periodic export) is an operational control not built yet.
+- Known limits: share links carry the token in the URL (redacted from the API access log, not from a reverse proxy's); the share package
+  still shows the sign-off ledger position and signer e-mails; a withheld (validator-failed) PDF is not itself ledgered.
 
 ## Phase 3 (2026-10-10): done, tag `sprint-3-gate`
 - Built: revision lineage (child revision on upload to a frozen revision; systems copied with confirmations; unchanged confirmed spaces

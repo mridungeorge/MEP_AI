@@ -237,7 +237,7 @@ test("designer froze it; checker reviews (spot-check, line by line) and signs Ga
   const checker = await asUser(s.checker_email);
   await expect(checker.getByTestId("review-progress")).toContainText("Signed: Gate 1");           // the designer's freeze
   await checker.getByRole("button", { name: "Sign Gate 2 (checker)" }).click();
-  await expect(checker.getByRole("alert").filter({ hasText: "stale, unclassified, unreviewed or not approved" })).toBeVisible();
+  await expect(checker.getByRole("alert").filter({ hasText: "have not reviewed anything" })).toBeVisible();
 
   const draw = checker.getByRole("button", { name: "Draw the spot-check sample" });
   await expect(draw).toBeEnabled();                       // the seeded run must have clean passes: the bulk path is not optional
