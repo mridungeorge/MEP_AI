@@ -1,2 +1,10 @@
-# Auto detect text files and perform LF normalization
-* text=auto
+# Source is LF everywhere (scripts must run on Linux and in the devcontainer, and git archive honours this).
+* text=auto eol=lf
+*.sh text eol=lf
+*.py text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.json text eol=lf
+*.sql text eol=lf
+*.md text eol=lf
+*.pdf binary
