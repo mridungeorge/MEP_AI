@@ -122,9 +122,9 @@ class PgReview:
                 "select rr.id, rr.subject_id, rr.rule_id, rr.part, rr.result::text as outcome, rr.citation, rr.causes, rr.near_miss,"
                 " rr.review_class, rr.review_reasons, rr.stale, rr.fix_hypotheses, rr.inputs, v.decision, v.reason, v.bulk, v.spot_check, v.user_id,"
                 " v.created_at, v.fail_category, v.fail_reference, fa.note as ack_note from rule_result rr"
-                " left join review_latest v on v.rule_result_id = rr.id left join fail_ack fa on fa.rule_result_id = rr.id"
+                " left join review_latest v on v.rule_result_id = rr.id left join fail_ack fa on fa.rule_result_id = rr.id and fa.user_id = %s"
                 " where rr.revision_id = %s and rr.firm_id = %s and rr.current order by rr.subject_id, rr.rule_id",
-                (revision_id, self._user.firm_id)).fetchall()
+                (self._user.user_id, revision_id, self._user.firm_id)).fetchall()
             signoffs = conn.execute("select gate::text as gate, signer_role::text as role, signed_at, registration_no, user_id"
                                     " from signoff where revision_id = %s order by gate", (revision_id,)).fetchall()
             sample = conn.execute("select id, candidate_ids, sample_ids, created_at from review_sample where revision_id = %s"
@@ -240,7 +240,7 @@ class PgReview:
 
 
 class PgShare:
-    """The public, read-only door. The link token is exchanged ONCE (a POST body, never a URL) for a short-lived session; the session
+    """The public, read-only door (the package it serves still shows the signers' e-mail addresses: a certifier needs to know who signed). The link token is exchanged ONCE (a POST body, never a URL) for a short-lived session; the session
     (an opaque random value kept in an HttpOnly cookie, stored here only as a hash) opens exactly one revision's package, and every
     exchange and read is logged."""
 

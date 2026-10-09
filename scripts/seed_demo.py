@@ -81,7 +81,10 @@ def main() -> None:
         sys.exit("strict mode needs three different e-mail addresses (use small_firm for one person)")
     if not args.firm_name.startswith(FIRM_NAME):
         sys.exit(f'the demo firm name must start with "{FIRM_NAME}" (DEMO- registration numbers are only valid in a demo firm)')
-    one_person = len({e.lower() for e in emails.values()}) == 1
+    distinct = len({e.lower() for e in emails.values()})
+    if distinct == 2:
+        sys.exit("give three different addresses, or the same address three times with --mode small_firm (not two the same)")
+    one_person = distinct == 1
     if one_person and args.mode != "small_firm":
         sys.exit("one e-mail address for all three roles needs --mode small_firm")
     dsn, secret = need("MEP_DB_URL"), need("MEP_JWT_SECRET")

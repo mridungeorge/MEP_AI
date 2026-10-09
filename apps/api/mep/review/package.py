@@ -67,7 +67,9 @@ def assemble(conn: psycopg.Connection[Any], firm_id: UUID, revision_id: UUID) ->
         " rr.fix_hypotheses, rr.review_class, rr.review_reasons, rr.stale, rr.inputs, v.decision, v.reason, v.bulk, v.spot_check, v.created_at as reviewed_at,"
         " v.fail_category, v.fail_reference, fa.note as ack_note, fa.acknowledged_at, fu.email as ack_by,"
         " u.email as reviewer from rule_result rr left join review_latest v on v.rule_result_id = rr.id"
-        " left join auth.users u on u.id = v.user_id left join fail_ack fa on fa.rule_result_id = rr.id"
+        " left join auth.users u on u.id = v.user_id left join lateral (select a.* from fail_ack a where a.rule_result_id = rr.id"
+        " order by (a.user_id in (select s.user_id from signoff s where s.revision_id = rr.revision_id and s.gate = 'gate3')) desc,"
+        " a.id desc limit 1) fa on true"
         " left join auth.users fu on fu.id = fa.user_id where rr.revision_id = %s and rr.firm_id = %s and rr.current"
         " order by rr.subject_id, rr.rule_id", (revision_id, firm_id)).fetchall()
     signoffs = cur.execute(

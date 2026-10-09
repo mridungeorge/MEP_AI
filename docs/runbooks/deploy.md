@@ -73,7 +73,7 @@ The approver gets the placeholder registration `DEMO-0001`. It is not a real reg
 
 1. New Project > Deploy from GitHub repo > `MEP_AI`. Railway reads `railway.json` (Dockerfile build, health check `/healthz`).
 2. Service > Variables: add exactly these (values from Steps 1 and 3; never paste the service_role key here):
-   `MEP_DB_URL`, `MEP_JWT_SECRET`, `MEP_SUPABASE_URL`, `MEP_SUPABASE_ANON_KEY`, `MEP_CORS_ORIGINS` (set after Step 5), `MEP_COOKIE_SECURE=1`.
+   `MEP_DB_URL`, `MEP_JWT_SECRET`, `MEP_SUPABASE_URL`, `MEP_SUPABASE_ANON_KEY`, `MEP_CORS_ORIGINS` (set after Step 5). Do not set `MEP_COOKIE_SECURE` (the cookie is Secure unless it is `0`).
 3. Service > Settings > Networking > **Generate Domain**. Note `https://<name>.up.railway.app`.
 4. Check: `curl https://<name>.up.railway.app/healthz` returns `{"status":"ok"}`; `curl -i https://<name>.up.railway.app/me` returns 401.
 

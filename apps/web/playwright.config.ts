@@ -26,7 +26,7 @@ export default defineConfig({
       url: `${API}/openapi.json`,
       timeout: 60_000,
       reuseExistingServer: false,
-      env: { ...(process.env as Record<string, string>), MEP_DB_URL: DB_URL, MEP_JWT_SECRET: SECRET, MEP_CORS_ORIGINS: WEB, MEP_ALLOW_DEMO_JWT_SECRET: "1",
+      env: { ...(process.env as Record<string, string>), MEP_DB_URL: DB_URL, MEP_JWT_SECRET: SECRET, MEP_CORS_ORIGINS: WEB, MEP_ALLOW_DEMO_JWT_SECRET: "1", MEP_COOKIE_SECURE: "0",
         MEP_SUPABASE_URL: SUPABASE_URL, MEP_SUPABASE_ANON_KEY: ANON_KEY },
     },
     {

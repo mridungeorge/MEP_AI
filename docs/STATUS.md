@@ -5,17 +5,24 @@ local devcontainer gate is the reference (tag `sprint-2-gate`). GitHub CI has ne
 Updated: 2026-10-09 (recovery after a device change; see "Recovery 2026-10-09")
 
 ## Resume here (updated 2026-10-12)
-User decisions after the 4a report: do **Phase 4a.1 (pilot readiness)**, then continue straight into **Phase 4b** without stopping
-(`sprint-4a1-gate`, then `sprint-4b-gate`). Done so far: 2.5, 3, 4a. 4a.1 is built (see its section); close it (review max 2 rounds,
-ci.sh, GitHub CI, tag) and move to 4b: space-envelope skill, skills_runner wiring (validator before release), spec cards/wizards in the UI,
-runtime agents on the Claude Agent SDK with the tool layer as safety boundary, PDF page renderer + vision extraction (provenance=extracted).
+Done: 2.5, 3, 4a, **4a.1** (`sprint-4a1-gate`). User decision: continue straight into **Phase 4b** without stopping (`sprint-4b-gate`, then STOP
+and report): (1) space-envelope skill (started: `skills/space-envelope/`), (2) wire duct-fab and space-envelope into the app via
+skills_runner (validator before release; both in ci.sh and GitHub CI), (3) spec cards / wizards / clarifying questions in the UI, (4) runtime
+agents on the Claude Agent SDK with the tool layer as the safety boundary, (5) PDF page renderer + vision extraction into evidence only.
 Notes: the local Supabase signs tokens with ES256 (JWKS). Mail for magic links goes to Mailpit (`http://127.0.0.1:54324`). Run everything in
 the devcontainer; `~/ws` is a synced work copy (never `uv sync` there); clean gates run from `git clone` copies (`~/gate3`). On the Windows
 host put `AppData/Local/Python/bin` (under the user profile) first on PATH (the WindowsApps `python` stub fails). `.env.example` files cannot
-be written here (permission rule): the templates are `deploy/env.api.example` and `deploy/env.web.example`.
+be written here (permission rule): the templates are `deploy/env.api.example` and `deploy/env.web.example`. DO NOT run `docker build` in the
+devcontainer: it hung Docker Desktop (restarted once); `deploy/api/Dockerfile` is unverified by a build (read-reviewed; uv image 0.12.24 matches the lock).
 Existing open revisions have results without an input fingerprint (`inputs_hash` NULL): re-run once before freezing.
 
-## Phase 4a.1 pilot readiness (2026-10-12)
+## Phase 4a.1 pilot readiness (2026-10-12): done, tag `sprint-4a1-gate`
+- Review: round 1 found 0 blockers + 9 should-fix (mode-switch laundering, own acknowledgements, acting-role lock-out, share leakage,
+  onboarding tools, one-person seed, demo script, Dockerfile pin, throttle key), all fixed (0016). Round 2 found 1 blocker (the per-signer
+  acknowledgement collided with `unique (rule_result_id)`: an absent approver could make Gate 3 unsignable) + should-fix (voiding an open
+  spot-check sample when a checker's role changes, Secure cookie by default, negative script tests, DEMO- case), fixed (0017).
+  **The round-2 fixes had no third review.** Unfixed nits: the mode stamp on a review is read in a new statement (a mode switch mid-call could
+  stamp `strict`); no backfill of `signer_mode` onto rows older than 0016 (no deployed data exists); the throttle is per replica.
 - Signer independence is a firm setting (`firm.signer_mode`): `strict` (default, three different people) or `small_firm` (one person may hold
   several gates by ACTING in roles listed in `app_user.also_roles`; the acting role travels in the request claims and the database re-checks
   it against the firm mode and the person's roles). In small_firm every ledger entry (inside the hash), signoff row, package, PDF page and the

@@ -2,6 +2,7 @@
 signed package (JSON, PDF, artifact) -> certifier share link -> ledger check. Needs the local Supabase."""
 import io
 import json
+import os
 
 import pytest
 from fastapi.testclient import TestClient
@@ -14,6 +15,7 @@ from tests.rls import test_pg_lineage as lin
 from tests.rls.conftest import DB_URL
 
 ROOT = lin.ROOT
+os.environ["MEP_COOKIE_SECURE"] = "0"          # the test client speaks plain http; production default is Secure (tested below)
 
 
 @pytest.fixture(scope="module")
@@ -202,3 +204,17 @@ def test_bulk_approval_through_the_api(admin, client, pack):
     ws2 = client.get(f"/revisions/{rev}/review", headers=ck).json()
     assert ws2["open_clean"] == 0
     assert any(r["bulk"] for r in ws2["results"]) == (sample["of"] > sample["size"])
+
+
+def test_the_share_cookie_is_secure_unless_a_local_run_says_otherwise(admin, client, pack, monkeypatch):
+    f = frozen(admin, client, pack)
+    review_all(client, f)
+    client.post(f"/revisions/{f['revision']}/sign/gate2", headers=auth(f, "checker"), json={})
+    acknowledge_all(client, f)
+    client.post(f"/revisions/{f['revision']}/sign/gate3", headers=auth(f, "approver"), json={"registration": "RPEQ 12345"})
+    token = client.post(f"/revisions/{f['revision']}/share-links", headers=auth(f, "approver"), json={"days": 1}).json()["token"]
+    monkeypatch.delenv("MEP_COOKIE_SECURE")
+    secure = TestClient(client.app).post("/share/exchange", json={"token": token})
+    assert secure.status_code == 200 and "secure" in secure.headers["set-cookie"].lower()
+    monkeypatch.setenv("MEP_COOKIE_SECURE", "0")
+    assert "secure" not in TestClient(client.app).post("/share/exchange", json={"token": token}).headers["set-cookie"].lower()

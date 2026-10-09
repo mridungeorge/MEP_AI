@@ -192,7 +192,7 @@ _attempts: dict[str, list[float]] = {}
 
 
 def _client_key(request: Request) -> str:
-    """The throttle key: the RIGHTMOST X-Forwarded-For hop (the one our own proxy appended; the left ones are the client's to forge)."""
+    """The throttle key (correct when our own proxy APPENDS to X-Forwarded-For; behind a CDN every certifier shares the edge's bucket): the RIGHTMOST X-Forwarded-For hop (the one our own proxy appended; the left ones are the client's to forge)."""
     forwarded = request.headers.get("x-forwarded-for", "")
     hops = [h.strip() for h in forwarded.split(",") if h.strip()]
     return hops[-1] if hops else (request.client.host if request.client else "?")
@@ -221,7 +221,7 @@ def share_exchange(body: ExchangeBody, request: Request, share: Share) -> Respon
     if got is None:      # unknown, expired and revoked look the same
         raise _err(404, "not_found", "this link is not valid or has expired")
     session, seconds = got
-    secure = request.url.scheme == "https" or os.environ.get("MEP_COOKIE_SECURE") == "1"
+    secure = os.environ.get("MEP_COOKIE_SECURE") != "0"       # Secure unless a local run says otherwise (behind a proxy the scheme is http)
     response = Response(content=json.dumps({"ok": True, "expires_in": seconds}), media_type="application/json",
                         headers={"Cache-Control": "no-store", "Referrer-Policy": "no-referrer"})
     response.set_cookie(COOKIE, session, max_age=seconds, httponly=True, samesite="strict", secure=secure, path="/")

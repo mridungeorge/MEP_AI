@@ -193,7 +193,7 @@ def test_gate3_needs_each_accepted_fail_acknowledged_individually_by_the_approve
     refused(f["approver"], "select gate3_acknowledge_fail(%s, 'acknowledged by me')", (f["results"][2],), "not an accepted FAIL")
     refused(f["approver"], "select gate3_acknowledge_fail(%s, '  ')", (f["results"][0],), "fail_ack_note_check")
     call(f["approver"], "select gate3_acknowledge_fail(%s, 'acknowledged: reviewed the explanation')", (f["results"][0],))
-    refused(f["approver"], "select gate3_acknowledge_fail(%s, 'acknowledged again')", (f["results"][0],), "fail_ack_rule_result_id_key")             # once each
+    refused(f["approver"], "select gate3_acknowledge_fail(%s, 'acknowledged again')", (f["results"][0],), "fail_ack_rule_result_user_key")             # once each, per approver
     refused(f["approver"], "select sign_gate(%s, 'gate3', 'RPEQ 12345')", (f["revision"],), "1 accepted FAIL(s)")
     call(f["approver"], "select gate3_acknowledge_fail(%s, 'acknowledged: reviewed the explanation')", (f["results"][1],))
     call(f["approver"], "select sign_gate(%s, 'gate3', 'RPEQ 12345')", (f["revision"],))
@@ -386,6 +386,12 @@ def test_only_the_gate3_signers_own_acknowledgements_count(admin):
     call(f["approver"], "select gate3_acknowledge_fail(%s, 'acknowledged by the first approver')", (f["results"][0],))
     refused(other, "select sign_gate(%s, 'gate3', 'RPEQ 22222')", (f["revision"],), "1 accepted FAIL(s) need")        # not his acknowledgement
     refused(f["designer"], "select gate3_acknowledge_fail(%s, 'x acknowledged')", (f["results"][0],), "only an approver")
+    # the second approver is NOT locked out by the first one's acknowledgement: he gives his own and signs
+    call(other, "select gate3_acknowledge_fail(%s, 'acknowledged by the second approver')", (f["results"][0],))
+    call(other, "select sign_gate(%s, 'gate3', 'RPEQ 22222')", (f["revision"],))
+    package = pkg.assemble(admin, uuid.UUID(f["firm"]), uuid.UUID(f["revision"]))
+    assert package is not None and len(package["accepted_fails"]) == 1
+    assert package["accepted_fails"][0]["accepted_fail"]["acknowledgement"] == "acknowledged by the second approver"   # the signer's own
 
 
 def test_a_strict_approver_who_signed_earlier_cannot_acknowledge(admin):
@@ -405,3 +411,17 @@ def test_a_demo_registration_is_refused_outside_the_demo_firm(admin):
     refused(f["approver"], "select sign_gate(%s, 'gate3', 'DEMO-0001')", (f["revision"],), "placeholders")
     admin.execute("update firm set name = 'Demo Mechanical (synthetic) test' where id = %s", (f["firm"],))
     call(f["approver"], "select sign_gate(%s, 'gate3', 'DEMO-0001')", (f["revision"],))
+
+
+def test_acknowledgements_made_in_small_firm_mode_are_not_laundered_by_switching_back(admin):
+    f = frozen(admin, results=2, classes={0: "fail"})
+    call(f["checker"], "select gate2_review(%s, 'approve', 'accepted for the stated reason, see file', null, 'out_of_scope')", (f["results"][0],))
+    call(f["checker"], "select gate2_review(%s, 'approve', 'checked against the clause')", (f["results"][1],))
+    call(f["checker"], "select sign_gate(%s, 'gate2')", (f["revision"],))
+    admin.execute("update firm set signer_mode = 'small_firm' where id = %s", (f["firm"],))
+    call(f["approver"], "select gate3_acknowledge_fail(%s, 'acknowledged while the firm was in small_firm mode')", (f["results"][0],))
+    admin.execute("update firm set signer_mode = 'strict' where id = %s", (f["firm"],))
+    assert admin.execute("select signer_mode from fail_ack where revision_id = %s", (f["revision"],)).fetchone()[0] == "small_firm"
+    call(f["approver"], "select sign_gate(%s, 'gate3', 'RPEQ 12345')", (f["revision"],))
+    package = pkg.assemble(admin, uuid.UUID(f["firm"]), uuid.UUID(f["revision"]))
+    assert package is not None and package["independence_notice"] == "NOT INDEPENDENTLY CHECKED"

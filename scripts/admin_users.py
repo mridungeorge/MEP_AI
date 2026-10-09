@@ -89,6 +89,8 @@ def set_mode(a: argparse.Namespace) -> None:
         conn.execute("update firm set signer_mode = %s where id = %s", (a.mode, row[0]))
         if a.mode == "strict":
             conn.execute("update app_user set also_roles = '{}' where firm_id = %s", (row[0],))
+            for (uid,) in conn.execute("select distinct created_by from review_sample where firm_id = %s and used_at is null", (row[0],)).fetchall():
+                void_samples(conn, uid, row[0], "the firm went back to strict mode")
     print(f"{a.firm}: signer mode {row[1]} -> {a.mode}" + ("" if a.mode == "strict" else
           "\nEvery package, PDF and ledger entry of this firm now says NOT INDEPENDENTLY CHECKED."))
 
@@ -105,8 +107,18 @@ def show(a: argparse.Namespace) -> None:
 ROLES = ("designer", "checker", "approver")
 
 
+def void_samples(conn: psycopg.Connection[Any], user_id: Any, firm: Any, why: str) -> None:
+    """A checker whose role or firm mode changes can no longer decide their open spot-check sample: close it (ledgered) so the others can."""
+    n = conn.execute("update review_sample set used_at = now() where created_by = %s and used_at is null", (user_id,)).rowcount
+    if n:
+        conn.execute("insert into ledger_event (firm_id, kind, payload) values (%s, 'spot_check_sample_voided', %s::jsonb)",
+                     (firm, json.dumps({"user_id": str(user_id), "samples": n, "why": why})))
+
+
 def add_firm(a: argparse.Namespace) -> None:
     name = a.name.strip()
+    if name.lower().startswith("demo mechanical (synthetic)"):
+        sys.exit("that name is reserved for the demo firm (DEMO- registration numbers are valid only there)")
     if len(name) < 3 or len(name) > 120:
         sys.exit("--name must be 3 to 120 characters")
     with connect() as conn:
@@ -147,6 +159,7 @@ def set_role(a: argparse.Namespace) -> None:
         if a.role != "approver":
             reg = None                                  # a registration number belongs to the approver role only
         conn.execute("update app_user set role = %s, registration_no = %s, also_roles = '{}' where id = %s", (a.role, reg, uid))
+        void_samples(conn, uid, _firm, f"role changed from {old} to {a.role}")
     print(f"{a.email}: {old} -> {a.role} (ledgered); open sign-ins keep working until the next request, which uses the new role")
 
 
