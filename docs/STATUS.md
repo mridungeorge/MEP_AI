@@ -5,11 +5,34 @@ local devcontainer gate is the reference (tag `sprint-2-gate`). GitHub CI has ne
 Updated: 2026-10-09 (recovery after a device change; see "Recovery 2026-10-09")
 
 ## Resume here (updated 2026-10-10)
-Unattended multi-phase build in progress. Order: PHASE 2.5 finish -> PHASE 3 (revision diff) -> PHASE 4a (review, sign-off, deliverable); STOP after 4a.
-A phase is done when its `*-gate` tag exists. Current phase: **2.5**. Items 1-4 are built and tested; what remains is the phase close:
-adversarial review (max two rounds) -> `scripts/ci.sh` green on a fresh clone in the devcontainer -> GitHub CI green -> tag `sprint-2.5-gate` -> push.
-Notes for the next session: the local Supabase signs tokens with ES256 (JWKS); the API verifies both that and HS256 (`auth.py`). Mail for the
-magic-link tests goes to Mailpit (`http://127.0.0.1:54324`). Run everything through `.claude/hooks/devcontainer_exec.py` or inside the container.
+Unattended multi-phase build. Order: PHASE 2.5 finish -> PHASE 3 (revision diff) -> PHASE 4a (review, sign-off, deliverable); STOP after 4a.
+A phase is done when its `*-gate` tag exists. **Phase 2.5: done (`sprint-2.5-gate`).** **Current phase: 3.**
+Phase 3 status: built and tested but NOT yet committed as separate items: dependency graph (`diff/graph.py`), revision diff core
+(`diff/revision.py`), reasoning trace (`diff/trace.py`), cross-rule re-run (`engine/cross_rule.py`), synthetic golden pair
+(`evals/revisions/syn-rev-b-to-c`), DB scaffolding (migration 0008: lineage rule, stored results, diff confirmation, freeze),
+`diff/service.py`, `api/revisions.py` (lineage, results, diff, diff/confirm, freeze), run persistence and the diff gate on the run.
+Still to do in Phase 3: (a) a new upload on a FROZEN revision creates a child revision (copy systems/inputs, ingest the file, carry
+confirmation for unchanged spaces) in `api/uploads_pg.py`; (b) RLS/API tests for lineage, stored results, diff, diff confirm, freeze;
+(c) UI: upload new revision, diff review + confirm, trace view; (d) Playwright full flow; (e) review (max two rounds), gate, tag
+`sprint-3-gate`. Then Phase 4a (see the user's phase prompt in the conversation: classifier, Gate 2/3, ledger hash chain, share link,
+PDF, Playwright) and STOP.
+Notes: the local Supabase signs tokens with ES256 (JWKS); the API verifies that and HS256 (`auth.py`). Mail for the magic-link tests goes to
+Mailpit (`http://127.0.0.1:54324`). Run everything through `.claude/hooks/devcontainer_exec.py` or inside the container. In the container
+`~/ws` is a synced work copy (never `uv sync` there: it removes cadquery); clean gates run from `git clone` copies (`~/gate3`).
+
+## Phase 2.5 (2026-10-10): done, tag `sprint-2.5-gate`
+- Built: local auth config (port 3100, mail rate limit, public signup off), Supabase magic-link sign-in, `/me`, `/revisions`, role in the
+  header, protected routes, IFC/DXF upload (content sniffing, 50 MiB cap, Supabase Storage under the firm, ingest + health), building part per
+  system (mixed-use runs per part when every part is allowed; any refused part refuses the run), Playwright sign-in -> upload -> Gate 1 -> cited
+  DRAFT report (9 tests).
+- Review: round 1 found 1 blocker (a small DXF could run the parser for hours) + 6 should-fix; round 2 found 2 blockers (the sandbox's OUTPUT was
+  unbounded; path spellings skipped the upload guard) + 5 should-fix. All of them were fixed afterwards (sandbox with output cap and self-applied
+  limits, DXF complexity budget, guard for every path spelling, concurrency cap, JWKS expiry, hash check on a storage conflict, migration 0009).
+  **The round-2 fixes had no third review** (two rounds is the maximum); they are covered by `tests/ingest/test_sandbox_budget.py`,
+  `tests/api/test_upload_guard.py` and the RLS tests.
+- Known limits: orphaned storage objects when ingest fails after the store; co-designers can grief a known file hash (409) within a firm; IFC
+  geometry cost is bounded only by the sandbox limits; non-Linux hosts have no rlimits; the web token is in localStorage (Supabase default).
+- Gate: `scripts/ci.sh` green on a fresh clone (1329 + 251 RLS/API + 9 e2e + 15 web + 134 golden), GitHub CI green, tag at `83f4b03`.
 
 ## Recovery 2026-10-09
 - **What happened:** the work was moved to a new device. The GitHub repo `mridungeorge/MEP_AI` holds ONE snapshot commit of
