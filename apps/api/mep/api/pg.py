@@ -402,6 +402,26 @@ class PgRepository:
                             "confirmed_by": s["confirmed_by"]} for s in spaces],
                 "systems": run_systems}
 
+    # ---- MeRepository -----------------------------------------------------------------------------------------
+    def me(self, user: CurrentUser) -> dict[str, Any]:
+        with self._as_user() as conn:
+            firm = conn.execute("select name from firm where id = %s", (user.firm_id,)).fetchone()
+        return {"user_id": str(user.user_id), "role": user.role, "firm_id": str(user.firm_id),
+                "firm_name": None if firm is None else firm["name"]}
+
+    def list_revisions(self, user: CurrentUser) -> list[dict[str, Any]]:
+        with self._as_user() as conn:
+            rows = conn.execute(
+                "select r.id, r.project_id, p.address, p.state, p.ncc_edition, r.architect_rev, r.status,"
+                " r.frozen_at is not null as frozen, r.parent_revision_id from revision r join project p"
+                " on p.id = r.project_id and p.firm_id = r.firm_id where r.firm_id = %s order by p.address, r.id",
+                (user.firm_id,)).fetchall()
+        return [{"id": str(r["id"]), "project_id": str(r["project_id"]), "address": r["address"], "state": r["state"],
+                 "ncc_edition": r["ncc_edition"], "architect_rev": r["architect_rev"], "status": r["status"],
+                 "frozen": r["frozen"],
+                 "parent_revision_id": None if r["parent_revision_id"] is None else str(r["parent_revision_id"])}
+                for r in rows]
+
     # ---- ScheduleRepository -----------------------------------------------------------------------------------
     def revision_edition(self, revision_id: UUID, firm_id: UUID) -> str | None:
         with self._as_user() as conn:
