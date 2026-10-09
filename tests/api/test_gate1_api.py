@@ -78,7 +78,7 @@ class InMemoryRepo:
     def upsert_input(self, rev, firm, input_id, data):
         return self._write(self.inputs, input_id, data, {"system": "ahu"})
 
-    def confirm(self, kind, ids, user_id):
+    def confirm(self, kind, ids, user_id, revision_id=None):
         self.confirm_calls.append((kind, ids, user_id))
         for i in ids:
             if kind == "project":
@@ -128,7 +128,7 @@ def load_inputs(c):
 def test_get_returns_the_contract_and_passes_health_through(pack):
     c, *_ = make(pack)
     body = c.get(f"{base()}/gate1").json()
-    assert set(body) == {"parts", "spaces", "inputs", "health", "ncc_edition", "project"}
+    assert set(body) == {"parts", "spaces", "inputs", "health", "ncc_edition", "project", "role"}
     assert body["health"] == HEALTH and body["ncc_edition"] == "2025"
 
 

@@ -39,6 +39,14 @@ MAX_CONFIRM_ROWS = 5000
 router = APIRouter()
 
 
+class UnknownSystemError(Exception):
+    """An input names a system tag that does not exist in this revision (or names none)."""
+
+
+class ConfirmRefused(Exception):
+    """The store refused a confirmation (for example the project facts are incomplete). The message is shown."""
+
+
 class Gate1Repository(Protocol):
     """Storage for Gate 1. Every method is scoped to the firm; a revision of another firm does not exist."""
 
@@ -58,8 +66,9 @@ class Gate1Repository(Protocol):
     def upsert_input(self, revision_id: UUID, firm_id: UUID, input_id: str | None,
                      data: dict[str, Any]) -> dict[str, Any] | None: ...
 
-    def confirm(self, kind: str, ids: list[str], user_id: UUID) -> None:
-        """Mark rows engineer_confirmed and record confirmed_by. Only called for a designer."""
+    def confirm(self, kind: str, ids: list[str], user_id: UUID, revision_id: UUID | None = None) -> None:
+        """Mark rows engineer_confirmed and record confirmed_by, and ledger the confirmation. Only called for a
+        designer. Raises ConfirmRefused when the store refuses."""
 
     def load_run_inputs(self, revision_id: UUID, firm_id: UUID) -> dict[str, Any]:
         """{project: {state, ncc_edition, climate_zone, building_class, approval_date, confirmed_by}, spaces: [{id, provenance,
@@ -119,7 +128,7 @@ class SpaceModel(BaseModel):
     name: Annotated[str, Field(max_length=200)] | None = None
     area_m2: Annotated[Number, Field(ge=0, le=MAX_AREA_M2)] | None = None
     use: Annotated[str, Field(max_length=100)] | None = None
-    storey: StrictInt | None = Field(default=None, ge=-100, le=200)
+    storey: StrictInt | Annotated[StrictStr, Field(max_length=100)] | None = None
     ceiling_void_mm: Annotated[Number, Field(ge=0, le=100_000)] | None = None
     manual_trace: StrictBool = False
 
@@ -134,6 +143,7 @@ class InputModel(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     name: Annotated[str, Field(min_length=1, max_length=64, pattern=r"^[a-z][a-z0-9_]{0,63}$")]
+    system: Annotated[str, Field(min_length=1, max_length=64)] | None = None   # schedule tag of the owning system
     value: StrictBool | StrictInt | StrictFloat | StrictStr | None = None
     unit: Annotated[str, Field(min_length=1, max_length=64)] | None = None
 
@@ -184,7 +194,9 @@ def _editable(repo: Gate1Repository, revision_id: UUID, user: CurrentUser) -> di
 @router.get("/revisions/{revision_id}/gate1")
 def get_gate1(revision_id: UUID, user: User, repo: Repo) -> dict[str, Any]:
     v = _view(repo, revision_id, user)
-    return {k: v[k] for k in ("parts", "spaces", "inputs", "health", "ncc_edition", "project") if k in v}
+    out = {k: v[k] for k in ("parts", "spaces", "inputs", "health", "ncc_edition", "project") if k in v}
+    out["role"] = user.role          # so the UI can explain why Confirm is unavailable; the server still enforces it
+    return out
 
 
 @router.put("/revisions/{revision_id}/gate1/parts")
@@ -210,13 +222,16 @@ def _write(repo: Gate1Repository, revision_id: UUID, user: CurrentUser, kind: st
             row = repo.upsert_input(revision_id, user.firm_id, row_id, data)
     except RevisionFrozenError:
         raise _err(409, "revision_frozen", "revision is frozen") from None
+    except UnknownSystemError as exc:
+        raise _err(422, "unknown_system", str(exc) or "name the schedule tag of an existing system") from None
     if row is None:
         raise _err(404, "not_found", f"{kind} not found")
     return row
 
 
-def _space_data(body: SpaceModel) -> tuple[dict[str, Any], bool]:
-    return body.model_dump(exclude={"manual_trace"}), body.manual_trace
+def _space_data(body: SpaceModel, *, partial: bool = False) -> tuple[dict[str, Any], bool]:
+    """An edit (PUT) carries only the fields the client sent; the others keep their stored value."""
+    return body.model_dump(exclude={"manual_trace"}, exclude_unset=partial), body.manual_trace
 
 
 @router.post("/revisions/{revision_id}/gate1/spaces")
@@ -227,7 +242,7 @@ def add_space(revision_id: UUID, body: SpaceModel, user: User, repo: Repo) -> di
 
 @router.put("/revisions/{revision_id}/gate1/spaces/{space_id}")
 def update_space(revision_id: UUID, space_id: str, body: SpaceModel, user: User, repo: Repo) -> dict[str, Any]:
-    data, manual = _space_data(body)
+    data, manual = _space_data(body, partial=True)
     return _write(repo, revision_id, user, "space", space_id, data, manual)
 
 
@@ -255,7 +270,12 @@ def confirm(revision_id: UUID, body: ConfirmRequest, user: User, repo: Repo) -> 
     for kind in ("space", "system_input", "building_part", "project"):
         ids = sorted({r.id for r in body.rows if r.kind == kind})
         if ids:
-            repo.confirm(kind, ids, user.user_id)
+            try:
+                repo.confirm(kind, ids, user.user_id, revision_id)
+            except ConfirmRefused as exc:
+                raise _err(409, "cannot_confirm", str(exc)) from None
+            except RevisionFrozenError:
+                raise _err(409, "revision_frozen", "revision is frozen") from None
     return {"confirmed": [r.model_dump() for r in body.rows]}
 
 
