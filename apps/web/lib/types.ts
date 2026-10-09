@@ -181,4 +181,62 @@ export interface UploadResponse {
   extractions: number;
   health: IngestHealth | null;
   problems: string[];
+  /** The revision the file was ingested into (a child when the target was frozen). */
+  revision_id: string;
+  new_revision?: NewRevision;
 }
+
+/** POST /revisions/{id}/uploads on a FROZEN revision creates a child revision. */
+export interface NewRevision {
+  id: string;
+  project_id: string;
+  architect_rev: string;
+  parent_revision_id: string;
+  spaces_carried_unchanged: number;
+}
+
+export interface FieldChange { field: string; old: unknown; new: unknown }
+export interface SpaceFields {
+  ifc_guid: string | null; name: string | null; area_m2: number | null; use: string | null;
+  storey: number | string | null; ceiling_void_mm: number | null;
+}
+export interface SpaceDiffItem {
+  change: "added" | "removed" | "changed";
+  key: string;
+  matched_by: string | null;
+  fields: FieldChange[];
+  space_id: string | null;
+  confirmed: boolean | null;
+  old: SpaceFields | null;
+  new: SpaceFields | null;
+  name: string | null;
+}
+export interface InputDiffItem {
+  change: string; system: string; name: string; old: unknown; new: unknown;
+  unit_old: string | null; unit_new: string | null; is_part_change: boolean;
+}
+export interface TraceStep { kind: string; id: string; text: string; via: string; path: string }
+export interface TraceItem {
+  subject_id: string; rule_id: string; chains: TraceStep[][]; lines: string[]; before: string | null; after: string | null;
+}
+export interface ConflictItem { subject_id: string; input: string; better_rule: string; worse_rule: string; text: string }
+/** GET /revisions/{id}/diff: what changed from the parent, which results it makes stale, and why. */
+export interface RevisionDiff {
+  parent: { id: string; architect_rev: string } | null;
+  spaces: SpaceDiffItem[];
+  inputs: InputDiffItem[];
+  stale: { subject_id: string; rule_id: string }[];
+  traces: TraceItem[];
+  conflicts?: ConflictItem[];
+  hash: string | null;
+  confirmed: boolean;
+  needs_confirmation: string[];
+  has_changes: boolean;
+}
+export interface LineageBrief { id: string; architect_rev: string; status: string; frozen: boolean }
+export interface Lineage { revision: LineageBrief; ancestors: LineageBrief[]; children: LineageBrief[] }
+export interface StoredResult {
+  subject_id: string; rule_id: string; outcome: string; part: number | null; run_id: string | null;
+  citation: unknown; causes: unknown; stale: boolean;
+}
+export interface RevisionResults { source: "own" | "carried_from_parent"; parent_revision_id?: string; results: StoredResult[] }

@@ -7,7 +7,7 @@ type Scenario = {
   designer_email: string; checker_email: string; health_score: number | null; spaces: number;
 };
 const state = JSON.parse(readFileSync(path.resolve(__dirname, ".state.json"), "utf-8")) as {
-  scenarios: Record<string, Scenario>; workbook: string; ifc: string; inputs_per_system: number; edition: string;
+  scenarios: Record<string, Scenario>; workbook: string; ifc: string; inputs_per_system: number; edition: string; rev_b: string;
 };
 const API = "http://127.0.0.1:8100";
 const MAILPIT = process.env.MEP_MAILPIT_URL ?? "http://127.0.0.1:54324";
@@ -172,4 +172,52 @@ test("a mixed-use project: each system names its building part, then the run rep
   const text = (await page.getByTestId("report-row").allInnerTexts()).join("\n");
   expect(text).toContain("ahu-1");
   expect(text).toContain("ahu-2");
+});
+
+test("a new architect revision on a frozen one: diff, Gate 1 for what changed, confirm the diff, trace, re-run, freeze", async ({ page }) => {
+  const s = state.scenarios["frozen"];
+  await signIn(page, s.designer_email);
+  await page.goto("/");
+  const row = page.getByTestId("revision-row").filter({ hasText: "(frozen)" }).first();
+  await expect(row).toContainText("frozen");
+  await row.getByRole("link", { name: "Diff & results" }).click();
+  await expect(page.getByRole("heading", { name: "Revision A (frozen)" })).toBeVisible();
+  await expect(page.getByRole("table", { name: "" }).first()).toBeVisible();
+  await expect(page.getByText("Results").first()).toBeVisible();
+
+  // the architect's next model: it becomes a CHILD revision; the frozen one is untouched
+  await page.getByLabel("Architect revision label").fill("B");
+  await page.getByLabel("Upload new revision file").setInputFiles(state.rev_b);
+  await expect(page.getByRole("heading", { name: "Revision B" })).toBeVisible();
+  await expect(page).toHaveURL(/\/diff$/);
+  await expect(page.getByTestId("space-change-changed")).toContainText("area_m2");
+  await expect(page.getByTestId("space-change-added")).toContainText("Room 30");
+  await expect(page.getByTestId("trace")).toContainText("-> ");
+  await expect(page.locator("[data-stale='true']").first()).toContainText("STALE");
+
+  // the diff cannot be confirmed (and rules cannot re-run) until the changed spaces are confirmed at Gate 1
+  await expect(page.getByTestId("diff-pending")).toContainText("2 changed or added space(s)");
+  await expect(page.getByRole("button", { name: "Confirm this diff" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Re-run rules" })).toBeDisabled();
+  await page.getByRole("link", { name: "Open Gate 1" }).click();
+  await expect(page.getByRole("heading", { name: "Gate 1: confirm inputs" })).toBeVisible();
+  // a plan has no storeys: the designer states them for the two spaces that changed (the carried ones keep their confirmation)
+  for (const i of [0, 3]) {
+    const saved = page.waitForResponse((r) => r.request().method() === "PUT" && r.url().includes("/gate1/spaces/"));
+    await page.getByLabel("storey", { exact: true }).nth(i).fill("Level 1");
+    await page.getByLabel("storey", { exact: true }).nth(i).blur();
+    expect((await saved).status()).toBe(200);
+  }
+  await confirmAllUnconfirmed(page);
+  await expect(page.locator("[data-state='unconfirmed']")).toHaveCount(0);
+
+  await page.goto(page.url().replace(/\/gate1$/, "/diff"));
+  await expect(page.getByRole("button", { name: "Confirm this diff" })).toBeEnabled();
+  await page.getByRole("button", { name: "Confirm this diff" }).click();
+  await expect(page.getByRole("button", { name: "Diff confirmed" })).toBeDisabled();
+  await page.getByRole("button", { name: "Re-run rules" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "Run complete" })).toBeVisible();
+  await expect(page.locator("[data-stale='true']")).toHaveCount(0);
+  await page.getByRole("button", { name: "Freeze revision" }).click();
+  await expect(page.getByRole("heading", { name: "Revision B (frozen)" })).toBeVisible();
 });

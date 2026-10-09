@@ -2,7 +2,7 @@
 import { supabase } from "./supabase";
 import type {
   ApiErrorBody, BuildingPart, ConfirmResponse, Gate1State, ImportResponse, RowRef,
-  Me, RevisionSummary, RunRulesResponse, SpaceInput, SpaceRow, SystemInputInput, SystemInputRow, UploadResponse,
+  Lineage, Me, RevisionDiff, RevisionResults, RevisionSummary, RunRulesResponse, SpaceInput, SpaceRow, SystemInputInput, SystemInputRow, UploadResponse,
 } from "./types";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -51,9 +51,10 @@ const json = (method: string, body: unknown): RequestInit => ({ method, body: JS
 export const api = {
   me: () => apiFetch<Me>("/me"),
   revisions: () => apiFetch<RevisionSummary[]>("/revisions"),
-  upload: (r: string, file: File) => {
+  upload: (r: string, file: File, architectRev?: string) => {
     const fd = new FormData();
     fd.append("file", file);
+    if (architectRev) fd.append("architect_rev", architectRev);
     return apiFetch<UploadResponse>(`${rev(r)}/uploads`, { method: "POST", body: fd });
   },
   assignPart: (r: string, tag: string, part: number) =>
@@ -76,5 +77,10 @@ export const api = {
   },
   templateUrl: (edition: string) => `${BASE_URL}/templates/mep-system-schedule-${encodeURIComponent(edition)}.xlsx`,
   confirm: (r: string, rows: RowRef[]) => apiFetch<ConfirmResponse>(`${rev(r)}/gate1/confirm`, json("POST", { rows })),
+  lineage: (r: string) => apiFetch<Lineage>(`${rev(r)}/lineage`),
+  diff: (r: string) => apiFetch<RevisionDiff>(`${rev(r)}/diff`),
+  confirmDiff: (r: string) => apiFetch<{ confirmed: boolean; hash: string }>(`${rev(r)}/diff/confirm`, { method: "POST" }),
+  results: (r: string) => apiFetch<RevisionResults>(`${rev(r)}/results`),
+  freeze: (r: string) => apiFetch<{ frozen: boolean }>(`${rev(r)}/freeze`, { method: "POST" }),
   runRules: (r: string) => apiFetch<RunRulesResponse>(`${rev(r)}/run-rules`, { method: "POST" }),
 };

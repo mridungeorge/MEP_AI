@@ -57,10 +57,13 @@ class RevisionMethods:
             children = conn.execute(
                 "select id, architect_rev, status, frozen_at is not null as frozen from revision"
                 " where parent_revision_id = %s and firm_id = %s order by architect_rev, id", (revision_id, firm_id)).fetchall()
+            me = conn.execute("select id, architect_rev, status, frozen_at is not null as frozen from revision"
+                              " where id = %s and firm_id = %s", (revision_id, firm_id)).fetchone()
+
         def brief(r: dict[str, Any]) -> dict[str, Any]:
             return {"id": str(r["id"]), "architect_rev": r["architect_rev"], "status": r["status"], "frozen": r["frozen"]}
 
-        return {"ancestors": [brief(r) for r in ancestors], "children": [brief(r) for r in children]}
+        return {"revision": brief(me or {}), "ancestors": [brief(r) for r in ancestors], "children": [brief(r) for r in children]}
 
     # ---- stored results ---------------------------------------------------------------------------------------------
     def current_results(self, revision_id: UUID, firm_id: UUID) -> list[dict[str, Any]]:

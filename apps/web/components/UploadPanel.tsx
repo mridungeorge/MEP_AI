@@ -45,6 +45,12 @@ export function UploadPanel({ revisionId, onUploaded }: { revisionId: string; on
           {done.health ? `, ingest health ${done.health.score_percent}%` : ""}.
         </p>
       )}
+      {done?.new_revision && (
+        <p role="status" data-testid="new-revision">
+          This revision is frozen, so a new revision (Rev {done.new_revision.architect_rev}) was created.{" "}
+          <a href={`/projects/${done.new_revision.project_id}/revisions/${done.new_revision.id}/diff`}>Review the diff</a>
+        </p>
+      )}
       {error && <p role="alert" style={{ color: "#b91c1c" }}>{error}</p>}
     </section>
   );
