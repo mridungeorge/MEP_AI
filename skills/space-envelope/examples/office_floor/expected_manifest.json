@@ -1,0 +1,169 @@
+{
+  "files": [
+    {
+      "bytes": 7021,
+      "name": "OFFICE-L1.ifc",
+      "role": "ifc",
+      "sha256": "679fd29a04bd8e56366f1d30937c06b5f3ffac9c21ae9739243628656947fe73"
+    },
+    {
+      "bytes": 36995,
+      "name": "OFFICE-L1.dxf",
+      "role": "dxf",
+      "sha256": "4d8417dba21401ea395306d8e348ec0b6acf96c4fde950665ce83ac3bd831f2c"
+    }
+  ],
+  "inputs": {
+    "mark": "OFFICE-L1",
+    "notes": "Synthetic example, not a real building",
+    "rooms": [
+      {
+        "ceiling_void_mm": 600.0,
+        "height_mm": 2700.0,
+        "kind": "room",
+        "name": "Open plan office",
+        "outline": [
+          [
+            0.0,
+            0.0
+          ],
+          [
+            12000.0,
+            0.0
+          ],
+          [
+            12000.0,
+            9000.0
+          ],
+          [
+            0.0,
+            9000.0
+          ]
+        ],
+        "use": "Office"
+      },
+      {
+        "ceiling_void_mm": 600.0,
+        "height_mm": 2700.0,
+        "kind": "room",
+        "name": "Meeting room 1",
+        "outline": [
+          [
+            12000.0,
+            0.0
+          ],
+          [
+            17000.0,
+            0.0
+          ],
+          [
+            17000.0,
+            4000.0
+          ],
+          [
+            12000.0,
+            4000.0
+          ]
+        ],
+        "use": "Office"
+      },
+      {
+        "height_mm": 2700.0,
+        "kind": "room",
+        "name": "Server room",
+        "outline": [
+          [
+            12000.0,
+            4000.0
+          ],
+          [
+            16000.0,
+            4000.0
+          ],
+          [
+            16000.0,
+            7000.0
+          ],
+          [
+            12000.0,
+            7000.0
+          ]
+        ],
+        "use": "Equipment"
+      }
+    ],
+    "spec_version": "1",
+    "storey": {
+      "elevation_mm": 0,
+      "floor_to_floor_mm": 3600,
+      "name": "Level 1"
+    },
+    "units": "mm"
+  },
+  "measures": {
+    "plant_rooms": 0,
+    "rooms": 3,
+    "rooms_detail": [
+      {
+        "area_m2": 108.0,
+        "height_mm": 2700.0,
+        "kind": "room",
+        "name": "Open plan office"
+      },
+      {
+        "area_m2": 20.0,
+        "height_mm": 2700.0,
+        "kind": "room",
+        "name": "Meeting room 1"
+      },
+      {
+        "area_m2": 12.0,
+        "height_mm": 2700.0,
+        "kind": "room",
+        "name": "Server room"
+      }
+    ],
+    "total_area_m2": 140.0
+  },
+  "skill": "space-envelope",
+  "skill_version": "1.0.0",
+  "spec_sha256": "7e7f66742a0b5bf6bb46a1ae3be6f37274419e2fd5a2f31a3bc293965f3bb084",
+  "toolchain": {
+    "ezdxf": "1.4.4",
+    "ifcopenshell": "0.9.0"
+  },
+  "validation": {
+    "checks": [
+      "input_files",
+      "spec_readable",
+      "ifc_loads",
+      "ifc_schema",
+      "ifc_units",
+      "ifc_project",
+      "ifc_storey",
+      "ifc_space_count",
+      "ifc_space_names",
+      "ifc_space_guids",
+      "ifc_aggregation",
+      "ifc_footprints",
+      "ifc_area_quantity",
+      "ifc_geometry_area",
+      "ifc_heights",
+      "ifc_plant_flag",
+      "ifc_use",
+      "ifc_ceiling_void",
+      "dxf_loads",
+      "dxf_units",
+      "dxf_layers",
+      "dxf_entities",
+      "dxf_room_count",
+      "dxf_outlines",
+      "dxf_areas",
+      "dxf_labels",
+      "cross_ifc_dxf",
+      "rooms_no_overlap",
+      "manifest_checksums"
+    ],
+    "passed": true
+  }
+}

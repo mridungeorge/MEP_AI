@@ -1,0 +1,13 @@
+{
+  "spec_version": "1",
+  "mark": "PLANT-ROOF",
+  "units": "mm",
+  "storey": { "name": "Roof plant level", "elevation_mm": 14400, "floor_to_floor_mm": 4500 },
+  "rooms": [
+    { "name": "AHU plant room", "kind": "plant_room",
+      "outline": { "type": "polygon", "points_mm": [[0, 0], [10000, 0], [10000, 4000], [6000, 4000], [6000, 8000], [0, 8000]] },
+      "height_mm": 3800 },
+    { "name": "Lift motor room", "kind": "plant_room", "use": "Lift plant",
+      "outline": { "type": "rectangle", "x_mm": 10000, "y_mm": 0, "width_mm": 3000, "depth_mm": 4000 }, "height_mm": 3000 }
+  ]
+}

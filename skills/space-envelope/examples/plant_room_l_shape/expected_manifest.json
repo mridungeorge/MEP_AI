@@ -1,0 +1,144 @@
+{
+  "files": [
+    {
+      "bytes": 5416,
+      "name": "PLANT-ROOF.ifc",
+      "role": "ifc",
+      "sha256": "3df71c9ca707bfec4b9a8a02112806790689013c6a5fae7e6c4ace7c5e3da0b0"
+    },
+    {
+      "bytes": 36704,
+      "name": "PLANT-ROOF.dxf",
+      "role": "dxf",
+      "sha256": "4a6285435072ac7bd9f68250aceae92b4c495805c091bee165ec4c283cad77f2"
+    }
+  ],
+  "inputs": {
+    "mark": "PLANT-ROOF",
+    "rooms": [
+      {
+        "height_mm": 3800.0,
+        "kind": "plant_room",
+        "name": "AHU plant room",
+        "outline": [
+          [
+            0.0,
+            0.0
+          ],
+          [
+            10000.0,
+            0.0
+          ],
+          [
+            10000.0,
+            4000.0
+          ],
+          [
+            6000.0,
+            4000.0
+          ],
+          [
+            6000.0,
+            8000.0
+          ],
+          [
+            0.0,
+            8000.0
+          ]
+        ],
+        "use": null
+      },
+      {
+        "height_mm": 3000.0,
+        "kind": "plant_room",
+        "name": "Lift motor room",
+        "outline": [
+          [
+            10000.0,
+            0.0
+          ],
+          [
+            13000.0,
+            0.0
+          ],
+          [
+            13000.0,
+            4000.0
+          ],
+          [
+            10000.0,
+            4000.0
+          ]
+        ],
+        "use": "Lift plant"
+      }
+    ],
+    "spec_version": "1",
+    "storey": {
+      "elevation_mm": 14400,
+      "floor_to_floor_mm": 4500,
+      "name": "Roof plant level"
+    },
+    "units": "mm"
+  },
+  "measures": {
+    "plant_rooms": 2,
+    "rooms": 2,
+    "rooms_detail": [
+      {
+        "area_m2": 64.0,
+        "height_mm": 3800.0,
+        "kind": "plant_room",
+        "name": "AHU plant room"
+      },
+      {
+        "area_m2": 12.0,
+        "height_mm": 3000.0,
+        "kind": "plant_room",
+        "name": "Lift motor room"
+      }
+    ],
+    "total_area_m2": 76.0
+  },
+  "skill": "space-envelope",
+  "skill_version": "1.0.0",
+  "spec_sha256": "f0b5b4bd42ee48baf100206451214376d197ac2c4e4b57c4a8d0cd20eb20be9e",
+  "toolchain": {
+    "ezdxf": "1.4.4",
+    "ifcopenshell": "0.9.0"
+  },
+  "validation": {
+    "checks": [
+      "input_files",
+      "spec_readable",
+      "ifc_loads",
+      "ifc_schema",
+      "ifc_units",
+      "ifc_project",
+      "ifc_storey",
+      "ifc_space_count",
+      "ifc_space_names",
+      "ifc_space_guids",
+      "ifc_aggregation",
+      "ifc_footprints",
+      "ifc_area_quantity",
+      "ifc_geometry_area",
+      "ifc_heights",
+      "ifc_plant_flag",
+      "ifc_use",
+      "ifc_ceiling_void",
+      "dxf_loads",
+      "dxf_units",
+      "dxf_layers",
+      "dxf_entities",
+      "dxf_room_count",
+      "dxf_outlines",
+      "dxf_areas",
+      "dxf_labels",
+      "cross_ifc_dxf",
+      "rooms_no_overlap",
+      "manifest_checksums"
+    ],
+    "passed": true
+  }
+}
