@@ -1,7 +1,33 @@
 # Status
 
 Sprint: 2 (prove the data) built; review round 3 blocker fixed but not re-reviewed; local gate green. Sprints 0 and 1 closed on the local Linux gate (see Tags); GitHub CI still pending, no remote.
-Updated: 2026-10-07
+Updated: 2026-10-09 (recovery after a device change; see "Recovery 2026-10-09")
+
+## Recovery 2026-10-09
+- **What happened:** the work was moved to a new device. The GitHub repo `mridungeorge/MEP_AI` holds ONE snapshot commit of
+  the old worktree (under `mep-duct-fab/`). Git history, tags and branches did not survive.
+- **What was lost:** every commit before the snapshot (no `git blame`/`git log`, no per-round review history, no
+  sign-off trailer history); all tags; all branches; the local `.git/config` (hooks path, user) and untracked/ignored
+  files (`.venv`, `node_modules`, the local Supabase volumes); file modes (executable bits on 14 shebang scripts, restored
+  in the index); and the **unfinished Sprint 2 finish** (listed under "Sprint 2 finish" below), which was not in the snapshot.
+  Rule files carry their own `reviewed_*` fields, so no sign-off state was lost; all 24 rules are still `draft`.
+- **Old tag/commit map (HISTORICAL ONLY, these commits no longer exist in this repo):** `sprint-0` and `sprint-1` = `c0a62ee`,
+  `sprint-1-gate` = `8e3e0a9`, `sprint-2-gate` = `ca34a40`. Do not treat them as verified baselines here.
+- **New baselines:** `restore-2026-10-09` = the flatten commit `25b9fd2` (snapshot moved to the repo root, nothing else
+  changed). `sprint-2-gate-restored` = the first commit whose clean `git archive` passed `scripts/ci.sh` in the devcontainer
+  (Linux, Python 3.12, nested Docker Supabase). `scripts/check_signoff_changes.py --base-tag` compares with the newest
+  `*-gate` or `restore-*` tag that is an ancestor of HEAD and fails closed if none exists (`ci.yml` uses it).
+- **Gate run (2026-10-09, clean archive, devcontainer):** ruff clean, mypy strict clean, 24 rules valid, 1197 engine/rules/
+  ingest/API/skills tests (last known 1184; +13 are the new base-tag tests), 181 RLS, 128 golden passed + 2 skipped
+  (the refused-run cases "refused runs produce no report"; whether they were skipped before is unknown), web 11 vitest,
+  review_db selftest. GitHub CI is still unrun (no remote CI evidence).
+- **Fixes made for the gate (not environment-only):** 6 ruff findings in the duct-fab files (4 unused `noqa`, `Callable`
+  from `collections.abc`, `check=False`); executable bit restored on shebang scripts (git index). Env notes: run the gate on a
+  clean checkout, not the Windows bind mount (it makes every file look executable); run `uv` as the `vscode` user.
+  `pnpm install` run as `vscode` twice left out the `@supabase/cli-linux-x64` package (cause not found); the install
+  done as root had it, and copying that `node_modules` into the clean checkout worked.
+- **Host note:** the Claude Stop hook runs the host Python 3.14 (no uv/pint), so it reports a false failure outside the
+  devcontainer. The devcontainer is the gate environment.
 
 ## Gate record
 - 2026-10-07: **local Linux gate passed, GitHub CI pending.** `scripts/ci.sh` ran green inside the devcontainer
