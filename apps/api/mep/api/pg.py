@@ -52,6 +52,12 @@ def _row_provenance(confirmed_by: Any, *provs: str | None) -> str:
     return "extracted" if "extracted" in provs else "default"
 
 
+def health_view(h: dict[str, Any]) -> dict[str, Any]:
+    """The stored ingest health in the shape the UI reads."""
+    return {"score_percent": h["score_percent"], "threshold_percent": h["minimum_percent"],
+            "below_threshold": h["below_threshold"], "fixes": list(h.get("fixes", []))}
+
+
 class PgLedger:
     """Service-role ledger writer: one short connection per event, so the write commits immediately."""
 
@@ -146,9 +152,7 @@ class PgRepository:
                                (revision_id, firm_id)).fetchone()
         health = None
         if run is not None:
-            h = run["health"]
-            health = {"score_percent": h["score_percent"], "threshold_percent": h["minimum_percent"],
-                      "below_threshold": h["below_threshold"], "fixes": list(h.get("fixes", []))}
+            health = health_view(run["health"])
         return {"project": {"id": str(proj["id"]), "state": proj["state"], "ncc_edition": proj["ncc_edition"],
                             "climate_zone": proj["climate_zone"],
                             "approval_date": None if proj["approval_date"] is None else proj["approval_date"].isoformat(),
