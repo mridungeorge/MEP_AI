@@ -10,7 +10,7 @@
       "bytes": 42715,
       "name": "R-01.dxf",
       "role": "dxf",
-      "sha256": "79e368eef4b41eb55c0d0e2449b33cb005a3afbfdb5f8d922af7dd2cd3caf996"
+      "sha256": "6b1fa0256d3809fa421a6ef44897cc43fc82e264eec306a89f44ecabdc84ef19"
     }
   ],
   "inputs": {
@@ -76,12 +76,15 @@
       "step_bbox_xy",
       "dxf_loads",
       "dxf_layers",
+      "dxf_units",
+      "dxf_entities",
       "cut_closed_single",
       "cut_no_zero_length",
       "cut_no_self_intersection",
       "net_connected",
       "net_no_self_intersection",
       "edge_lengths_match_3d",
+      "rulings_on_net",
       "net_area_matches_lateral_area",
       "net_inlet_perimeter",
       "net_outlet_perimeter",

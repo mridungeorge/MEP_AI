@@ -14,7 +14,6 @@ import copy
 import importlib.util
 import json
 import math
-import shutil
 import sys
 import tempfile
 from importlib import metadata
@@ -32,6 +31,9 @@ from skills.cad import cadkit, develop
 from skills.cad.develop import Tube
 
 SKILL_VERSION = "1.0.0"
+DEGENERATE_MM = 0.01  # a difference smaller than this is zero for the purpose of "is this really that fitting"
+RESERVED_NAMES = frozenset({"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)),
+                            *(f"LPT{i}" for i in range(1, 10))})
 FITTING_TITLES = {
     "rect_to_round": "RECTANGULAR TO ROUND TRANSITION",
     "rect_reducer": "RECTANGULAR REDUCER",
@@ -67,14 +69,17 @@ def normalise_spec(spec: dict[str, Any]) -> dict[str, Any]:
     out = copy.deepcopy(spec)
     g = out["geometry"]
     kind = out["fitting"]
+    if out["mark"].upper() in RESERVED_NAMES:
+        raise SpecError(f"mark {out['mark']!r} is a reserved file name on Windows")
     if kind == "rect_to_round":
         g.setdefault("offset_x_mm", 0)
         g.setdefault("offset_y_mm", 0)
-        g.setdefault("circle_segments", 16)
+        g["circle_segments"] = int(g.get("circle_segments", 16))  # the schema accepts 16.0 as an integer
     elif kind == "rect_reducer":
-        if (g["width_in_mm"], g["height_in_mm"]) == (g["width_out_mm"], g["height_out_mm"]):
+        if (abs(g["width_in_mm"] - g["width_out_mm"]) < DEGENERATE_MM
+                and abs(g["height_in_mm"] - g["height_out_mm"]) < DEGENERATE_MM):
             raise SpecError("inlet and outlet are the same size: this is not a reducer (use rect_offset)")
-    elif kind == "rect_offset" and g["offset_x_mm"] == 0 and g["offset_y_mm"] == 0:
+    elif kind == "rect_offset" and abs(g["offset_x_mm"]) < DEGENERATE_MM and abs(g["offset_y_mm"]) < DEGENERATE_MM:
         raise SpecError("offset is zero in both directions: this is a straight duct, not an offset")
     return out
 
@@ -333,11 +338,24 @@ def build(spec_in: dict[str, Any], out_dir: Path) -> dict[str, Any]:
             "validation": {"passed": True, "checks": [c["name"] for c in result.checks]},
             "toolchain": _toolchain(),
         }
-        out_dir.mkdir(parents=True, exist_ok=True)
-        for p in (step_path, dxf_path):
-            shutil.copyfile(p, out_dir / p.name)
-        cadkit.write_atomic(out_dir / "manifest.json", (json.dumps(manifest, indent=2, sort_keys=True) + "\n").encode())
+        _publish(out_dir, [(step_path.name, step_path.read_bytes()), (dxf_path.name, dxf_path.read_bytes()),
+                           ("manifest.json", (json.dumps(manifest, indent=2, sort_keys=True) + "\n").encode())])
     return manifest
+
+
+def _publish(out_dir: Path, files: list[tuple[str, bytes]]) -> None:
+    """Write the files one by one (each atomically, the manifest last). If any write fails, the files this call already
+    put there are removed again, so an output folder never holds half a build."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    done: list[Path] = []
+    try:
+        for name, data in files:
+            cadkit.write_atomic(out_dir / name, data)
+            done.append(out_dir / name)
+    except BaseException:
+        for p in done:
+            p.unlink(missing_ok=True)
+        raise
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -347,8 +365,12 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     try:
         spec = json.loads(args.spec.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:        # includes JSONDecodeError and bad UTF-8
+        print(f"spec rejected: {exc}", file=sys.stderr)
+        return 2
+    try:
         manifest = build(spec, args.out)
-    except (SpecError, json.JSONDecodeError, OSError) as exc:
+    except SpecError as exc:
         print(f"spec rejected: {exc}", file=sys.stderr)
         return 2
     except ValidationFailed as exc:
@@ -358,6 +380,9 @@ def main(argv: list[str] | None = None) -> int:
                       file=sys.stderr)
         print(str(exc), file=sys.stderr)
         return 3
+    except Exception as exc:  # noqa: BLE001 - a kernel error or an output that cannot be written: nothing is released
+        print(f"build failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+        return 4
     print(json.dumps({"out": str(args.out), "files": [f["name"] for f in manifest["files"]] + ["manifest.json"]}))
     return 0
 

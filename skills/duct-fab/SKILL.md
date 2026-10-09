@@ -32,13 +32,13 @@ Fitting geometry fields:
 - The STEP solid is the nominal envelope (the net duct size). Sheet thickness is recorded, not modelled, and is not used as a bend deduction in v1.
 - Flat pattern: triangulation development (the round end is a regular N-gon). Layers: `CUT` (one closed outline including allowances), `BEND` (every developed edge: fold and ruling lines, tagged with XDATA `MEPFAB` role/index), `ANNOTATION` (dimensions and title block). Pattern is drawn as seen from outside.
 - Seam is on corner 0 (+X,+Y) along its middle generator. The seam allowance is one lap tab on the end of the pattern; the connection allowance is added beyond the net inlet and outlet edges.
-- Deterministic: same spec card gives identical files (STEP clock and DXF GUIDs fixed; coordinates rounded to 1e-6 mm). Byte identity holds within one toolchain (see `toolchain` in the manifest).
+- Deterministic: same spec card gives identical files (STEP clock and DXF GUIDs fixed; coordinates rounded to 1e-6 mm). The DXF CLASSES and OBJECTS sections are put in a fixed order, so the bytes do not depend on `PYTHONHASHSEED` (tested over eight seeds). Byte identity is claimed within one toolchain (see `toolchain` in the manifest); it has been checked on Linux only.
 
 ## How it runs
 ```bash
 python skills/duct-fab/scripts/build.py --spec skills/duct-fab/examples/rect_to_round/spec.json --out out/
 ```
-Needs `cadquery`, `ezdxf`, `jsonschema` (`requirements.txt`). Exit codes: 0 built, 2 spec rejected, 3 validator rejected (nothing is written to `--out`).
+Needs `cadquery`, `ezdxf`, `jsonschema` (`requirements.txt`). Exit codes: 0 built, 2 spec rejected (unreadable, off-schema, degenerate), 3 validator rejected, 4 build failed (kernel error, or the output could not be written). On 3 and 4 `--out` holds no file from this build: files are written one at a time, the manifest last, and removed again if a later write fails.
 
 ## Outputs
 - `<mark>.step`, `<mark>.dxf`, `manifest.json` (inputs, spec hash, files with sha256, measures, validation summary, toolchain).
@@ -47,9 +47,10 @@ Needs `cadquery`, `ezdxf`, `jsonschema` (`requirements.txt`). Exit codes: 0 buil
 `validator.py` re-reads both files independently (tolerance 0.5 mm unless noted):
 - STEP is one valid solid; key dimensions (length, end sizes, round-end radius, offset) match the spec.
 - CUT outline is closed, has no zero-length edge and does not self-intersect; the net loop rebuilt from BEND lines is closed.
-- Every developed edge length matches the corresponding 3D edge; developed area matches 3D lateral area (0.1 %); inlet and outlet net perimeters match the spec.
+- Every developed edge length matches the corresponding 3D edge, and every ruling joins an inlet vertex to an outlet vertex of the net outline; developed area matches 3D lateral area (0.1 %); inlet and outlet net perimeters match the spec.
 - Seam and connection allowances are present at the specified distance.
-- Title block carries the spec values; manifest checksums match (when supplied).
+- Title block carries the spec values (sizes, offset, thickness, seam, connection, units and scope lines); DXF units are millimetres; the sheet holds nothing but BEND lines, one CUT polyline and annotation; manifest checksums match (when supplied).
+- Known limits: the 0.5 mm tolerance is absolute (dimensions are at least 10 mm); the manifest `measures` are the builder's and are not validated.
 
 ## Worked example
 `examples/rect_to_round/spec.json` → `examples/rect_to_round/expected_manifest.json` (also `rect_to_round_offset`, `rect_reducer`, `rect_offset`).

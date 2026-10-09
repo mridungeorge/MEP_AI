@@ -12,6 +12,7 @@ import hashlib
 import os
 import re
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -128,29 +129,37 @@ def save_dxf(doc: Any, path: Path) -> None:
 _WRITTEN_BY = re.compile(r"(\d+\.\d+\.\d+) @ \d{4}-\d\d-\d\dT[\d:.]+\+00:00")
 
 
+
+
 def canonical_dxf(text: str) -> str:
-    """Remove the two things ezdxf leaves to chance: the 'written by' timestamp, and the order of the OBJECTS
-    section (which follows set iteration, so it changes with PYTHONHASHSEED). Objects are put in handle order."""
+    """Remove what ezdxf leaves to chance: the 'written by' timestamp, and the order of the CLASSES and OBJECTS
+    sections (both follow set iteration, so they change with PYTHONHASHSEED). CLASSES are put in name order and
+    OBJECTS in handle order, so the same drawing always gives the same bytes."""
     text = _WRITTEN_BY.sub(r"\1 @ 2000-01-01T00:00:00+00:00", text.replace("\r\n", "\n"))
     lines = text.split("\n")
     trailing = lines[-1] == ""
     if trailing:
         lines = lines[:-1]
     pairs = [(lines[i], lines[i + 1]) for i in range(0, len(lines) - 1, 2)]
-    start = next((i for i, p in enumerate(pairs) if p[0].strip() == "2" and p[1] == "OBJECTS"), None)
-    if start is None:
-        return text
-    end = next(i for i in range(start, len(pairs)) if pairs[i][0].strip() == "0" and pairs[i][1] == "ENDSEC")
-    chunks: list[list[tuple[str, str]]] = []
-    for pair in pairs[start + 1 : end]:
-        if pair[0].strip() == "0":
-            chunks.append([])
-        chunks[-1].append(pair)
 
-    def handle(chunk: list[tuple[str, str]]) -> int:
-        return next((int(v, 16) for c, v in chunk if c.strip() == "5"), 0)
+    def first_value(chunk: list[tuple[str, str]], code: str) -> str:
+        return next((v for c, v in chunk if c.strip() == code), "")
 
-    chunks.sort(key=handle)  # stable: chunks without a handle keep their relative order
-    ordered = pairs[: start + 1] + [p for c in chunks for p in c] + pairs[end:]
-    out = "\n".join(f"{a}\n{b}" for a, b in ordered)
+    sort_keys: dict[str, Callable[[list[tuple[str, str]]], Any]] = {
+        "CLASSES": lambda ch: (first_value(ch, "1"), first_value(ch, "2"), first_value(ch, "3")),
+        "OBJECTS": lambda ch: int(first_value(ch, "5") or "0", 16),
+    }
+    for section, key in sort_keys.items():
+        start = next((i for i, p in enumerate(pairs) if p[0].strip() == "2" and p[1] == section), None)
+        if start is None:
+            continue
+        end = next(i for i in range(start, len(pairs)) if pairs[i][0].strip() == "0" and pairs[i][1] == "ENDSEC")
+        chunks: list[list[tuple[str, str]]] = []
+        for pair in pairs[start + 1 : end]:
+            if pair[0].strip() == "0":
+                chunks.append([])
+            chunks[-1].append(pair)
+        chunks.sort(key=key)  # stable: chunks with equal keys keep their relative order
+        pairs = pairs[: start + 1] + [p for c in chunks for p in c] + pairs[end:]
+    out = "\n".join(f"{a}\n{b}" for a, b in pairs)
     return out + ("\n" if trailing else "")

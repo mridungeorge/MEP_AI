@@ -532,6 +532,22 @@ def chk_dxf_layers(ctx: _Ctx) -> Outcome:
     return not missing, list(LAYERS), {"missing": missing}
 
 
+ALLOWED_ENTITIES = {("BEND", "LINE"), ("CUT", "LWPOLYLINE"), ("ANNOTATION", "LINE"), ("ANNOTATION", "TEXT"),
+                    ("ANNOTATION", "LWPOLYLINE")}
+
+
+def chk_dxf_units(ctx: _Ctx) -> Outcome:
+    units = ctx.dxf.doc.header.get("$INSUNITS")
+    return units == 4, "$INSUNITS = 4 (millimetres)", {"insunits": units}
+
+
+def chk_dxf_entities(ctx: _Ctx) -> Outcome:
+    """Nothing on the sheet but what the skill draws: a stray circle or a line on layer 0 would reach the shop."""
+    found = sorted({(str(e.dxf.layer), e.dxftype()) for e in ctx.dxf.doc.modelspace()})
+    extra = [f"{layer}:{kind}" for layer, kind in found if (layer, kind) not in ALLOWED_ENTITIES]
+    return not extra, "only BEND lines, one CUT polyline and ANNOTATION lines/text", {"unexpected": extra}
+
+
 def chk_cut_closed_single(ctx: _Ctx) -> Outcome:
     d = ctx.dxf
     kinds = [e.dxftype() for e in d.cut_entities]
@@ -593,6 +609,23 @@ def chk_edge_lengths(ctx: _Ctx) -> Outcome:
     ok = best <= TOL_MM and seam_dev <= TOL_MM
     return ok, exp, {"dxf_bend_lines": len(ld), "step_edges": len(l3), "max_dev_mm": _r(best),
                      "seam_start_vs_end_mm": _r(seam_dev)}
+
+
+def chk_rulings_on_net(ctx: _Ctx) -> Outcome:
+    """Fold lines are the shop instruction: each ruling must join a vertex of the inlet chain to a vertex of the outlet
+    chain of the net outline (the lengths alone cannot tell a fold line moved sideways from a correct one)."""
+    net = ctx.net_strict
+    inlet = [ln.p for ln in net.inlet] + [net.inlet[-1].q]
+    outlet = [ln.p for ln in net.outlet] + [net.outlet[-1].q]
+
+    def near(pt: Pt, pts: list[Pt]) -> bool:
+        return any(_len(_sub(pt, q)) <= TOL_MM for q in pts)
+
+    rulings = [ln for ln in ctx.dxf.bend if ln.role == "ruling"]
+    bad = [ln.index for ln in rulings
+           if not ((near(ln.p, inlet) and near(ln.q, outlet)) or (near(ln.p, outlet) and near(ln.q, inlet)))]
+    return not bad, "every ruling joins an inlet vertex to an outlet vertex of the net", {
+        "rulings": len(rulings), "misplaced": bad[:10]}
 
 
 def chk_net_area(ctx: _Ctx) -> Outcome:
@@ -700,7 +733,23 @@ def chk_connection_allowance(ctx: _Ctx) -> Outcome:
 
 def chk_title_block(ctx: _Ctx) -> Outcome:
     spec = ctx.spec
+    g, kind = spec["geometry"], spec["fitting"]
+    if kind == "rect_to_round":
+        size = (f"INLET: {_num(g['width_mm'])} x {_num(g['height_mm'])}  OUTLET: DIA {_num(g['diameter_mm'])}  "
+                f"LENGTH: {_num(g['length_mm'])}")
+        extra = f"OFFSET: X {_num(g['offset_x_mm'])} Y {_num(g['offset_y_mm'])}  CHORDS: {g['circle_segments']}"
+    elif kind == "rect_reducer":
+        size = (f"INLET: {_num(g['width_in_mm'])} x {_num(g['height_in_mm'])}  "
+                f"OUTLET: {_num(g['width_out_mm'])} x {_num(g['height_out_mm'])}  LENGTH: {_num(g['length_mm'])}")
+        extra = f"ALIGNMENT: {g['alignment']}"
+    else:
+        size = f"SIZE: {_num(g['width_mm'])} x {_num(g['height_mm'])}  LENGTH: {_num(g['length_mm'])}"
+        extra = f"OFFSET: X {_num(g['offset_x_mm'])} Y {_num(g['offset_y_mm'])}"
     wanted = {
+        "size": size,
+        "extra": extra,
+        "units": "UNITS: mm   VIEW: OUTSIDE   DEVELOPMENT: TRIANGULATION",
+        "scope": "GEOMETRY ONLY - NOT A COMPLIANCE CHECK",
         "mark": f"MARK: {spec['mark']}",
         "thickness": f"SHEET t={_num(spec['sheet_thickness_mm'])} mm",
         "seam": f"SEAM: {spec['seam']['type']} +{_num(spec['seam']['allowance_mm'])} mm",
@@ -782,12 +831,15 @@ def validate(spec: dict[str, Any], files: list[Path]) -> ValidationResult:
     run("step_bbox_xy", t, lambda: chk_step_bbox_xy(ctx))
     run("dxf_loads", None, lambda: chk_dxf_loads(ctx))
     run("dxf_layers", None, lambda: chk_dxf_layers(ctx))
+    run("dxf_units", None, lambda: chk_dxf_units(ctx))
+    run("dxf_entities", None, lambda: chk_dxf_entities(ctx))
     run("cut_closed_single", None, lambda: chk_cut_closed_single(ctx))
     run("cut_no_zero_length", ZERO_EDGE_MM, lambda: chk_cut_zero_length(ctx))
     run("cut_no_self_intersection", TOUCH_MM, lambda: chk_cut_self_intersection(ctx))
     run("net_connected", CONNECT_TOL, lambda: chk_net_connected(ctx))
     run("net_no_self_intersection", TOUCH_MM, lambda: chk_net_self_intersection(ctx))
     run("edge_lengths_match_3d", t, lambda: chk_edge_lengths(ctx))
+    run("rulings_on_net", t, lambda: chk_rulings_on_net(ctx))
     run("net_area_matches_lateral_area", "0.1%", lambda: chk_net_area(ctx))
     run("net_inlet_perimeter", t, lambda: chk_inlet_perimeter(ctx))
     run("net_outlet_perimeter", t, lambda: chk_outlet_perimeter(ctx))

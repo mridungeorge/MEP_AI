@@ -10,7 +10,7 @@
       "bytes": 50707,
       "name": "T-02.dxf",
       "role": "dxf",
-      "sha256": "9dcec301995801628bd5c410116e6c52cc2cd292ce0698e1062ba6bd29fd2ee6"
+      "sha256": "b72882920d482a84b7563ad3e959c4404f8fbd2cb43d843006ca0172acfa6da5"
     }
   ],
   "inputs": {
@@ -77,12 +77,15 @@
       "step_bbox_xy",
       "dxf_loads",
       "dxf_layers",
+      "dxf_units",
+      "dxf_entities",
       "cut_closed_single",
       "cut_no_zero_length",
       "cut_no_self_intersection",
       "net_connected",
       "net_no_self_intersection",
       "edge_lengths_match_3d",
+      "rulings_on_net",
       "net_area_matches_lateral_area",
       "net_inlet_perimeter",
       "net_outlet_perimeter",

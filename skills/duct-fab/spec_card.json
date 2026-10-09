@@ -27,6 +27,7 @@
     "material": {
       "type": "string",
       "maxLength": 40,
+      "pattern": "^[^\\u0000-\\u001f\\u007f]*$",
       "description": "Free-text label for the title block, e.g. a firm material code. Optional."
     },
     "seam": {
@@ -58,7 +59,7 @@
       }
     },
     "geometry": { "type": "object" },
-    "notes": { "type": "string", "maxLength": 200 }
+    "notes": { "type": "string", "maxLength": 200, "pattern": "^[^\\u0000-\\u001f\\u007f]*$" }
   },
   "allOf": [
     {
@@ -75,7 +76,7 @@
     }
   ],
   "$defs": {
-    "dim": { "type": "number", "exclusiveMinimum": 0, "maximum": 10000 },
+    "dim": { "type": "number", "minimum": 10, "maximum": 10000 },
     "offset": { "type": "number", "minimum": -5000, "maximum": 5000 },
     "rect_to_round": {
       "type": "object",

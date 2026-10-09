@@ -223,6 +223,55 @@ def bend_ruling_moved(env: Env) -> list[Path]:
     return _step_dxf(env, _edit_dxf(env, "bend_ruling", edit))
 
 
+def ruling_moved_same_length(env: Env) -> list[Path]:
+    """A fold line carried sideways: same length, so the length checks cannot see it (review round 1, B2)."""
+    def edit(doc: Any) -> None:
+        line = _bend(doc, "ruling", 0)
+        (x0, y0, _), (x1, y1, _) = line.dxf.start, line.dxf.end
+        line.dxf.start, line.dxf.end = (x0 + 300, y0 + 40, 0.0), (x1 + 300, y1 + 40, 0.0)
+
+    return _step_dxf(env, _edit_dxf(env, "ruling_moved", edit))
+
+
+def units_inches(env: Env) -> list[Path]:
+    def edit(doc: Any) -> None:
+        doc.header["$INSUNITS"] = 1
+
+    return _step_dxf(env, _edit_dxf(env, "inches", edit))
+
+
+def stray_circle(env: Env) -> list[Path]:
+    def edit(doc: Any) -> None:
+        doc.modelspace().add_circle((10, 10), 5, dxfattribs={"layer": "BEND"})
+
+    return _step_dxf(env, _edit_dxf(env, "circle", edit))
+
+
+def stray_line_on_layer_0(env: Env) -> list[Path]:
+    def edit(doc: Any) -> None:
+        doc.modelspace().add_line((0, 0), (500, 500), dxfattribs={"layer": "0"})
+
+    return _step_dxf(env, _edit_dxf(env, "layer0", edit))
+
+
+def title_size_wrong(env: Env) -> list[Path]:
+    def edit(doc: Any) -> None:
+        for t in doc.modelspace().query("TEXT"):
+            if t.dxf.text.startswith(("INLET:", "SIZE:")):
+                t.dxf.text = "INLET: 1 x 1  OUTLET: 1 x 1  LENGTH: 1"
+
+    return _step_dxf(env, _edit_dxf(env, "title_size", edit))
+
+
+def title_scope_deleted(env: Env) -> list[Path]:
+    def edit(doc: Any) -> None:
+        for t in list(doc.modelspace().query("TEXT")):
+            if "NOT A COMPLIANCE CHECK" in t.dxf.text:
+                doc.modelspace().delete_entity(t)
+
+    return _step_dxf(env, _edit_dxf(env, "title_scope", edit))
+
+
 def bend_inlet_gap(env: Env) -> list[Path]:
     def edit(doc: Any) -> None:
         _extend_end(_bend(doc, "inlet", 1), 2.0)
@@ -355,6 +404,12 @@ MUTATIONS: dict[str, Mutation] = {
     "bend_untagged": Mutation(bend_untagged, ("net_connected",)),
     "bend_line_dropped": Mutation(bend_line_dropped, ("edge_lengths_match_3d",)),
     "title_wrong": Mutation(title_wrong, ("title_block",)),
+    "ruling_moved_same_length": Mutation(ruling_moved_same_length, ("rulings_on_net",)),
+    "units_inches": Mutation(units_inches, ("dxf_units",)),
+    "stray_circle": Mutation(stray_circle, ("dxf_entities",)),
+    "stray_line_on_layer_0": Mutation(stray_line_on_layer_0, ("dxf_entities",)),
+    "title_size_wrong": Mutation(title_size_wrong, ("title_block",)),
+    "title_scope_deleted": Mutation(title_scope_deleted, ("title_block",)),
     "dxf_garbage": Mutation(dxf_garbage, ("dxf_loads", "dxf_layers", "cut_closed_single", "net_connected")),
     "seam_dropped": Mutation(seam_dropped, ("seam_allowance", "title_block")),
     "connection_wrong": Mutation(connection_wrong, ("connection_allowance", "title_block")),
