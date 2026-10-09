@@ -15,9 +15,9 @@ import hashlib
 import json
 import math
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from collections.abc import Callable
 from typing import Any
 
 TOL_MM = 0.5  # general dimensional tolerance
