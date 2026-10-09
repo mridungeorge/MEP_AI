@@ -23,6 +23,8 @@ run python scripts/ingest_accuracy.py --check   # the measured-accuracy report i
 pnpm --filter @mep/web run typecheck
 pnpm --filter @mep/web run test
 run python -m pytest tests/rules tests/engine tests/ingest tests/api tests/diff tests/review tests/db
+# the drafting skills: duct-fab (needs cadquery, installed in the devcontainer) and space-envelope; their validators gate every output
+run python -m pytest tests/skills
 # RLS attack tests need a real Postgres: local Supabase (Docker). Fails loudly if it is down.
 if ! pnpm exec supabase status >/dev/null 2>&1; then pnpm exec supabase start; fi
 pnpm exec supabase db reset

@@ -17,7 +17,7 @@ from typing import Any
 SKILL_DIR = Path(__file__).resolve().parent
 if str(SKILL_DIR) not in sys.path:
     sys.path.insert(0, str(SKILL_DIR))
-import se_geometry as geo  # noqa: E402
+import se_geometry as geo
 
 TOL_MM = 0.5
 AREA_REL_TOL = 1e-3

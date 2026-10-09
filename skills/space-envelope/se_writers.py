@@ -13,7 +13,7 @@ from typing import Any
 SKILL_DIR = Path(__file__).resolve().parent
 if str(SKILL_DIR) not in sys.path:
     sys.path.insert(0, str(SKILL_DIR))
-import se_geometry as geo  # noqa: E402
+import se_geometry as geo
 
 IFC_TIMESTAMP = "2000-01-01T00:00:00"
 ORIGINATING_SYSTEM = "MEP Co-pilot space-envelope"
@@ -105,10 +105,9 @@ def build_ifc(spec: dict[str, Any], path: Path) -> None:
     # every other rooted entity (property sets, relationships) gets a GlobalId derived from the file order, so the bytes are repeatable
     n = 0
     for e in f:
-        if e.is_a("IfcRoot") and not e.is_a("IfcSpace") and not str(e.GlobalId or "").startswith("~"):
-            if e.is_a() in ("IfcPropertySet", "IfcElementQuantity", "IfcRelDefinesByProperties"):
-                e.GlobalId = _guid(mark, e.is_a(), n)
-                n += 1
+        if e.is_a() in ("IfcPropertySet", "IfcElementQuantity", "IfcRelDefinesByProperties"):
+            e.GlobalId = _guid(mark, e.is_a(), n)
+            n += 1
     f.write(str(path))
     _strip_ifc_clock(path)
 

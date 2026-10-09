@@ -21,11 +21,13 @@ from mep.api import gate1, revisions, uploads
 from mep.api import me as me_api
 from mep.api import review as review_api
 from mep.api import schedule as schedule_api
+from mep.api import skills as skills_api
 from mep.api.app import create_app
 from mep.api.auth import make_current_user
 from mep.api.pg import PgLedger, PgRepository
 from mep.api.review_pg import PgReview, PgShare
 from mep.api.schedule import CurrentUser
+from mep.api.skills_pg import PgSkills
 from mep.api.uploads_pg import PgUploads
 from mep.diff.graph import build_graph
 from mep.engine.loader import RulePack, load_pack
@@ -69,12 +71,16 @@ def create_pg_app(dsn: str, jwt_secret: str, pack: RulePack, cors_origins: list[
     app.dependency_overrides[review_api.get_service] = lambda user=Depends(current_user): PgReview(dsn, user)  # noqa: B008
     share = PgShare(dsn)
     app.dependency_overrides[review_api.get_share] = lambda: share
+    app.include_router(skills_api.router)
+    app.dependency_overrides[skills_api.current_user] = current_user
+    app.dependency_overrides[skills_api.get_service] = lambda user=Depends(current_user): PgSkills(dsn, user)  # noqa: B008
     app.dependency_overrides[me_api.current_user] = current_user
     app.dependency_overrides[me_api.get_repository] = repository
     app.dependency_overrides[uploads.current_user] = current_user
     if supabase_url and anon_key:      # without a storage endpoint the upload route refuses (503)
         service = PgUploads(dsn, supabase_url, anon_key)
         app.dependency_overrides[uploads.get_service] = lambda: service
+        app.dependency_overrides[skills_api.get_uploads] = lambda: service
     app.dependency_overrides[schedule_api.get_repository] = repository
     if cors_origins:
         app.add_middleware(CORSMiddleware, allow_origins=cors_origins, allow_methods=["GET", "POST", "PUT", "DELETE"],

@@ -24,10 +24,11 @@ for p in (str(REPO_ROOT), str(SKILL_DIR)):
     if p not in sys.path:
         sys.path.insert(0, p)
 
-import jsonschema  # noqa: E402
-import se_geometry as geo  # noqa: E402
-import se_writers as writers  # noqa: E402
-from skills.cad import cadkit  # noqa: E402
+import jsonschema
+import se_geometry as geo
+import se_writers as writers
+
+from skills.cad import cadkit
 
 SKILL_VERSION = "1.0.0"
 MIN_ROOM_M2 = 0.25

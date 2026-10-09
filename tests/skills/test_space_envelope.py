@@ -151,7 +151,7 @@ def _mut(path: str, value):
     (_mut("rooms.1.outline", {"type": "polygon", "points_mm": [[12000, 0], [17000, 4000], [17000, 0], [12000, 4000]]}), "not a simple polygon"),
     (_mut("rooms.1.outline", {"type": "polygon", "points_mm": [[12000, 0], [12010, 0], [12010, 10]]}), "smaller"),
     (_mut("rooms.1.kind", "bathroom"), "kind"),
-    (_mut("notes", "x‮y"), "notes"),
+    (_mut("notes", "x" + chr(0x202E) + "y"), "notes"),
 ])
 def test_a_bad_spec_is_rejected_with_a_reason_and_nothing_is_written(build_mod, spec, why, tmp_path):
     f = tmp_path / "spec.json"

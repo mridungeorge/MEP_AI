@@ -26,6 +26,7 @@
     },
     "material": {
       "type": "string",
+      "x-firm-default": true,
       "maxLength": 40,
       "pattern": "^[^\\u0000-\\u001f\\u007f\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2069\\ufeff]*$",
       "description": "Free-text label for the title block, e.g. a firm material code. Optional."
@@ -59,7 +60,7 @@
       }
     },
     "geometry": { "type": "object" },
-    "notes": { "type": "string", "maxLength": 200, "pattern": "^[^\\u0000-\\u001f\\u007f\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2069\\ufeff]*$" }
+    "notes": { "type": "string", "maxLength": 200, "x-firm-default": true, "pattern": "^[^\\u0000-\\u001f\\u007f\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2069\\ufeff]*$" }
   },
   "allOf": [
     {
@@ -95,6 +96,7 @@
           "maximum": 64,
           "multipleOf": 8,
           "default": 16,
+          "x-firm-default": true,
           "description": "Number of chords the round end is divided into for the triangulation development."
         }
       }
