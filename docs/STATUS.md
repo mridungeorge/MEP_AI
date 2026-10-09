@@ -4,13 +4,35 @@ Sprint: 2 (prove the data) rebuilt and finished after the 2026-10-09 recovery; t
 local devcontainer gate is the reference (tag `sprint-2-gate`). GitHub CI has never run (no remote CI evidence).
 Updated: 2026-10-09 (recovery after a device change; see "Recovery 2026-10-09")
 
-## Resume here (updated 2026-10-10)
-Unattended multi-phase build: **Phases 2.5, 3 and 4a are done** (`sprint-2.5-gate`, `sprint-3-gate`, `sprint-4a-gate`). The prompt says STOP
-after 4a: **do not start 4b until the user replies to the 4a report.**
+## Resume here (updated 2026-10-12)
+User decisions after the 4a report: do **Phase 4a.1 (pilot readiness)**, then continue straight into **Phase 4b** without stopping
+(`sprint-4a1-gate`, then `sprint-4b-gate`). Done so far: 2.5, 3, 4a. 4a.1 is built (see its section); close it (review max 2 rounds,
+ci.sh, GitHub CI, tag) and move to 4b: space-envelope skill, skills_runner wiring (validator before release), spec cards/wizards in the UI,
+runtime agents on the Claude Agent SDK with the tool layer as safety boundary, PDF page renderer + vision extraction (provenance=extracted).
 Notes: the local Supabase signs tokens with ES256 (JWKS). Mail for magic links goes to Mailpit (`http://127.0.0.1:54324`). Run everything in
 the devcontainer; `~/ws` is a synced work copy (never `uv sync` there); clean gates run from `git clone` copies (`~/gate3`). On the Windows
-host put `AppData/Local/Python/bin` (under the user profile) first on PATH (the WindowsApps `python` stub fails).
+host put `AppData/Local/Python/bin` (under the user profile) first on PATH (the WindowsApps `python` stub fails). `.env.example` files cannot
+be written here (permission rule): the templates are `deploy/env.api.example` and `deploy/env.web.example`.
 Existing open revisions have results without an input fingerprint (`inputs_hash` NULL): re-run once before freezing.
+
+## Phase 4a.1 pilot readiness (2026-10-12)
+- Signer independence is a firm setting (`firm.signer_mode`): `strict` (default, three different people) or `small_firm` (one person may hold
+  several gates by ACTING in roles listed in `app_user.also_roles`; the acting role travels in the request claims and the database re-checks
+  it against the firm mode and the person's roles). In small_firm every ledger entry (inside the hash), signoff row, package, PDF page and the
+  UI says NOT INDEPENDENTLY CHECKED. Mode, roles and registration changes are ledgered. Tests for both modes: `tests/rls/test_pg_pilot.py`.
+- Accepted FAIL: approving a FAIL needs a category (performance_solution + reference, rule_disputed, out_of_scope) and an explanation;
+  never in bulk or a spot-check; `rule_disputed` writes `rule_dispute` and appends to `docs/engineer-review/disputed.md` (or
+  `scripts/export_disputed.py`); the approver acknowledges each one individually (`gate3_acknowledge_fail`) before Gate 3; listed first in
+  the package, PDF and UI.
+- Registration numbers stay service-only: `scripts/admin_users.py register-approver` (evidence, ledgered), runbook `docs/runbooks/register-approver.md`.
+- Share link: token in the URL FRAGMENT (`/share#token`); the page POSTs it once to `/share-api/exchange` (a Next rewrite to the API),
+  gets a 15-minute HttpOnly SameSite=Strict session cookie; reads use the cookie; every exchange/read is logged; no token in any request URL, log
+  or Referer (the Playwright test records every request). Old `/share/<token>` routes are gone.
+- Races reproduced with two live database sessions (`test_pg_pilot.py`, last section): edit during freeze, freeze during edit, run during
+  freeze, freeze during run. All four behaved correctly (the lock order from migrations 0012/0013 holds); no code change was needed.
+- Deployment: `deploy/api/Dockerfile`, `railway.json`, `deploy/env.*.example`, `docs/runbooks/{deploy,migrate,register-approver}.md`,
+  `scripts/seed_demo.py` (demo firm, three users, synthetic VIC office project), `/healthz`. `docs/demo-script.md` + `docs/demo-assets/`.
+  The user must create the accounts and keys by hand: `docs/runbooks/deploy.md` Step 0 to 6.
 
 ## Phase 4a (2026-10-10): done, tag `sprint-4a-gate`
 - Built: exception classifier (`review/classifier.py`; 7 exception classes + clean pass; reasons stored with the result); migration 0010

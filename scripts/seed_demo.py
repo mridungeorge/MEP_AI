@@ -4,7 +4,7 @@ docs/demo-script.md. Run it against a database YOU own (local Supabase or your c
     uv run python scripts/seed_demo.py --designer you+designer@example.com --checker you+checker@example.com \\
                                        --approver you+approver@example.com [--mode strict|small_firm]
 
-Environment (see .env.example; nothing is read from git):
+Environment (see deploy/env.api.example; nothing is read from git):
     MEP_DB_URL                  Postgres connection string of the project (the service role / pooler string)
     MEP_JWT_SECRET              the project's JWT secret (used only to talk to the API code in-process while seeding)
     MEP_SUPABASE_URL            https://<ref>.supabase.co  (or http://127.0.0.1:54321 locally)
@@ -43,7 +43,7 @@ DEMO_REGISTRATION = "DEMO-0001"
 def need(name: str) -> str:
     value = os.environ.get(name, "")
     if not value:
-        sys.exit(f"{name} is not set (see .env.example)")
+        sys.exit(f"{name} is not set (see deploy/env.api.example)")
     return value
 
 

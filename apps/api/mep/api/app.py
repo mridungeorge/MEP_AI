@@ -26,6 +26,10 @@ def create_app(repo: Any, current_user: Callable[..., Any], pack: RulePack | Non
         errors = [{"loc": list(e["loc"]), "msg": e["msg"], "type": e["type"]} for e in exc.errors()]
         return JSONResponse(status_code=422, content={"detail": errors})
 
+    @app.get("/healthz")
+    async def _healthz() -> dict[str, str]:
+        return {"status": "ok"}          # for the host's health check: no database, no data
+
     @app.get("/templates/{filename}")
     async def _template(filename: str) -> FileResponse:
         # the published Excel templates only: the name must match exactly, nothing else is served from this route

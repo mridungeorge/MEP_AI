@@ -90,11 +90,11 @@ def test_the_whole_chain_designer_checker_approver_package_and_share_link(admin,
     assert client.post(f"/revisions/{rev}/sign/gate3", headers=ap, json={"registration": "RPEQ 12345"}).status_code == 409   # gate 2 first
     assert client.post(f"/revisions/{rev}/sign/gate2", headers=ck, json={}).status_code == 200
     assert client.post(f"/revisions/{rev}/sign/gate2", headers=ck, json={}).status_code == 409                # one signer per gate
-    wrong = client.post(f"/revisions/{rev}/sign/gate3", headers=ap, json={"registration": "RPEQ 99999"})
-    assert wrong.status_code == 409 and "does not match" in wrong.text
     unacked = client.post(f"/revisions/{rev}/sign/gate3", headers=ap, json={"registration": "RPEQ 12345"})
     assert unacked.status_code == 409 and "acknowledgement" in unacked.text                                     # accepted FAILs first
     assert acknowledge_all(client, f) >= 1
+    wrong = client.post(f"/revisions/{rev}/sign/gate3", headers=ap, json={"registration": "RPEQ 99999"})
+    assert wrong.status_code == 409 and "does not match" in wrong.text
     assert client.post(f"/revisions/{rev}/sign/gate3", headers=ap, json={"registration": "RPEQ 12345"}).status_code == 200
 
     # a decision after signing is refused

@@ -25,7 +25,7 @@ NUMBER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ./-]{2,39}$")
 def connect() -> psycopg.Connection[Any]:
     dsn = os.environ.get("MEP_DB_URL", "")
     if not dsn:
-        sys.exit("MEP_DB_URL is not set (see .env.example)")
+        sys.exit("MEP_DB_URL is not set (see deploy/env.api.example)")
     return psycopg.connect(dsn, autocommit=False)
 
 
