@@ -329,3 +329,52 @@ test("designer froze it; checker reviews (spot-check, line by line) and signs Ga
   await certifier.reload();
   await expect(certifier.getByRole("alert").filter({ hasText: "not valid" })).toBeVisible();
 });
+
+
+test("drafting: a sentence is read back for confirmation, the card is completed, the build is released and becomes the revision's model", async ({ page }) => {
+  const s = state.scenarios["drafting"];
+  await signIn(page, s.designer_email);
+  await page.goto(`/projects/${s.project}/revisions/${s.revision}/drafting`);
+  await expect(page.getByRole("heading", { name: "Drafting" })).toBeVisible();
+  await page.getByLabel("Skill", { exact: true }).selectOption("space-envelope");
+  await expect(page.getByRole("heading", { name: "The card" })).toBeVisible();
+
+  await page.getByLabel("Describe it").fill("Level 1, 3.6 m floor to floor; Open office 12 x 9 m, 2.7 m high, 0.6 m void; AHU plant room 6 x 4 m, 3.2 m high");
+  await page.getByRole("button", { name: "Read it" }).click();
+  await expect(page.getByTestId("proposal")).toContainText("What was understood");
+  await expect(page.getByTestId("proposal")).toContainText("rooms[0].outline");
+  await expect(page.getByTestId("assumptions")).toContainText("placed left to right");          // an assumption is shown, never silent
+  await expect(page.getByTestId("questions")).toContainText("mark");                            // the mark was not said: it is asked
+  await page.getByRole("button", { name: "Put this into the card" }).click();
+  await expect(page.locator('[data-path="rooms[0].name"]')).toHaveValue("Open office");
+
+  // nothing builds until the designer has confirmed, and the server still insists on the missing field
+  const build = page.getByRole("button", { name: "Build", exact: true });
+  await expect(build).toBeDisabled();
+  await page.getByRole("button", { name: "What is missing?" }).click();
+  await expect(page.getByTestId("missing-question").first()).toBeVisible();
+  await page.locator('[data-path="mark"]').fill("OFFICE-L1");
+  await page.getByRole("button", { name: "What is missing?" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "Every required field is filled in." })).toBeVisible();
+  await page.getByLabel("I have checked every value above", { exact: false }).check();
+  await expect(build).toBeEnabled();
+
+  // a bad card is refused with the reason and offers no file
+  await page.locator('[data-path="rooms[0].outline.width_mm"]').fill("14000");                                       // now overlaps the plant room
+  await page.getByLabel("I have checked every value above", { exact: false }).check();
+  await build.click();
+  await expect(page.getByTestId("skill-result")).toHaveAttribute("data-status", "spec_rejected");
+  await expect(page.getByTestId("skill-result")).toContainText("overlap");
+  await expect(page.getByRole("button", { name: /^Download/ })).toHaveCount(0);
+
+  await page.locator('[data-path="rooms[0].outline.width_mm"]').fill("12000");
+  await page.getByLabel("I have checked every value above", { exact: false }).check();
+  await build.click();
+  await expect(page.getByTestId("skill-result")).toHaveAttribute("data-status", "ok");
+  await expect(page.getByTestId("skill-result")).toContainText("Built: all checks passed");
+  const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Download OFFICE-L1.ifc" }).click()]);
+  expect(download.suggestedFilename()).toBe("OFFICE-L1.ifc");
+  await page.getByRole("button", { name: "Use as this revision's model" }).first().click();
+  await expect(page.getByRole("alert").filter({ hasText: "2 space(s) read" })).toBeVisible();
+  await expect(page.getByTestId("runs")).toContainText("released");
+});

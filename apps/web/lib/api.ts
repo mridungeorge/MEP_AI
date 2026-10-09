@@ -2,7 +2,7 @@
 import { supabase } from "./supabase";
 import type {
   ApiErrorBody, BuildingPart, ConfirmResponse, Gate1State, ImportResponse, RowRef,
-  Lineage, Me, Package, ShareLinkView, Worksheet, RevisionDiff, RevisionResults, RevisionSummary, RunRulesResponse, SpaceInput, SpaceRow, SystemInputInput, SystemInputRow, UploadResponse,
+  Lineage, Me, ShortcutResult, SkillCard, SkillRunRow, SkillRunSummary, SkillSummary, Package, ShareLinkView, Worksheet, RevisionDiff, RevisionResults, RevisionSummary, RunRulesResponse, SpaceInput, SpaceRow, SystemInputInput, SystemInputRow, UploadResponse,
 } from "./types";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -139,5 +139,24 @@ export const api = {
   sharedPdfUrl: () => "/share-api/report.pdf",
   acknowledgeFail: (r: string, resultId: string, note: string) =>
     apiFetch<{ id: number }>(`${rev(r)}/review/acknowledge-fail`, json("POST", { result_id: resultId, note })),
+  skills: () => apiFetch<SkillSummary[]>("/skills"),
+  skillCard: (name: string) => apiFetch<SkillCard>(`/skills/${encodeURIComponent(name)}/card`),
+  setSkillDefaults: (name: string, defaults: Record<string, unknown>) =>
+    apiFetch<{ saved: boolean }>(`/skills/${encodeURIComponent(name)}/defaults`, json("PUT", { defaults })),
+  skillShortcut: (name: string, text: string) => apiFetch<ShortcutResult>(`/skills/${encodeURIComponent(name)}/shortcut`, json("POST", { text })),
+  skillMissing: (name: string, spec: unknown) =>
+    apiFetch<{ missing: { field: string; question: string }[] }>(`/skills/${encodeURIComponent(name)}/missing`, json("POST", { spec })),
+  runSkill: (r: string, name: string, spec: unknown) =>
+    apiFetch<SkillRunSummary>(`${rev(r)}/skills/${encodeURIComponent(name)}/run`, json("POST", { spec })),
+  skillRuns: (r: string) => apiFetch<SkillRunRow[]>(`${rev(r)}/skill-runs`),
+  useSkillOutputAsModel: (r: string, runId: string, which: "ifc" | "dxf") =>
+    apiFetch<UploadResponse>(`${rev(r)}/skill-runs/${encodeURIComponent(runId)}/use-as-model?which=${which}`, { method: "POST" }),
+  /** A released file, fetched with the session token (an <a href> cannot send it). */
+  artifactBlob: async (id: string): Promise<Blob> => {
+    const token = await getToken();
+    const res = await fetch(`${BASE_URL}/artifacts/${encodeURIComponent(id)}/download`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+    if (!res.ok) throw new ApiError(res.status, null, "That file is not available (only files whose checks passed can be downloaded).");
+    return res.blob();
+  },
   runRules: (r: string) => apiFetch<RunRulesResponse>(`${rev(r)}/run-rules`, { method: "POST" }),
 };

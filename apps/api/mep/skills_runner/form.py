@@ -128,6 +128,15 @@ def default_paths(form: list[Field], spec: Schema | None = None) -> set[str]:
     return out
 
 
+def apply_constants(schema: Schema, spec: Schema) -> Schema:
+    """Fill the fixed fields of the card (`spec_version`, `units`: a `const` in the schema) that the form never shows."""
+    out = copy.deepcopy(spec)
+    for name, sub in schema.get("properties", {}).items():
+        if "const" in sub and name not in out:
+            out[name] = sub["const"]
+    return out
+
+
 def _get(d: Any, parts: list[str]) -> Any:
     for p in parts:
         if not isinstance(d, dict) or p not in d:

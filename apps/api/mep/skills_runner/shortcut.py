@@ -65,7 +65,7 @@ def _duct_fab(text: str, p: Parsed) -> None:
         p.put("geometry.width_mm", _f(inlet[0]), m.group(0))                        # type: ignore[union-attr]
         p.put("geometry.height_mm", _f(inlet[1]), m.group(0))                       # type: ignore[union-attr]
     if offset and fitting in ("rect_offset", "rect_to_round"):
-        ox, oy = offset.group(1), offset.group(4) if offset.lastindex and offset.lastindex >= 4 else None
+        ox, oy = offset.group(1), offset.group(3)         # group 3 is the second (optional) signed number, group 1 the first
         p.put("geometry.offset_x_mm", _f(ox), offset.group(0))
         if oy is not None:
             p.put("geometry.offset_y_mm", _f(oy), offset.group(0))
@@ -76,7 +76,7 @@ def _duct_fab(text: str, p: Parsed) -> None:
     am = re.search(r"(concentric|flat[ _-](?:bottom|top|left|right))", low)
     if am:
         p.put("geometry.alignment", am.group(1).replace(" ", "_").replace("-", "_"), am.group(0))
-    lm = re.search(NUM + r"\s*(?:mm)?\s*(?:long|length|lg)\b", low) or re.search(r"\b(?:length|l)\s*[=:]?\s*" + NUM, low)
+    lm = re.search(r"\b(?:length|l)\s*[=:]?\s*" + NUM, low) or re.search(NUM + r"\s*(?:mm)?\s*(?:long|lg)\b", low)
     if lm:
         p.put("geometry.length_mm", _f(lm.group(1)), lm.group(0))
     tm = re.search(NUM + r"\s*mm\s*(?:sheet|thick\w*|steel|galv\w*|gauge)", low) or re.search(r"(?:sheet|thickness)\s*[=:]?\s*" + NUM, low)

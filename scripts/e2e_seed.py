@@ -9,6 +9,7 @@ magic link). Data goes in through the real API code (an in-process TestClient on
   mixed                      two building parts, two systems, everything confirmed; the UI test assigns each system to a part.
   signoff                    like frozen, plus an approver with a registration number (RPEQ 12345): the UI test does Gate 2,
                              Gate 3, the signed package and the certifier share link.
+  drafting                   an empty open revision for the drafting wizard test (space-envelope sentence -> card -> build -> use as model).
   frozen                     Rev A from a DXF plan (three named rooms), everything confirmed, rules run, revision FROZEN; the UI test
                              uploads rev-b.dxf (one room bigger, one room added) as the architect's next revision.
 
@@ -112,7 +113,7 @@ def main() -> None:
         fixtures.mkdir(parents=True, exist_ok=True)
         rev_a = plan_dxf(fixtures / "rev-a.dxf", [(0, 6, 5), (10, 4, 4), (20, 3, 3)])
         rev_b = plan_dxf(fixtures / "rev-b.dxf", [(0, 8, 5), (10, 4, 4), (20, 3, 3), (30, 5, 5)])
-        for name in ("flow", *[f"refuse-{k}" for k in KINDS], "mixed", "frozen", "signoff"):
+        for name in ("flow", *[f"refuse-{k}" for k in KINDS], "mixed", "frozen", "signoff", "drafting"):
             f = make_world(conn, name, approver=name == "signoff")
             h = {"Authorization": f"Bearer {mint_token(SECRET, f['designer'], ttl_seconds=6 * 3600)}"}
             base = f"/revisions/{f['revision']}"

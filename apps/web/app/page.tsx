@@ -19,7 +19,7 @@ export default function Home() {
       {revisions.length === 0 && <p>No revisions yet.</p>}
       <table>
         <thead>
-          <tr><th>Project</th><th>State</th><th>NCC</th><th>Architect rev</th><th>Status</th><th /><th /><th /></tr>
+          <tr><th>Project</th><th>State</th><th>NCC</th><th>Architect rev</th><th>Status</th><th /><th /><th /><th /></tr>
         </thead>
         <tbody>
           {revisions.map((r) => (
@@ -29,6 +29,7 @@ export default function Home() {
               <td><a href={`/projects/${r.project_id}/revisions/${r.id}/gate1`}>Open Gate 1</a></td>
               <td><a href={`/projects/${r.project_id}/revisions/${r.id}/diff`}>Diff &amp; results</a></td>
               <td><a href={`/projects/${r.project_id}/revisions/${r.id}/review`}>Review &amp; sign</a></td>
+              <td><a href={`/projects/${r.project_id}/revisions/${r.id}/drafting`}>Drafting</a></td>
             </tr>
           ))}
         </tbody>

@@ -117,6 +117,7 @@ def shortcut(name: str, body: ShortcutBody, user: User, svc: Service) -> dict[st
     except KeyError:
         raise _err(422, "no_shortcut", f"{name} has no plain-language shortcut") from None
     spec, filled = skill_form.apply_defaults(_skill(name).schema, parsed.spec, svc.firm_defaults(name))
+    spec = skill_form.apply_constants(_skill(name).schema, spec)
     return {"proposal": spec, "understood": parsed.understood, "assumptions": parsed.assumptions,
             "firm_defaults_applied": filled, "missing": missing_fields(name, spec)}
 
@@ -143,6 +144,7 @@ def run(revision_id: UUID, name: str, body: RunBody, user: User, svc: Service) -
     if frozen:
         raise _err(409, "revision_frozen", "revision is frozen")
     spec, filled = (skill_form.apply_defaults(s.schema, body.spec, svc.firm_defaults(name)) if body.use_firm_defaults else (body.spec, []))
+    spec = skill_form.apply_constants(s.schema, spec)
     try:
         result = run_skill(name, spec)
     except SkillUnavailable as exc:

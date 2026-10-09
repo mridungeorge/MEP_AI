@@ -286,3 +286,36 @@ export interface Package {
   status: { signed_gates: string[]; complete: boolean; missing: string[] };
   ledger: { verified: boolean; events: number; reason: string | null; anchor_seq: number | null; anchor_hash: string | null };
 }
+
+/** Drafting skills: the spec card as a form (GET /skills/{name}/card). Everything about a field comes from the card itself. */
+export interface FormFieldBase { path: string; name: string; label: string; required: boolean; help: string; firm_default: boolean }
+export type FormField =
+  | (FormFieldBase & { kind: "number" | "integer"; unit: string | null; min: number | null; max: number | null; step: number | null; default: number | null })
+  | (FormFieldBase & { kind: "text"; pattern: string | null; max_length: number | null })
+  | (FormFieldBase & { kind: "enum"; options: string[]; default: string | null })
+  | (FormFieldBase & { kind: "points"; min_items: number | null; max_items: number | null; unit: string })
+  | (FormFieldBase & { kind: "group"; fields: FormField[] })
+  | (FormFieldBase & { kind: "list"; min_items: number; max_items: number | null; item: FormField[] })
+  | (FormFieldBase & { kind: "choice"; key: string; cases: Record<string, FormField[]> })
+  | (FormFieldBase & { kind: "conditional"; on: string; cases: Record<string, FormField[]> });
+export interface SkillSummary { name: string; description: string; available: boolean; unavailable_reason: string }
+export interface SkillCard {
+  name: string; description: string; form: FormField[]; firm_default_paths: string[]; firm_defaults: Record<string, unknown>; available: boolean;
+}
+export interface ShortcutResult {
+  proposal: Record<string, unknown>;
+  understood: { text: string; field: string; value: unknown }[];
+  assumptions: string[];
+  firm_defaults_applied: string[];
+  missing: { field: string; question: string }[];
+}
+export interface SkillFile { artifact_id: string; name: string; role: string; bytes: number; sha256: string; released: boolean }
+export interface SkillRunSummary {
+  run_id: string; status: string; released: boolean; message: string;
+  validation: { passed?: boolean; checks?: { name: string; passed: boolean }[]; failed?: string[] };
+  files: SkillFile[]; firm_defaults_applied: string[];
+}
+export interface SkillRunRow {
+  run_id: string; skill: string; status: string; message: string; passed: boolean; created_at: string; via: string; spec_sha256: string;
+  artifacts: { artifact_id: string; name: string; role: string; released: boolean }[];
+}
