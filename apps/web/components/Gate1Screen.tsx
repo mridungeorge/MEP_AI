@@ -1,10 +1,12 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ApiError, api } from "@/lib/api";
-import { applyEdit, canConfirm, canRun } from "@/lib/gate1";
-import type { Gate1State, RowRef, SpaceInput } from "@/lib/types";
+import { applyEdit, canConfirm, canRun, unconfirmedRefs } from "@/lib/gate1";
+import type { Gate1State, Report, RowKind, RowRef, SpaceInput } from "@/lib/types";
 import { HealthPanel } from "./HealthPanel";
 import { PartsEditor } from "./PartsEditor";
+import { ProjectFactsPanel } from "./ProjectFactsPanel";
+import { RunReport } from "./RunReport";
 import { SchedulePanel } from "./SchedulePanel";
 import { ManualTraceForm, SpaceTable } from "./SpaceTable";
 
@@ -14,12 +16,15 @@ function refusal(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
+type Selection = Record<RowKind, Set<string>>;
+const EMPTY: Selection = { space: new Set(), system_input: new Set(), building_part: new Set(), project: new Set() };
+
 export function Gate1Screen({ revisionId }: { revisionId: string }) {
   const [state, setState] = useState<Gate1State | null>(null);
-  const [selSpaces, setSelSpaces] = useState<Set<string>>(new Set());
-  const [selInputs, setSelInputs] = useState<Set<string>>(new Set());
+  const [sel, setSel] = useState<Selection>(EMPTY);
   const [message, setMessage] = useState<string | null>(null);
   const [runMessage, setRunMessage] = useState<string | null>(null);
+  const [report, setReport] = useState<Report | null>(null);
 
   const reload = useCallback(async () => {
     try {
@@ -31,19 +36,16 @@ export function Gate1Screen({ revisionId }: { revisionId: string }) {
   useEffect(() => { void reload(); }, [reload]);
 
   const selected: RowRef[] = useMemo(
-    () => [
-      ...[...selSpaces].map((id): RowRef => ({ kind: "space", id })),
-      ...[...selInputs].map((id): RowRef => ({ kind: "system_input", id })),
-    ],
-    [selSpaces, selInputs],
+    () => (Object.keys(sel) as RowKind[]).flatMap((kind) => [...sel[kind]].map((id): RowRef => ({ kind, id }))),
+    [sel],
   );
 
   if (!state) return <p>{message ?? "Loading Gate 1..."}</p>;
 
-  const toggle = (set: Set<string>, setter: (s: Set<string>) => void) => (id: string) => {
-    const n = new Set(set);
-    if (n.has(id)) n.delete(id); else n.add(id);
-    setter(n);
+  const toggle = (kind: RowKind) => (id: string) => {
+    const next = new Set(sel[kind]);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setSel({ ...sel, [kind]: next });
   };
   const guard = async (fn: () => Promise<void>) => {
     setMessage(null);
@@ -61,38 +63,55 @@ export function Gate1Screen({ revisionId }: { revisionId: string }) {
   const confirm = () =>
     guard(async () => {
       await api.confirm(revisionId, selected);
-      setSelSpaces(new Set());
-      setSelInputs(new Set());
+      setSel(EMPTY);
       await reload();
     });
 
-  const run = canRun(state.spaces, state.inputs);
-  const confirmOk = canConfirm(state.spaces, state.inputs, selected);
+  const isDesigner = state.role === undefined || state.role === "designer";
+  const run = canRun(state.spaces, state.inputs, state.parts, state.project);
+  const confirmOk = isDesigner && canConfirm(state.spaces, state.inputs, selected, state.parts, state.project);
+  const lowHealth = state.health === null || state.health.below_threshold;
 
   return (
     <main>
       <h1>Gate 1: confirm inputs</h1>
       <HealthPanel health={state.health} />
+      {state.project && (
+        <ProjectFactsPanel project={state.project} selected={sel.project.has(state.project.id)}
+                           onToggle={() => toggle("project")(state.project!.id)} />
+      )}
       <PartsEditor
-        key={state.parts.map((p) => p.id).join(",")}
+        key={state.parts.map((p) => `${p.id}:${p.confirmed}`).join(",")}
         parts={state.parts}
+        selected={sel.building_part}
+        onToggle={toggle("building_part")}
         onSave={async (p) => { await api.putParts(revisionId, p); await reload(); }}
       />
-      <SpaceTable spaces={state.spaces} selected={selSpaces} onToggle={toggle(selSpaces, setSelSpaces)} onEdit={editSpace} />
-      {state.health.below_threshold && (
+      <SpaceTable spaces={state.spaces} selected={sel.space} onToggle={toggle("space")} onEdit={editSpace} />
+      {lowHealth && (
         <ManualTraceForm onAdd={async (s) => { await api.addSpace(revisionId, s); await reload(); }} />
       )}
       <SchedulePanel
         inputs={state.inputs}
-        selected={selInputs}
-        onToggle={toggle(selInputs, setSelInputs)}
+        selected={sel.system_input}
+        onToggle={toggle("system_input")}
         templateUrl={api.templateUrl(state.ncc_edition)}
         onAdd={async (i) => { await api.addInput(revisionId, i); await reload(); }}
         onImport={async (f) => { await api.importSchedule(revisionId, f); await reload(); }}
       />
       <section aria-label="Confirm">
+        <button type="button"
+                onClick={() => setSel({
+                  ...EMPTY,
+                  ...Object.fromEntries((["space", "system_input", "building_part", "project"] as RowKind[]).map(
+                    (k) => [k, new Set(unconfirmedRefs(state.spaces, state.inputs, state.parts, state.project)
+                      .filter((r) => r.kind === k).map((r) => r.id))])) as Selection,
+                })}>
+          Select all unconfirmed
+        </button>{" "}
         <button type="button" disabled={!confirmOk} onClick={confirm}>Confirm selected ({selected.length})</button>
-        {!confirmOk && selected.length > 0 && <span> A selected row has no value.</span>}
+        {!isDesigner && <span> Only a designer confirms Gate 1 rows.</span>}
+        {isDesigner && !confirmOk && selected.length > 0 && <span> A selected row has no value.</span>}
         {message && <p role="alert" style={{ color: "#b91c1c" }}>{message}</p>}
       </section>
       <section aria-label="Run rules">
@@ -101,9 +120,11 @@ export function Gate1Screen({ revisionId }: { revisionId: string }) {
           disabled={!run.ok}
           onClick={async () => {
             setRunMessage(null);
+            setReport(null);
             try {
               const r = await api.runRules(revisionId);
-              setRunMessage(`Run started: ${r.run_id}`);
+              setRunMessage(`Run complete: ${r.run_id}`);
+              setReport(r.report);
             } catch (e) {
               setRunMessage(refusal(e));
             }
@@ -111,9 +132,10 @@ export function Gate1Screen({ revisionId }: { revisionId: string }) {
         >
           Run rules
         </button>
-        {!run.ok && <p>{run.reason}</p>}
+        {!run.ok && <p data-testid="run-blocked">{run.reason}</p>}
         {runMessage && <p role="alert">{runMessage}</p>}
       </section>
+      {report && <RunReport report={report} />}
     </main>
   );
 }

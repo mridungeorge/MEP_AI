@@ -10,12 +10,13 @@ export type Provenance = "extracted" | "default" | "engineer_confirmed";
 export const BUILDING_CLASSES = ["2", "3", "4", "5", "6", "7a", "7b", "8", "9a", "9b", "9c"] as const;
 export type BuildingClass = (typeof BUILDING_CLASSES)[number];
 
-/** A building part: class, storeys (1-200), floor area in m2 (> 0). */
+/** A building part: class, storeys (1-200), floor area in m2 (> 0). `confirmed` is the server's record of Gate 1. */
 export interface BuildingPart {
   id: string;
   building_class: BuildingClass;
   storeys: number;
   area_m2: number;
+  confirmed?: boolean;
 }
 
 /** A space row. Null value fields mean "no value yet". Provenance is per row (applies to each value). */
@@ -26,18 +27,21 @@ export interface SpaceRow {
   name: string | null;
   area_m2: number | null;
   use: string | null;
-  storey: number | null;
+  /** IFC storeys are names ("00 groundfloor"); a hand-entered storey may be a number. */
+  storey: number | string | null;
   ceiling_void_mm: number | null;
   provenance: Provenance;
   /** True when the designer added this by hand because ingest health was low. */
   manual_trace: boolean;
 }
 
-/** A system schedule input (name, value, unit). */
+/** A system schedule input (name, value, unit) of the system with this schedule tag. */
 export interface SystemInputRow {
   id: string;
+  /** Schedule tag of the owning system. */
+  system?: string | null;
   name: string;
-  value: number | string | null;
+  value: number | string | boolean | null;
   unit: string | null;
   provenance: Provenance;
 }
@@ -53,17 +57,31 @@ export interface IngestHealth {
   fixes: string[];
 }
 
+/** The project facts that choose the rule pack. A designer confirms them like any other Gate 1 value. */
+export interface ProjectFacts {
+  id: string;
+  state: string;
+  ncc_edition: string;
+  climate_zone: number | null;
+  approval_date: string | null;
+  confirmed: boolean;
+}
+
 /** GET /revisions/{id}/gate1 */
 export interface Gate1State {
   parts: BuildingPart[];
   spaces: SpaceRow[];
   inputs: SystemInputRow[];
-  health: IngestHealth;
-  /** NCC edition of the project; selects the schedule template, e.g. "2022". */
+  /** Null when nothing has been ingested yet. */
+  health: IngestHealth | null;
+  /** NCC edition of the project, e.g. "NCC2025"; selects the schedule template. */
   ncc_edition: string;
+  project?: ProjectFacts;
+  /** The signed-in user's role. Only a designer may confirm; the server enforces it. */
+  role?: string;
 }
 
-export type RowKind = "space" | "system_input";
+export type RowKind = "space" | "system_input" | "building_part" | "project";
 export interface RowRef {
   kind: RowKind;
   id: string;
@@ -88,15 +106,32 @@ export interface ApiErrorBody {
   detail?: string | { code?: string; message?: string };
 }
 
-/** POST /revisions/{id}/gate1/schedule/import response. */
+/** POST /revisions/{id}/schedule/import response. */
 export interface ImportResponse {
-  inputs: SystemInputRow[];
-  warnings?: string[];
+  systems: number;
+  inputs: number;
 }
 
-/** POST /revisions/{id}/run-rules response (opaque run reference). */
+/** One cited rule result in the report. The outcome is the engine's; the UI only shows it. */
+export interface ReportResult {
+  subject_id: string;
+  rule_id: string;
+  outcome: string;
+  causes?: string[];
+  citation: { document: string; edition: string; clause: string; url: string; rule_status: string };
+}
+
+/** The cited report the engine returns. `banner` is set while any rule used is a draft. */
+export interface Report {
+  banner: string | null;
+  draft_rules?: string[];
+  results: ReportResult[];
+}
+
+/** POST /revisions/{id}/run-rules response. */
 export interface RunRulesResponse {
   run_id: string;
+  report: Report;
 }
 
 /** Edit payloads. Provenance is not sendable: the server forces 'default' on any edit. */

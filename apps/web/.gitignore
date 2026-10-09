@@ -2,3 +2,7 @@ node_modules
 .next
 *.tsbuildinfo
 next-env.d.ts
+e2e/.state.json
+e2e/.fixtures
+test-results
+playwright-report

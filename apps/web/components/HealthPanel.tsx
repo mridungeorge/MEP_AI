@@ -1,7 +1,15 @@
 import type { IngestHealth } from "@/lib/types";
 
 /** Displays the API's ingest health verbatim; the below-threshold decision is the API's. */
-export function HealthPanel({ health }: { health: IngestHealth }) {
+export function HealthPanel({ health }: { health: IngestHealth | null }) {
+  if (health === null) {
+    return (
+      <section aria-label="Ingest health">
+        <h2>Ingest health: no file ingested yet</h2>
+        <p>Enter the spaces by hand (manual trace) or ingest an IFC or DXF.</p>
+      </section>
+    );
+  }
   return (
     <section aria-label="Ingest health">
       <h2>Ingest health: {health.score_percent}%</h2>

@@ -3,16 +3,23 @@ import { useState } from "react";
 import { validatePart } from "@/lib/gate1";
 import { BUILDING_CLASSES, type BuildingClass, type BuildingPart } from "@/lib/types";
 
-type Draft = Omit<BuildingPart, "id">;
+type Draft = Omit<BuildingPart, "id" | "confirmed"> & { id?: string; confirmed?: boolean };
 
 export function PartsEditor({
-  parts, onSave,
-}: { parts: BuildingPart[]; onSave: (parts: Draft[]) => Promise<void> }) {
-  const [rows, setRows] = useState<Draft[]>(parts.map(({ id: _id, ...r }) => r));
+  parts, selected, onToggle, onSave,
+}: {
+  parts: BuildingPart[];
+  /** Ids of saved parts selected for Gate 1 confirmation. */
+  selected: Set<string>;
+  onToggle: (id: string) => void;
+  onSave: (parts: Omit<BuildingPart, "id" | "confirmed">[]) => Promise<void>;
+}) {
+  const [rows, setRows] = useState<Draft[]>(parts.map((p) => ({ ...p })));
   const [error, setError] = useState<string | null>(null);
 
+  // an edited row is no longer the saved (and possibly confirmed) one: drop its id until it is saved again
   const set = (i: number, patch: Partial<Draft>) =>
-    setRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+    setRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...patch, id: undefined, confirmed: false } : r)));
 
   async function save() {
     for (const r of rows) {
@@ -21,7 +28,7 @@ export function PartsEditor({
     }
     setError(null);
     try {
-      await onSave(rows);
+      await onSave(rows.map(({ building_class, storeys, area_m2 }) => ({ building_class, storeys, area_m2 })));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -32,18 +39,28 @@ export function PartsEditor({
       <h2>Building parts</h2>
       <table>
         <thead>
-          <tr><th>Class</th><th>Storeys (1-200)</th><th>Area (m2)</th><th /></tr>
+          <tr><th>Select</th><th>Class</th><th>Storeys (1-200)</th><th>Area (m2)</th><th>Status</th><th /></tr>
         </thead>
         <tbody>
           {rows.map((r, i) => (
-            <tr key={i}>
+            <tr key={i} data-state={r.confirmed ? "confirmed" : "unconfirmed"} data-testid="part-row">
               <td>
-                <select value={r.building_class} onChange={(e) => set(i, { building_class: e.target.value as BuildingClass })}>
+                {r.id ? (
+                  <input type="checkbox" checked={selected.has(r.id)} onChange={() => onToggle(r.id as string)}
+                         aria-label={`Select building part ${i + 1}`} />
+                ) : null}
+              </td>
+              <td>
+                <select value={r.building_class} aria-label="Building class"
+                        onChange={(e) => set(i, { building_class: e.target.value as BuildingClass })}>
                   {BUILDING_CLASSES.map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
               </td>
-              <td><input type="number" min={1} max={200} step={1} value={r.storeys} onChange={(e) => set(i, { storeys: Number(e.target.value) })} /></td>
-              <td><input type="number" min={0} step="any" value={r.area_m2} onChange={(e) => set(i, { area_m2: Number(e.target.value) })} /></td>
+              <td><input type="number" min={1} max={200} step={1} value={r.storeys} aria-label="Storeys"
+                         onChange={(e) => set(i, { storeys: Number(e.target.value) })} /></td>
+              <td><input type="number" min={0} step="any" value={r.area_m2} aria-label="Part area"
+                         onChange={(e) => set(i, { area_m2: Number(e.target.value) })} /></td>
+              <td>{r.id ? (r.confirmed ? "confirmed" : "not confirmed") : "unsaved"}</td>
               <td><button type="button" onClick={() => setRows((rs) => rs.filter((_, j) => j !== i))}>Remove</button></td>
             </tr>
           ))}

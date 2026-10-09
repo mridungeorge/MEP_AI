@@ -27,6 +27,8 @@ run python -m pytest tests/rules tests/engine tests/ingest tests/api tests/diff 
 if ! pnpm exec supabase status >/dev/null 2>&1; then pnpm exec supabase start; fi
 pnpm exec supabase db reset
 run python -m pytest tests/rls
+# end to end: real Next.js build + uvicorn on the local Supabase + Chromium (IFC -> health -> confirm -> run; refusals)
+(cd apps/web && pnpm exec playwright install chromium && pnpm run e2e)
 # review agents must run against a disposable DB with confined roles; prove the isolation properties
 run python scripts/review_db.py selftest
 grep -q "Database isolation (mandatory)" .claude/agents/adversarial-reviewer.md || { echo "ci.sh: reviewer agent lacks the database isolation rule"; exit 1; }

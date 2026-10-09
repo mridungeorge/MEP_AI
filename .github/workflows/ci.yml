@@ -26,6 +26,8 @@ jobs:
       - run: uv run pytest tests/rules tests/engine tests/ingest tests/api tests/diff tests/review tests/db
       - run: pnpm exec supabase start && pnpm exec supabase db reset
       - run: uv run pytest tests/rls
+      - run: pnpm --filter @mep/web exec playwright install --with-deps chromium
+      - run: pnpm --filter @mep/web run e2e
       - run: uv run python scripts/review_db.py selftest
       - run: uv run pytest tests/golden || [ $? -eq 5 ]  # 5 = no golden projects yet
   # A release claim made any other way (a tag, a GitHub release created in the web UI) still shows up red here.

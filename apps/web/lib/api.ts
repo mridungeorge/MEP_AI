@@ -6,9 +6,16 @@ import type {
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
-/** Placeholder: replace with the real auth session token lookup. */
+/** Key under which the signed-in session's access token is kept (the sign-in screen is a later sprint). */
+export const TOKEN_KEY = "mep_access_token";
+
+/** The access token the API verifies. The role and firm are looked up server-side; nothing is read from the token here. */
 export function getToken(): string | null {
-  return null;
+  try {
+    return typeof window === "undefined" ? null : window.localStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null; // storage blocked: the API will answer 401 and the screen shows it
+  }
 }
 
 /** Error carrying the API's code and message verbatim. */

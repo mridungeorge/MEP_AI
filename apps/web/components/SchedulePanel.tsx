@@ -14,6 +14,8 @@ export function SchedulePanel({
   onImport: (file: File) => Promise<void>;
   templateUrl: string;
 }) {
+  const tags = [...new Set(inputs.map((i) => i.system).filter((t): t is string => !!t))];
+  const [system, setSystem] = useState("");
   const [name, setName] = useState("");
   const [value, setValue] = useState("");
   const [unit, setUnit] = useState("");
@@ -33,14 +35,15 @@ export function SchedulePanel({
       <h2>System schedule inputs</h2>
       <table>
         <thead>
-          <tr><th>Select</th><th>Name</th><th>Value</th><th>Unit</th><th>Provenance</th></tr>
+          <tr><th>Select</th><th>System</th><th>Name</th><th>Value</th><th>Unit</th><th>Provenance</th></tr>
         </thead>
         <tbody>
           {inputs.map((i) => (
-            <tr key={i.id} data-state={rowState(i)}>
-              <td><input type="checkbox" checked={selected.has(i.id)} onChange={() => onToggle(i.id)} aria-label={`Select ${i.name}`} /></td>
+            <tr key={i.id} data-state={rowState(i)} data-testid="input-row">
+              <td><input type="checkbox" checked={selected.has(i.id)} onChange={() => onToggle(i.id)} aria-label={`Select ${i.system ?? ""} ${i.name}`} /></td>
+              <td>{i.system ?? ""}</td>
               <td>{i.name}</td>
-              <td>{i.value ?? ""}</td>
+              <td>{typeof i.value === "boolean" ? String(i.value) : (i.value ?? "")}</td>
               <td>{i.unit ?? ""}</td>
               <td><ProvenanceBadge provenance={i.provenance} /></td>
             </tr>
@@ -48,6 +51,10 @@ export function SchedulePanel({
         </tbody>
       </table>
       <h3>Add input</h3>
+      <select aria-label="System tag" value={system} onChange={(e) => setSystem(e.target.value)}>
+        <option value="">System…</option>
+        {tags.map((t) => <option key={t} value={t}>{t}</option>)}
+      </select>{" "}
       <input placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />{" "}
       <input placeholder="Value" value={value} onChange={(e) => setValue(e.target.value)} />{" "}
       <input placeholder="Unit (e.g. L/s)" value={unit} onChange={(e) => setUnit(e.target.value)} />{" "}
@@ -55,9 +62,10 @@ export function SchedulePanel({
         type="button"
         onClick={() =>
           run(async () => {
+            if (!system) throw new Error("Choose the system this input belongs to (import the schedule first).");
             if (!name.trim() || value.trim() === "") throw new Error("Enter a name and a value.");
             const n = Number(value);
-            await onAdd({ name: name.trim(), value: Number.isFinite(n) ? n : value, unit: unit.trim() || null });
+            await onAdd({ system, name: name.trim(), value: Number.isFinite(n) ? n : value, unit: unit.trim() || null });
             setName(""); setValue(""); setUnit("");
           })
         }

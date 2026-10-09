@@ -5,7 +5,7 @@ import type { SpaceInput, SpaceRow } from "@/lib/types";
 import { ProvenanceBadge } from "./ProvenanceBadge";
 
 type Field = "name" | "area_m2" | "use" | "storey" | "ceiling_void_mm";
-const NUMERIC: Field[] = ["area_m2", "storey", "ceiling_void_mm"];
+const NUMERIC: Field[] = ["area_m2", "ceiling_void_mm"];   // a storey is a name in IFC ("00 groundfloor")
 
 function parse(field: Field, raw: string): string | number | null {
   if (raw.trim() === "") return null;
@@ -73,8 +73,8 @@ export function ManualTraceForm({ onAdd }: { onAdd: (s: SpaceInput) => Promise<v
 
   async function submit() {
     const a = Number(area);
-    const st = Number(storey);
-    if (!name.trim() || !(a > 0) || area === "" || storey === "" || !Number.isFinite(st)) {
+    const st = storey.trim();
+    if (!name.trim() || !(a > 0) || area === "" || st === "") {
       return setError("Enter a name, an area above 0 m2 and a storey.");
     }
     setError(null);
@@ -91,7 +91,7 @@ export function ManualTraceForm({ onAdd }: { onAdd: (s: SpaceInput) => Promise<v
       <h3>Manual trace (ingest health is low)</h3>
       <input placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />{" "}
       <input placeholder="Area (m2)" type="number" step="any" value={area} onChange={(e) => setArea(e.target.value)} />{" "}
-      <input placeholder="Storey" type="number" step={1} value={storey} onChange={(e) => setStorey(e.target.value)} />{" "}
+      <input placeholder="Storey" value={storey} onChange={(e) => setStorey(e.target.value)} />{" "}
       <button type="button" onClick={submit}>Add manual trace space</button>
       {error && <p role="alert" style={{ color: "#b91c1c" }}>{error}</p>}
     </section>
