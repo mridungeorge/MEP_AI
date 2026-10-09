@@ -64,7 +64,7 @@ def create_pg_app(dsn: str, jwt_secret: str, pack: RulePack, cors_origins: list[
         app.dependency_overrides[uploads.get_service] = lambda: service
     app.dependency_overrides[schedule_api.get_repository] = repository
     if cors_origins:
-        app.add_middleware(CORSMiddleware, allow_origins=cors_origins, allow_methods=["GET", "POST", "PUT"],
+        app.add_middleware(CORSMiddleware, allow_origins=cors_origins, allow_methods=["GET", "POST", "PUT", "DELETE"],
                            allow_headers=["Authorization", "Content-Type"])
     return app
 

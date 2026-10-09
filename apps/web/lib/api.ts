@@ -2,7 +2,7 @@
 import { supabase } from "./supabase";
 import type {
   ApiErrorBody, BuildingPart, ConfirmResponse, Gate1State, ImportResponse, RowRef,
-  Lineage, Me, RevisionDiff, RevisionResults, RevisionSummary, RunRulesResponse, SpaceInput, SpaceRow, SystemInputInput, SystemInputRow, UploadResponse,
+  Lineage, Me, Package, ShareLinkView, Worksheet, RevisionDiff, RevisionResults, RevisionSummary, RunRulesResponse, SpaceInput, SpaceRow, SystemInputInput, SystemInputRow, UploadResponse,
 } from "./types";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -83,5 +83,32 @@ export const api = {
     apiFetch<{ confirmed: boolean; hash: string }>(`${rev(r)}/diff/confirm`, json("POST", { hash })),
   results: (r: string) => apiFetch<RevisionResults>(`${rev(r)}/results`),
   freeze: (r: string) => apiFetch<{ frozen: boolean }>(`${rev(r)}/freeze`, { method: "POST" }),
+  worksheet: (r: string) => apiFetch<Worksheet>(`${rev(r)}/review`),
+  decide: (r: string, resultId: string, decision: string, reason: string, sampleId?: string) =>
+    apiFetch<{ seq: number }>(`${rev(r)}/review/decisions`, json("POST", { result_id: resultId, decision, reason, sample_id: sampleId ?? null })),
+  prepareBulk: (r: string) => apiFetch<{ sample_id: string }>(`${rev(r)}/review/bulk/prepare`, { method: "POST" }),
+  bulkApprove: (r: string, sampleId: string) =>
+    apiFetch<{ approved: number }>(`${rev(r)}/review/bulk/approve`, json("POST", { sample_id: sampleId })),
+  sign: (r: string, gate: "gate2" | "gate3", registration?: string) =>
+    apiFetch<{ signed: string }>(`${rev(r)}/sign/${gate}`, json("POST", { registration: registration ?? null })),
+  pkg: (r: string) => apiFetch<Package>(`${rev(r)}/package`),
+  /** The signed PDF, fetched with the session token (an <a href> cannot send it). */
+  pdfBlob: async (r: string) => {
+    const token = await getToken();
+    const res = await fetch(`${BASE_URL}${rev(r)}/package.pdf`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+    if (!res.ok) throw new ApiError(res.status, null, `HTTP ${res.status}`);
+    return res.blob();
+  },
+  shareLinks: (r: string) => apiFetch<ShareLinkView[]>(`${rev(r)}/share-links`),
+  createShare: (r: string, days: number, label?: string) =>
+    apiFetch<{ token: string; expires_at: string }>(`${rev(r)}/share-links`, json("POST", { days, label: label || null })),
+  revokeShare: (r: string, id: string) => apiFetch<{ revoked: boolean }>(`${rev(r)}/share-links/${id}`, { method: "DELETE" }),
+  /** The public, read-only certifier view: no sign-in, the token is the credential. */
+  shared: async (token: string): Promise<Package> => {
+    const res = await fetch(`${BASE_URL}/share/${encodeURIComponent(token)}`);
+    if (!res.ok) throw new ApiError(res.status, null, "This link is not valid or has expired.");
+    return (await res.json()) as Package;
+  },
+  sharedPdfUrl: (token: string) => `${BASE_URL}/share/${encodeURIComponent(token)}/report.pdf`,
   runRules: (r: string) => apiFetch<RunRulesResponse>(`${rev(r)}/run-rules`, { method: "POST" }),
 };

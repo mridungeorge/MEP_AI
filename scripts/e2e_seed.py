@@ -7,6 +7,8 @@ magic link). Data goes in through the real API code (an in-process TestClient on
   refuse-project / -building_part / -space / -system_input
                              everything entered and confirmed EXCEPT that one kind (IFC ingested by the store).
   mixed                      two building parts, two systems, everything confirmed; the UI test assigns each system to a part.
+  signoff                    like frozen, plus an approver with a registration number (RPEQ 12345): the UI test does Gate 2,
+                             Gate 3, the signed package and the certifier share link.
   frozen                     Rev A from a DXF plan (three named rooms), everything confirmed, rules run, revision FROZEN; the UI test
                              uploads rev-b.dxf (one room bigger, one room added) as the architect's next revision.
 
@@ -58,7 +60,7 @@ def make_auth_user(email: str) -> str:
     return uid
 
 
-def make_world(conn: psycopg.Connection[Any], label: str) -> dict[str, str]:
+def make_world(conn: psycopg.Connection[Any], label: str, approver: bool = False) -> dict[str, str]:
     run = uuid.uuid4().hex[:8]
     f = {k: str(uuid.uuid4()) for k in ("firm", "project", "revision")}
     conn.execute("insert into firm (id, name) values (%s, %s)", (f["firm"], f"e2e {label}"))
@@ -66,6 +68,11 @@ def make_world(conn: psycopg.Connection[Any], label: str) -> dict[str, str]:
         f[f"{role}_email"] = f"{role}-{label}-{run}@e2e.invalid"
         f[role] = make_auth_user(f[f"{role}_email"])
         conn.execute("insert into app_user (id, firm_id, role) values (%s, %s, %s)", (f[role], f["firm"], role))
+    if approver:
+        f["approver_email"] = f"approver-{label}-{run}@e2e.invalid"
+        f["approver"] = make_auth_user(f["approver_email"])
+        conn.execute("insert into app_user (id, firm_id, role, registration_no) values (%s, %s, 'approver', 'RPEQ 12345')",
+                     (f["approver"], f["firm"]))
     conn.execute("insert into project (id, firm_id, address, state, climate_zone, ncc_edition, approval_date)"
                  " values (%s, %s, %s, 'VIC', 6, %s, %s)", (f["project"], f["firm"], f"1 E2E St ({label})", EDITION, date(2026, 10, 1)))
     conn.execute("insert into revision (id, firm_id, project_id, architect_rev) values (%s, %s, %s, 'A')",
@@ -105,13 +112,13 @@ def main() -> None:
         fixtures.mkdir(parents=True, exist_ok=True)
         rev_a = plan_dxf(fixtures / "rev-a.dxf", [(0, 6, 5), (10, 4, 4), (20, 3, 3)])
         rev_b = plan_dxf(fixtures / "rev-b.dxf", [(0, 8, 5), (10, 4, 4), (20, 3, 3), (30, 5, 5)])
-        for name in ("flow", *[f"refuse-{k}" for k in KINDS], "mixed", "frozen"):
-            f = make_world(conn, name)
+        for name in ("flow", *[f"refuse-{k}" for k in KINDS], "mixed", "frozen", "signoff"):
+            f = make_world(conn, name, approver=name == "signoff")
             h = {"Authorization": f"Bearer {mint_token(SECRET, f['designer'], ttl_seconds=6 * 3600)}"}
             base = f"/revisions/{f['revision']}"
             if name != "flow":
                 store_ingest(conn, firm_id=f["firm"], revision_id=f["revision"],
-                             result=read_dxf(rev_a) if name == "frozen" else read_ifc(IFC))
+                             result=read_dxf(rev_a) if name in ("frozen", "signoff") else read_ifc(IFC))
                 classes = ["5", "6"] if name == "mixed" else ["5"]
                 parts = [{"building_class": c, "storeys": 3, "area_m2": 400 + 100 * i} for i, c in enumerate(classes)]
                 assert client.put(f"{base}/gate1/parts", headers=h, json={"parts": parts}).status_code == 200
@@ -125,13 +132,13 @@ def main() -> None:
                     rows = [x for x in rows if x != skip]
                 r = client.post(f"{base}/gate1/confirm", headers=h, json={"rows": rows})
                 assert r.status_code == 200, r.text
-                if name == "frozen":
+                if name in ("frozen", "signoff"):
                     assert client.post(f"{base}/run-rules", headers=h).status_code == 200
                     assert client.post(f"{base}/freeze", headers=h).status_code == 200
             view = client.get(f"{base}/gate1", headers=h).json()
             scenarios[name] = {"project": f["project"], "revision": f["revision"], "designer": f["designer"],
                                "checker": f["checker"], "designer_email": f["designer_email"],
-                               "checker_email": f["checker_email"], "token": h["Authorization"].split()[1],
+                               "checker_email": f["checker_email"], "approver_email": f.get("approver_email"), "token": h["Authorization"].split()[1],
                                "health_score": view["health"]["score_percent"] if view["health"] else None,
                                "spaces": len(view["spaces"])}
     workbook = fixtures / "schedule.xlsx"

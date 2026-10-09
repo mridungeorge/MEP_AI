@@ -240,3 +240,34 @@ export interface StoredResult {
   citation: unknown; causes: unknown; stale: boolean;
 }
 export interface RevisionResults { source: "own" | "carried_from_parent"; parent_revision_id?: string; results: StoredResult[] }
+
+/** Gate 2 worksheet (GET /revisions/{id}/review). Classes, reasons and decisions are the API's. */
+export interface ReviewLine {
+  id: string; subject_id: string; rule_id: string; part: number | null; outcome: string;
+  citation: { document?: string; clause?: string; rule_status?: string; url?: string };
+  review_class: string | null; reasons: string[]; stale: boolean; fix_hypotheses: string[];
+  decision: "approve" | "reject" | "request_changes" | null; reason: string | null;
+  bulk: boolean; spot_check: boolean; in_sample: boolean;
+}
+export interface SignoffView { gate: string; role: string; signed_at: string; registration_no: string | null; mine: boolean }
+export interface Worksheet {
+  revision: { id: string; architect_rev: string; frozen: boolean };
+  results: ReviewLine[]; by_class: Record<string, number>; open_clean: number; approved: number; total: number;
+  signoffs: SignoffView[];
+  sample: { id: string; size: number; of: number; result_ids: string[] } | null;
+}
+export interface ShareLinkView { id: string; created_at: string; expires_at: string; revoked: boolean; views: number; label: string | null; last_viewed_at: string | null }
+/** GET /revisions/{id}/package and GET /share/{token}. */
+export interface Package {
+  banner: string | null;
+  revision: { id: string; architect_rev: string; status: string; frozen_at: string | null; derived_from: string[] };
+  project: { address: string; state: string; climate_zone: number; ncc_edition: string; approval_date: string;
+             building_parts: { class: string; storeys: number; area_m2: number }[] };
+  summary: Record<string, number>;
+  results: { subject: string; rule_id: string; part: number | null; outcome: string; citation: ReviewLine["citation"];
+             review_class: string | null; reasons: string[]; decision: string | null; reason: string | null; bulk: boolean;
+             reviewed_by: string | null }[];
+  signoffs: { gate: string; role: string; email: string | null; signed_at: string; registration_no: string | null; attests: string | null }[];
+  status: { signed_gates: string[]; complete: boolean; missing: string[] };
+  ledger: { verified: boolean; events: number; reason: string | null; anchor_seq: number | null; anchor_hash: string | null };
+}

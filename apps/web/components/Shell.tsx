@@ -32,7 +32,7 @@ export function Shell({ children }: { children: ReactNode }) {
   const { session, loading } = useSession();
   const path = usePathname();
   const router = useRouter();
-  const isPublic = PUBLIC_PATHS.includes(path ?? "");
+  const isPublic = PUBLIC_PATHS.includes(path ?? "") || (path ?? "").startsWith("/share/");
   useEffect(() => {
     if (!loading && !session && !isPublic) router.replace("/login");
   }, [loading, session, isPublic, router]);

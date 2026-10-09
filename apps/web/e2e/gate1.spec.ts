@@ -4,7 +4,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 type Scenario = {
   project: string; revision: string; designer: string; checker: string; token: string;
-  designer_email: string; checker_email: string; health_score: number | null; spaces: number;
+  designer_email: string; checker_email: string; approver_email?: string; health_score: number | null; spaces: number;
 };
 const state = JSON.parse(readFileSync(path.resolve(__dirname, ".state.json"), "utf-8")) as {
   scenarios: Record<string, Scenario>; workbook: string; ifc: string; inputs_per_system: number; edition: string; rev_b: string;
@@ -220,4 +220,82 @@ test("a new architect revision on a frozen one: diff, Gate 1 for what changed, c
   await expect(page.locator("[data-stale='true']")).toHaveCount(0);
   await page.getByRole("button", { name: "Freeze revision" }).click();
   await expect(page.getByRole("heading", { name: "Revision B (frozen)" })).toBeVisible();
+});
+
+test("designer froze it; checker reviews (spot-check, line by line) and signs Gate 2; approver signs Gate 3; signed package; certifier link", async ({ browser }) => {
+  const s = state.scenarios["signoff"];
+  const base = `/projects/${s.project}/revisions/${s.revision}/review`;
+  async function asUser(email: string): Promise<Page> {
+    const page = await (await browser.newContext()).newPage();
+    await signIn(page, email);
+    await page.goto(base);
+    await expect(page.getByRole("heading", { name: /^Review and sign-off/ })).toBeVisible();
+    return page;
+  }
+
+  // ---- the checker: Gate 2 -------------------------------------------------------------------------------------------
+  const checker = await asUser(s.checker_email);
+  await expect(checker.getByTestId("review-progress")).toContainText("Signed: Gate 1");           // the designer's freeze
+  await checker.getByRole("button", { name: "Sign Gate 2 (checker)" }).click();
+  await expect(checker.getByRole("alert").filter({ hasText: "stale, unclassified, unreviewed or not approved" })).toBeVisible();
+
+  const draw = checker.getByRole("button", { name: "Draw the spot-check sample" });
+  if (await draw.isEnabled()) {
+    await draw.click();
+    await expect(checker.getByTestId("sample-info")).toBeVisible();
+    await checker.getByRole("button", { name: "Approve the remaining clean passes" }).click();     // refused: the sample is not examined
+    await expect(checker.getByRole("alert").filter({ hasText: "have not been examined yet" })).toBeVisible();
+    for (const line of await checker.locator("[data-sample='true']").all()) {
+      await line.getByPlaceholder("reason (required)").fill("examined in the spot check against the clause");
+      await line.getByRole("button", { name: "Approve", exact: true }).click();
+      await expect(line).toHaveAttribute("data-decision", "approve");
+    }
+    await checker.getByRole("button", { name: "Approve the remaining clean passes" }).click();
+    await expect(checker.getByRole("alert").filter({ hasText: "approved in bulk" })).toBeVisible();
+  }
+  // every other line, one by one with a reason
+  for (let guard = 0; guard < 80; guard++) {
+    const open = checker.locator("[data-testid='review-line'][data-decision='']");
+    const n = await open.count();
+    if (n === 0) break;
+    await open.first().getByPlaceholder("reason (required)").fill("reviewed line by line against the cited clause");
+    await open.first().getByRole("button", { name: "Approve", exact: true }).click();
+    await expect(open).toHaveCount(n - 1);
+  }
+  await expect(checker.locator("[data-testid='review-line'][data-decision='']")).toHaveCount(0);
+  await checker.getByRole("button", { name: "Sign Gate 2 (checker)" }).click();
+  await expect(checker.getByRole("alert").filter({ hasText: "Gate 2 signed." })).toBeVisible();
+  await expect(checker.getByTestId("package-status")).toContainText("NOT FULLY SIGNED: missing Gate 3");
+  await expect(checker.getByRole("button", { name: "Create share link" })).toHaveCount(0);           // nothing to share yet
+
+  // ---- the approver: Gate 3 with the registration number -------------------------------------------------------------
+  const approver = await asUser(s.approver_email!);
+  await approver.getByLabel("Registration number").fill("RPEQ 99999");
+  await approver.getByRole("button", { name: "Sign Gate 3 (approver)" }).click();
+  await expect(approver.getByRole("alert").filter({ hasText: "does not match" })).toBeVisible();
+  await approver.getByLabel("Registration number").fill("RPEQ 12345");
+  await approver.getByRole("button", { name: "Sign Gate 3 (approver)" }).click();
+  await expect(approver.getByTestId("package-status")).toContainText("SIGNED: Gate 1 (designer), Gate 2 (checker) and Gate 3 (approver)");
+  await expect(approver.getByTestId("signoffs")).toContainText("RPEQ 12345");
+  await expect(approver.getByTestId("draft-banner")).toHaveText("DRAFT RULES: NOT ENGINEER-APPROVED");
+  await expect(approver.getByTestId("ledger-status")).toContainText("verified");
+
+  // ---- the certifier link ---------------------------------------------------------------------------------------------
+  await approver.getByRole("button", { name: "Create share link" }).click();
+  const url = (await approver.getByTestId("share-url").innerText()).trim();
+  expect(url).toMatch(/\/share\/[A-Za-z0-9_-]{40,}$/);
+  const certifier = await (await browser.newContext()).newPage();                                    // no sign-in at all
+  await certifier.goto(url);
+  await expect(certifier.getByRole("heading", { name: "Compliance package (read-only)" })).toBeVisible();
+  await expect(certifier.getByTestId("package-status")).toContainText("SIGNED: Gate 1");
+  await expect(certifier.getByTestId("package-results").getByRole("row")).not.toHaveCount(1);
+  const pdf = await certifier.request.get((await certifier.getByTestId("shared-pdf").getAttribute("href")) as string);
+  expect(pdf.status()).toBe(200);
+  expect((await pdf.body()).subarray(0, 5).toString()).toBe("%PDF-");
+  await approver.reload();
+  await expect(approver.getByTestId("share-links")).toContainText("opened 2 time(s)");                // the page and the PDF were logged
+  await approver.getByRole("button", { name: "Revoke" }).click();
+  await expect(approver.getByTestId("share-links")).toContainText("REVOKED");
+  await certifier.reload();
+  await expect(certifier.getByRole("alert").filter({ hasText: "not valid or has expired" })).toBeVisible();
 });
