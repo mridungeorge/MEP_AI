@@ -1,16 +1,26 @@
 #!/usr/bin/env python3
 """Stop hook: don't let a turn end with failing rule tests or golden evals.
 
-Returns {"decision": "block", "reason": ...} so Claude keeps working.
-Respects stop_hook_active to avoid infinite loops. Stdlib only.
+The tests run INSIDE the project's devcontainer (Linux, Python 3.12, locked dependencies), never on the host. If the
+container cannot be reached the turn is blocked too: a gate that cannot run is not a gate that passed.
+
+Returns {"decision": "block", "reason": ...} so Claude keeps working. Respects stop_hook_active to avoid infinite loops.
+Stdlib only.
 """
 import json
 import os
-import shutil
-import subprocess
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import devcontainer_exec
+
 TEST_DIRS = ["tests/rules", "tests/engine", "tests/golden"]
+UNREACHABLE = devcontainer_exec.UNREACHABLE
+
+
+def block(reason: str) -> None:
+    print(json.dumps({"decision": "block", "reason": reason}))
+    sys.exit(0)
 
 
 def main() -> None:
@@ -28,22 +38,14 @@ def main() -> None:
     if not targets:
         sys.exit(0)  # nothing built yet (early Sprint 0)
 
-    runner = ["uv", "run", "pytest"] if shutil.which("uv") else [sys.executable, "-m", "pytest"]
-    try:
-        proc = subprocess.run(
-            runner + ["-q", "-x", "--no-header", *targets],
-            cwd=root, capture_output=True, text=True, timeout=540, check=False,
-        )
-    except (subprocess.TimeoutExpired, FileNotFoundError) as exc:
-        print(json.dumps({"decision": "block", "reason": f"Test gate could not run: {exc}. Fix the test setup."}))
-        sys.exit(0)
-
+    # `uv run` keeps the container's environment in step with uv.lock; pytest comes from the project's dev group
+    proc = devcontainer_exec.run("uv run pytest -q -x --no-header -p no:cacheprovider " + " ".join(targets), root)
+    if proc.returncode == UNREACHABLE:
+        block("The test gate could not run in the devcontainer: " + (proc.stderr.strip() or "unknown error")
+              + "\nStart Docker Desktop and the devcontainer, then finish.")
     if proc.returncode not in (0, 5):  # 5 = no tests collected
         tail = "\n".join((proc.stdout + proc.stderr).strip().splitlines()[-40:])
-        print(json.dumps({
-            "decision": "block",
-            "reason": "Rule tests or golden evals are failing. Fix them before finishing.\n" + tail,
-        }))
+        block("Rule tests or golden evals are failing (run in the devcontainer). Fix them before finishing.\n" + tail)
     sys.exit(0)
 
 

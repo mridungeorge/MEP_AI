@@ -27,8 +27,8 @@ Updated: 2026-10-09 (recovery after a device change; see "Recovery 2026-10-09")
   clean checkout, not the Windows bind mount (it makes every file look executable); run `uv` as the `vscode` user.
   `pnpm install` run as `vscode` twice left out the `@supabase/cli-linux-x64` package (cause not found); the install
   done as root had it, and copying that `node_modules` into the clean checkout worked.
-- **Host note:** the Claude Stop hook runs the host Python 3.14 (no uv/pint), so it reports a false failure outside the
-  devcontainer. The devcontainer is the gate environment.
+- **Host note:** all checks run in the devcontainer. The Stop hook and the post-edit lint now run there too
+  (`.claude/hooks/devcontainer_exec.py`; the stop gate blocks if the container cannot be reached). The host Python is not used.
 
 ## Sprint 2 finish (2026-10-09, after the recovery)
 - **Gate (2026-10-09):** tag `sprint-2-gate` = `dca8eb0`. `scripts/ci.sh` ran green, with `set -e`, on a fresh `git clone` of that commit in the

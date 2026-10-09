@@ -27,6 +27,10 @@ Australian mechanical services design-to-verification tool. Full build plan: `BU
 
 - Read `docs/STATUS.md` at start (SessionStart hook prints it).
 - Update `docs/STATUS.md` before ending a session.
+- Everything runs in the devcontainer (Linux, Python 3.12, locked deps), never on the host: tests, lint, `scripts/ci.sh`, the
+  Playwright e2e, and the Stop and post-edit hooks (`.claude/hooks/devcontainer_exec.py` runs them there). From the host use
+  `python .claude/hooks/devcontainer_exec.py -- "<command>"`. If the container is down the stop gate blocks; start Docker Desktop
+  and the container (`npx @devcontainers/cli up --workspace-folder .`).
 - If a hook blocks you, fix the cause. Never disable or bypass hooks.
 - Review agents (adversarial-reviewer, code-review, any other) never touch the shared local DB: they use a disposable
   database from `python scripts/review_db.py` with its read-only / client-level roles.
