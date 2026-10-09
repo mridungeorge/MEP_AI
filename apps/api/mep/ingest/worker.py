@@ -1,15 +1,29 @@
 """The reader process: `python -m mep.ingest.worker <ifc|dxf> <path>` prints the result as JSON on stdout.
 
-Run only by ingest/sandbox.py, which applies the CPU, memory and wall-clock limits. Exit codes: 0 read, 3 refused on purpose (the
-message on stderr is safe to show), 4 the file could not be read (only the error's type is reported).
+Run only by ingest/sandbox.py. It applies its own resource limits before it opens the file (the sandbox passes them in the
+environment): CPU time, address space, and the size of any file written (stdout and stderr are files, so this caps the output).
+Exit codes: 0 read, 3 refused on purpose (the last stderr line is safe to show), 5 the result is larger than the output limit, 4 the file could not be read (only the error's type
+is reported).
 """
 import json
+import os
+import resource
 import sys
 
 from mep.ingest.records import IngestRefused, result_to_json
 
 
+def apply_limits() -> None:
+    for name, limit in (("MEP_WORKER_CPU", resource.RLIMIT_CPU), ("MEP_WORKER_AS", resource.RLIMIT_AS),
+                        ("MEP_WORKER_FSIZE", resource.RLIMIT_FSIZE)):
+        value = os.environ.get(name)
+        if value and value.isdigit():
+            n = int(value)
+            resource.setrlimit(limit, (n, n + 5 if limit == resource.RLIMIT_CPU else n))
+
+
 def main(argv: list[str]) -> int:
+    apply_limits()
     if len(argv) != 2 or argv[0] not in ("ifc", "dxf"):
         print("usage: python -m mep.ingest.worker <ifc|dxf> <path>", file=sys.stderr)
         return 2
@@ -27,7 +41,13 @@ def main(argv: list[str]) -> int:
     except Exception as exc:  # noqa: BLE001 - any failure to read a damaged file
         print(type(exc).__name__, file=sys.stderr)
         return 4
-    json.dump(result_to_json(result), sys.stdout, default=str)
+    try:
+        json.dump(result_to_json(result), sys.stdout, default=str)
+        sys.stdout.flush()
+    except OSError:          # the file-size limit refused the write (Python ignores SIGXFSZ): the result is too large
+        print("result too large", file=sys.stderr)
+        sys.stderr.flush()
+        os._exit(5)          # not a normal return: exit would try to flush the refused output again and change the code
     return 0
 
 

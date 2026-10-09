@@ -29,19 +29,23 @@ class _RateLimitedJWKS(PyJWKClient):
     """PyJWKClient refetches the key set on every unknown `kid`, so an unauthenticated caller could make the API send one outbound
     request per request. Refetch at most once per `cooldown` seconds."""
 
-    cooldown = 30.0
+    cooldown = 30.0          # at most one fetch attempt (successful or not) per this many seconds
+    key_lifetime = 600.0     # a key is trusted from the set fetched at most this long ago, then the set is fetched again
 
     def get_signing_key(self, kid: str) -> Any:
         import time
-        try:
-            return self.__dict__["_known"][kid]
-        except KeyError:
-            pass
+        d = self.__dict__
         now = time.monotonic()
-        if now - self.__dict__.get("_fetched", -1e9) < self.cooldown and "_known" in self.__dict__:
+        known, fetched = d.get("_known", {}), d.get("_fetched", -1e9)
+        if kid in known and now - fetched < self.key_lifetime:
+            return known[kid]
+        if now - d.get("_attempted", -1e9) < self.cooldown:
+            if kid in known and now - fetched < 2 * self.key_lifetime:
+                return known[kid]              # the key service is not answering: keep the last set a little longer
             raise jwt.PyJWKClientError(f"Unable to find a signing key that matches: {kid}")
+        d["_attempted"] = now                   # recorded BEFORE the fetch, so an outage is rate limited too
         keys = {k.key_id: k for k in self.get_signing_keys(refresh=True)}
-        self.__dict__["_known"], self.__dict__["_fetched"] = keys, now
+        d["_known"], d["_fetched"] = keys, now
         if kid not in keys:
             raise jwt.PyJWKClientError(f"Unable to find a signing key that matches: {kid}")
         return keys[kid]

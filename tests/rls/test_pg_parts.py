@@ -118,8 +118,7 @@ def test_changing_the_parts_withdraws_every_part_assignment(admin, client, pack)
     assign(client, f, "ahu-1", 0)
     assign(client, f, "ahu-2", 1)
     assert h.confirm(client, f, h.rows_to_confirm(client, f)).status_code == 200
-    assert run(client, f).status_code == 200
-    put_parts(client, f, ["6", "5"])                                          # the same list in the other order
+    put_parts(client, f, ["6", "5"])                  # the same list in the other order (parts freeze once a run is stored)
     v = client.get(f"{h.base(f)}/gate1", headers=h.auth(f["designer"])).json()
     parts_inputs = [i for i in v["inputs"] if i["name"] == "building_part"]
     assert len(parts_inputs) == 2 and {i["provenance"] for i in parts_inputs} == {"default"}

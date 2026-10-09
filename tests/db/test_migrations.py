@@ -11,6 +11,9 @@ RLS_TABLES = {
     for name in re.findall(r"'(\w+)'", block)
 }
 
+# ... plus tables that enable it with a direct statement
+RLS_TABLES |= set(re.findall(r"alter table (\w+) enable row level security", SQL))
+
 SECTION4 = {"firm", "app_user", "project", "revision", "space", "system", "equipment",
             "rule_result", "artifact", "review", "signoff", "ledger_event", "ledger_link"}
 

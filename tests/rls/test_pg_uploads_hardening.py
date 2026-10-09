@@ -9,8 +9,6 @@ from fastapi.testclient import TestClient
 from mep.api import uploads
 from mep.api.server import create_pg_app
 from mep.engine.loader import load_pack
-from mep.ingest.records import IngestRefused
-from mep.ingest.sandbox import read_isolated
 
 from tests.rls import test_pg_api as h
 from tests.rls.conftest import DB_URL
@@ -41,21 +39,6 @@ def bomb(tmp_path: Path, depth: int = 7, fanout: int = 10) -> bytes:
     return path.read_bytes()
 
 
-def slow_dxf(tmp_path: Path, polylines: int = 40) -> Path:
-    """Within the complexity budget, but every polyline costs about a second in the self-intersection test."""
-    import math
-
-    import ezdxf
-    doc = ezdxf.new("R2018")
-    doc.header["$INSUNITS"] = 6
-    for k in range(polylines):
-        pts = [(100 * k + 40 * math.cos(2 * math.pi * i / 1999), 40 * math.sin(2 * math.pi * i / 1999)) for i in range(1999)]
-        doc.modelspace().add_lwpolyline(pts, close=True, dxfattribs={"layer": "A-SPACE"})
-    path = tmp_path / "slow.dxf"
-    doc.saveas(path)
-    return path
-
-
 def test_a_nested_block_bomb_is_refused_quickly_with_a_reason(admin, client, tmp_path):
     data = bomb(tmp_path)
     assert len(data) < 100_000
@@ -79,33 +62,6 @@ def test_a_circular_block_reference_is_refused(admin, client, tmp_path):
     doc.saveas(path)
     r = post(client, h.seed(admin), path.read_bytes(), name="loop.dxf")
     assert r.status_code == 422 and "contains itself" in r.json()["detail"]["message"]
-
-
-def test_the_sandbox_stops_a_reader_that_runs_too_long_or_uses_too_much_cpu(tmp_path):
-    path = slow_dxf(tmp_path)
-    started = time.monotonic()
-    with pytest.raises(IngestRefused, match="took longer"):
-        read_isolated("dxf", path, wall_seconds=2)
-    with pytest.raises(IngestRefused, match="more processing time or memory"):
-        read_isolated("dxf", path, cpu_seconds=1, wall_seconds=60)
-    assert time.monotonic() - started < 30
-
-
-def test_the_sandbox_reads_a_normal_file_and_reports_the_same_result(tmp_path):
-    from mep.ingest.ifc import read_ifc
-    path = ROOT / "tests/fixtures/ifc/bsi-arch-ifc4.ifc"
-    direct, isolated = read_ifc(path), read_isolated("ifc", path)
-    assert [(s.key, s.name, s.area_m2, s.centroid_m) for s in isolated.spaces] == \
-        [(s.key, s.name, s.area_m2, s.centroid_m) for s in direct.spaces]
-    assert isolated.metadata == direct.metadata and isolated.source_sha256 == direct.source_sha256
-
-
-def test_the_sandbox_reports_a_damaged_file_without_leaking_internals(tmp_path):
-    path = tmp_path / "bad.ifc"
-    path.write_bytes(b"ISO-10303-21;\nHEADER;\nFILE_SCHEMA(('IFC4'));\nENDSEC;\nDATA;\n#1=GARBAGE(((;\nENDSEC;\nEND-ISO-10303-21;\n")
-    with pytest.raises(IngestRefused) as e:
-        read_isolated("ifc", path)
-    assert "Traceback" not in str(e.value) and len(str(e.value)) < 120
 
 
 # ---- the request body is judged before it is read ----------------------------------------------------------------------

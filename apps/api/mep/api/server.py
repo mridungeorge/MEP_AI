@@ -15,7 +15,7 @@ from pathlib import Path
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from mep.api import gate1, uploads
+from mep.api import gate1, revisions, uploads
 from mep.api import me as me_api
 from mep.api import schedule as schedule_api
 from mep.api.app import create_app
@@ -23,6 +23,7 @@ from mep.api.auth import make_current_user
 from mep.api.pg import PgLedger, PgRepository
 from mep.api.schedule import CurrentUser
 from mep.api.uploads_pg import PgUploads
+from mep.diff.graph import build_graph
 from mep.engine.loader import RulePack, load_pack
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
@@ -42,6 +43,12 @@ def create_pg_app(dsn: str, jwt_secret: str, pack: RulePack, cors_origins: list[
     app.include_router(uploads.router)
     app.add_middleware(uploads.UploadGuard)
     app.include_router(me_api.router)
+    app.include_router(revisions.router)
+    graph = build_graph(pack)
+    app.dependency_overrides[revisions.current_user] = current_user
+    app.dependency_overrides[revisions.get_repository] = repository
+    app.dependency_overrides[revisions.get_graph] = lambda: graph
+    app.dependency_overrides[revisions.get_pack] = lambda: pack
     app.dependency_overrides[me_api.current_user] = current_user
     app.dependency_overrides[me_api.get_repository] = repository
     app.dependency_overrides[uploads.current_user] = current_user

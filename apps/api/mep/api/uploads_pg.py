@@ -8,6 +8,7 @@ the space rows on a service connection. Spaces are always provenance 'extracted'
 import hashlib
 import json
 import tempfile
+import threading
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -23,18 +24,30 @@ from mep.ingest.sandbox import read_isolated
 from mep.ingest.store import AlreadyIngested, store_ingest
 
 BUCKET = "uploads"
+MAX_CONCURRENT_READS = 4
+_READERS = threading.BoundedSemaphore(MAX_CONCURRENT_READS)
 
 
 def read_file(kind: str, name: str, data: bytes) -> IngestResult:
     """Parse the uploaded bytes with the reader for `kind`, in a child process with CPU, memory and wall-clock limits (a small
     file can ask for hours of work). Any failure to read is a 422, never a 500, and never stalls the API."""
+    # at most a few readers at once: each holds a request thread for up to the sandbox's wall-clock limit
+    if not _READERS.acquire(timeout=5):
+        raise UploadRefused(503, "busy", "several files are being read right now; try again in a minute")
+    try:
+        return _read(kind, name, data)
+    finally:
+        _READERS.release()
+
+
+def _read(kind: str, name: str, data: bytes) -> IngestResult:
     with tempfile.TemporaryDirectory() as td:
         path = Path(td) / f"{Path(name).stem or 'upload'}.{kind}"
         path.write_bytes(data)
         try:
             return read_isolated(kind, path)
         except IngestRefused as exc:
-            code = "too_complex" if "too complex" in str(exc) or "too" in str(exc).split(":")[0] else "unreadable_file"
+            code = "too_complex" if "too complex" in str(exc) or "was stopped" in str(exc) else "unreadable_file"
             raise UploadRefused(422, code, str(exc)) from None
 
 

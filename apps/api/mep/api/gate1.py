@@ -353,6 +353,11 @@ def run_rules(revision_id: UUID, user: User, repo: Repo, pack: Pack, ledger: Led
     unconfirmed = [f"{k} {n}" for k, n, r in rows if r.get("confirmed_by") is None]
     if unconfirmed:
         return _refuse("gate1_required", [f"{x} is not confirmed at Gate 1" for x in unconfirmed])
+    pending = getattr(repo, "diff_reasons", None)
+    if pending is not None:       # a child revision may not run until the designer has confirmed what changed
+        reasons = pending(revision_id, user.firm_id)
+        if reasons:
+            return _refuse("diff_not_confirmed", reasons)
     classes = data["project"]["building_class"]
     n_parts = len(classes) if isinstance(classes, list) else 1
     if n_parts > 1:      # a mixed-use project: every system must serve a building part that exists
@@ -372,4 +377,12 @@ def run_rules(revision_id: UUID, user: User, repo: Repo, pack: Pack, ledger: Led
         report = run(RunRequest(_project(data["project"], revision_id, user.firm_id), subjects), pack, ledger=ledger)
     except RunRefused as exc:
         return _refuse(exc.code, exc.reasons)
-    return {"run_id": str(uuid.uuid4()), "report": report}
+    save = getattr(repo, "save_results", None)
+    if save is None:
+        return {"run_id": str(uuid.uuid4()), "report": report}
+    try:
+        run_id = save(revision_id, user.firm_id, report)
+    except RevisionFrozenError:
+        raise _err(409, "revision_frozen", "revision is frozen") from None
+    extras = getattr(repo, "run_extras", None)
+    return {"run_id": run_id, "report": report, **({} if extras is None else extras(revision_id, user.firm_id))}

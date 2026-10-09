@@ -17,10 +17,8 @@ end $$;
 create or replace function building_part_shift_withdraws() returns trigger language plpgsql security definer
   set search_path = public, pg_temp as
 $$ begin
-  -- an inserted part, a changed position, or a changed class, storey count or area (the facts the engine reads for the part a
-  -- system names) means the assignments must be confirmed again
-  if tg_op = 'INSERT' or (new.position, new.building_class, new.storeys, new.area_m2_value)
-                         is distinct from (old.position, old.building_class, old.storeys, old.area_m2_value) then
+  -- an inserted part or a changed position shifts the indices subjects refer to: confirm the list again
+  if tg_op = 'INSERT' or new.position is distinct from old.position then
     update public.building_part set confirmed_by = null, confirmed_at = null
       where project_id = new.project_id and firm_id = new.firm_id and id <> new.id and confirmed_by is not null;
     update public.system_input si set confirmed_by = null, confirmed_at = null, provenance = 'default'

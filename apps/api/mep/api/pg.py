@@ -24,6 +24,7 @@ import psycopg
 from psycopg.rows import dict_row
 
 from mep.api.gate1 import ConfirmRefused, InvalidInputError, UnknownSystemError
+from mep.api.pg_revisions import RevisionMethods
 from mep.api.schedule import CurrentUser, RevisionFrozenError, SystemModel
 from mep.engine.assignment import rules_for_system_type
 from mep.engine.ledger import PostgresLedger
@@ -59,6 +60,9 @@ def _row_provenance(confirmed_by: Any, *provs: str | None) -> str:
     return "extracted" if "extracted" in provs else "default"
 
 
+_GRAPHS: dict[int, tuple[Any, Any]] = {}
+
+
 def health_view(h: dict[str, Any]) -> dict[str, Any]:
     """The stored ingest health in the shape the UI reads."""
     return {"score_percent": h["score_percent"], "threshold_percent": h["minimum_percent"],
@@ -76,7 +80,7 @@ class PgLedger:
             PostgresLedger(conn).write(kind, payload, firm_id=firm_id, revision_id=revision_id)
 
 
-class PgRepository:
+class PgRepository(RevisionMethods):
     """Implements both Gate1Repository and ScheduleRepository for one signed-in user."""
 
     def __init__(self, dsn: str, user: CurrentUser, pack: RulePack | None = None) -> None:
@@ -408,6 +412,39 @@ class PgRepository:
                 "spaces": [{"id": str(s["id"]), "provenance": self._space(s)["provenance"],
                             "confirmed_by": s["confirmed_by"]} for s in spaces],
                 "systems": run_systems}
+
+    # ---- the run: gate on the diff, extras after it -----------------------------------------------------------------
+    def _graph(self) -> Any:
+        from mep.diff.graph import build_graph
+        if self._pack is None:
+            raise LookupError("no rule pack")
+        cached = _GRAPHS.get(id(self._pack))
+        if cached is None or cached[0] is not self._pack:
+            cached = _GRAPHS[id(self._pack)] = (self._pack, build_graph(self._pack))
+        return cached[1]
+
+    def diff_reasons(self, revision_id: UUID, firm_id: UUID) -> list[str]:
+        """Why a CHILD revision may not run yet: its differences from the parent must be confirmed, as they stand."""
+        from mep.diff.service import build_diff
+        data = self.diff_data(revision_id, firm_id)
+        if data is None or data["parent"] is None:
+            return []
+        diff = build_diff(data, self._graph())
+        if diff["has_changes"] and not diff["confirmed"]:
+            return ["this revision differs from its parent and the diff is not confirmed (or it changed since it was confirmed)"]
+        return []
+
+    def run_extras(self, revision_id: UUID, firm_id: UUID) -> dict[str, Any]:
+        """After a run of a child revision: the stale results with their traces (now with the new outcomes) and the conflicts."""
+        from mep.api.revisions import conflicts_of
+        from mep.diff.service import build_diff
+        data = self.diff_data(revision_id, firm_id)
+        if data is None or data["parent"] is None:
+            return {}
+        diff = build_diff(data, self._graph())
+        conflicts = conflicts_of(self, self._pack, self._graph(), firm_id, revision_id, UUID(data["parent"]["id"]), diff["inputs"])
+        return {"revision": {"parent": data["parent"]["id"], "architect_rev": data["revision"]["architect_rev"]},
+                "stale": diff["stale"], "traces": diff["traces"], "conflicts": conflicts}
 
     # ---- MeRepository -----------------------------------------------------------------------------------------
     def me(self, user: CurrentUser) -> dict[str, Any]:

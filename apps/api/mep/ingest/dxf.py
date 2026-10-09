@@ -47,6 +47,10 @@ MAX_MODEL_ENTITIES = 500_000       # entities directly in model space
 MAX_EXPANDED_ENTITIES = 2_000_000  # entities after expanding block references (INSERT) everywhere
 MAX_SPACE_POLYLINES = 5_000        # closed polylines on space layers
 MAX_LABELS = 2_000                 # TEXT / MTEXT entities (each is tested against each polygon)
+MAX_LABEL_CHARS = 200              # a label longer than this is cut (it only names a room)
+# The extents (a scale sanity check) are taken over plain geometry only. Block references, dimensions, leaders and tables are
+# deliberately NOT expanded: expanding them is where a small file can ask for billions of entities.
+_EXTENT_TYPES = frozenset({"LWPOLYLINE", "POLYLINE", "LINE", "ARC", "CIRCLE", "ELLIPSE", "POINT", "TEXT", "MTEXT", "SOLID"})
 MAX_TOTAL_VERTICES = 100_000       # vertices over all space polylines
 
 
@@ -177,7 +181,7 @@ def read_dxf(
     labels: list[tuple[Point, str]] = []
     for e in msp.query("TEXT MTEXT"):
         text = e.plain_text() if e.dxftype() == "MTEXT" else e.dxf.text
-        text = " ".join(str(text).split())
+        text = " ".join(str(text).split())[:MAX_LABEL_CHARS]
         if text:
             ins = e.dxf.insert
             labels.append(((float(ins.x), float(ins.y)), text))
@@ -236,7 +240,7 @@ def read_dxf(
         inside = [t for p, t in labels if lo_x <= p[0] <= hi_x and lo_y <= p[1] <= hi_y and _point_in_polygon(p, pts)]
         notes = ["area from polyline geometry"]
         if len(inside) > 1:
-            notes.append(f"{len(inside)} labels inside; first used: {inside}")
+            notes.append(f"{len(inside)} labels inside; first used: {inside[0][:80]!r}")
         if inside:
             labelled += 1
         res.spaces.append(SpaceRecord(
@@ -248,7 +252,7 @@ def read_dxf(
     extents_m: list[float] | None = None
     scale_check = "unknown"
     try:
-        box = bbox.extents(msp)
+        box = bbox.extents(e for e in msp if e.dxftype() in _EXTENT_TYPES)
     except Exception:  # noqa: BLE001 - odd entities must not stop ingest
         box = None
     if box is not None and box.has_data and scale_ok and factor is not None:

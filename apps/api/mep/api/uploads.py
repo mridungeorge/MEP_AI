@@ -19,7 +19,9 @@ UPLOAD_ROLES = frozenset({"designer"})
 
 BODY_MARGIN = 1024 * 1024                  # multipart framing around the file
 router = APIRouter()
-_UPLOAD_PATH = re.compile(r"^/revisions/[0-9A-Fa-f-]{36}/uploads$")
+# any POST whose path ends in /uploads (or /uploads/): FastAPI's UUID parameter also accepts the 32-hex, braced and urn:uuid
+# spellings, and the app may be mounted under a prefix, so the guard must not depend on the canonical form
+_UPLOAD_PATH = re.compile(r"/uploads/?$")
 
 
 class UploadGuard:
@@ -30,7 +32,7 @@ class UploadGuard:
         self.app = app
 
     async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
-        if scope["type"] != "http" or scope["method"] != "POST" or not _UPLOAD_PATH.match(scope["path"]):
+        if scope["type"] != "http" or scope["method"] != "POST" or not _UPLOAD_PATH.search(scope["path"]):
             await self.app(scope, receive, send)
             return
         headers = {k.decode("latin-1").lower(): v.decode("latin-1") for k, v in scope["headers"]}

@@ -83,10 +83,11 @@ def store_ingest(conn: psycopg.Connection[Any], *, firm_id: str, revision_id: st
         for s in result.spaces:
             conn.execute(
                 "insert into space (firm_id, revision_id, ifc_guid, name, use, storey, area_m2_value,"
-                " area_m2_provenance, ceiling_void_mm_value, ceiling_void_mm_provenance)"
-                " values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                " area_m2_provenance, ceiling_void_mm_value, ceiling_void_mm_provenance, centroid_x_m, centroid_y_m)"
+                " values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
                 (firm_id, revision_id, s.key if result.source_kind == "ifc" else None, s.name, s.use, s.storey,
                  s.area_m2, None if s.area_m2 is None else "extracted", s.ceiling_void_mm,
-                 None if s.ceiling_void_mm is None else "extracted"))
+                 None if s.ceiling_void_mm is None else "extracted",
+                 None if s.centroid_m is None else s.centroid_m[0], None if s.centroid_m is None else s.centroid_m[1]))
     return {"ingest_run": run_id, "spaces": len(result.spaces), "extractions": len(evidence),
             "health": health}
