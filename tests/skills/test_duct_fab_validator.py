@@ -14,7 +14,7 @@ import pytest
 pytest.importorskip("cadquery")
 pytest.importorskip("ezdxf")
 
-from tests.skills import _duct_fab_mutations as mut  # noqa: E402
+from tests.skills import _duct_fab_mutations as mut
 
 CHECK_KEYS = {"name", "passed", "expected", "actual", "tolerance"}
 ALL_CHECKS = {

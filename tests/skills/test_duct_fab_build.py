@@ -34,7 +34,7 @@ def _spec(name: str) -> dict:
 def _run_cli(spec: Path, out: Path, hashseed: str) -> subprocess.CompletedProcess:
     env = {**os.environ, "PYTHONHASHSEED": hashseed}
     return subprocess.run([sys.executable, str(SKILL / "scripts" / "build.py"), "--spec", str(spec), "--out", str(out)],
-                          capture_output=True, text=True, env=env, cwd=ROOT)
+                          capture_output=True, text=True, env=env, cwd=ROOT, check=False)
 
 
 def test_there_is_one_example_per_fitting():

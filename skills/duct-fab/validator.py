@@ -17,7 +17,8 @@ import math
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 TOL_MM = 0.5  # general dimensional tolerance
 AREA_REL_TOL = 1e-3  # 0.1 %

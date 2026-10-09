@@ -26,10 +26,10 @@ REPO_ROOT = SKILL_DIR.parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-import jsonschema  # noqa: E402
+import jsonschema
 
-from skills.cad import cadkit, develop  # noqa: E402
-from skills.cad.develop import Tube  # noqa: E402
+from skills.cad import cadkit, develop
+from skills.cad.develop import Tube
 
 SKILL_VERSION = "1.0.0"
 FITTING_TITLES = {
