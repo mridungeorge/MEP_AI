@@ -150,6 +150,10 @@ export type SystemInputInput = Partial<Omit<SystemInputRow, "id" | "provenance">
 
 /** GET /me: the role and firm are the database's, not the token's. */
 export interface Me {
+  signer_mode?: "strict" | "small_firm" | null;
+  own_role?: string | null;
+  available_roles?: string[];
+  independence_notice?: string | null;
   user_id: string;
   role: string;
   firm_id: string;
@@ -246,6 +250,7 @@ export interface ReviewLine {
   id: string; subject_id: string; rule_id: string; part: number | null; outcome: string;
   citation: { document?: string; clause?: string; rule_status?: string; url?: string };
   review_class: string | null; reasons: string[]; stale: boolean; fix_hypotheses: string[];
+  fail_category: string | null; fail_reference: string | null; acknowledged: boolean;
   decision: "approve" | "reject" | "request_changes" | null; reason: string | null;
   bulk: boolean; spot_check: boolean; in_sample: boolean;
 }
@@ -257,16 +262,26 @@ export interface Worksheet {
   sample: { id: string; size: number; of: number; result_ids: string[] } | null;
 }
 export interface ShareLinkView { id: string; created_at: string; expires_at: string; revoked: boolean; views: number; label: string | null; last_viewed_at: string | null }
-/** GET /revisions/{id}/package and GET /share/{token}. */
+export interface AcceptedFail {
+  category: string; reference: string | null; explanation: string; acknowledged: boolean; acknowledged_by?: string | null;
+  acknowledgement: string | null; acknowledged_at: string | null;
+}
+export interface PackageLine {
+  subject: string; rule_id: string; part: number | null; outcome: string; citation: ReviewLine["citation"];
+  review_class: string | null; reasons: string[]; decision: string | null; reason: string | null; bulk: boolean;
+  reviewed_by?: string | null; accepted_fail: AcceptedFail | null;
+}
+export type AcceptedFailLine = PackageLine & { accepted_fail: AcceptedFail };
+/** GET /revisions/{id}/package and the certifier's session read. */
 export interface Package {
   banner: string | null;
   revision: { id: string; architect_rev: string; status: string; frozen_at: string | null; derived_from: string[] };
   project: { address: string; state: string; climate_zone: number; ncc_edition: string; approval_date: string;
              building_parts: { class: string; storeys: number; area_m2: number }[] };
   summary: Record<string, number>;
-  results: { subject: string; rule_id: string; part: number | null; outcome: string; citation: ReviewLine["citation"];
-             review_class: string | null; reasons: string[]; decision: string | null; reason: string | null; bulk: boolean;
-             reviewed_by: string | null }[];
+  independence_notice: string | null;
+  accepted_fails: AcceptedFailLine[];
+  results: PackageLine[];
   signoffs: { gate: string; role: string; email: string | null; signed_at: string; registration_no: string | null; attests: string | null }[];
   status: { signed_gates: string[]; complete: boolean; missing: string[] };
   ledger: { verified: boolean; events: number; reason: string | null; anchor_seq: number | null; anchor_hash: string | null };

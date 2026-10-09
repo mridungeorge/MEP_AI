@@ -7,7 +7,6 @@ the space rows on a service connection. Spaces are always provenance 'extracted'
 """
 import contextlib
 import hashlib
-import json
 import tempfile
 import threading
 from pathlib import Path
@@ -106,7 +105,7 @@ class PgUploads:
         with psycopg.connect(self._dsn, autocommit=False) as conn:
             conn.execute("set local role authenticated")
             conn.execute("select set_config('request.jwt.claims', %s, true)",
-                         (json.dumps({"sub": str(user.user_id), "role": "authenticated"}),))
+                         (user.claims_json(),))
             rev = conn.execute("select frozen_at is not null, architect_rev, project_id from revision"
                                " where id = %s and firm_id = %s", (revision_id, user.firm_id)).fetchone()
             if rev is None:

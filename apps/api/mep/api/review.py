@@ -4,6 +4,8 @@ The API only carries requests to the security-definer functions (migration 0010)
 a gate itself. The public /share routes need no sign-in: the long random token IS the credential, it opens one revision's package,
 read-only, for a limited time, and each opening is logged in the ledger.
 """
+import os
+import time
 from typing import Annotated, Any, Literal, Protocol
 from uuid import UUID
 
@@ -20,7 +22,9 @@ router = APIRouter()
 
 class ReviewService(Protocol):
     def worksheet(self, revision_id: UUID) -> dict[str, Any]: ...
-    def review(self, result_id: UUID, decision: str, reason: str, sample_id: UUID | None) -> int: ...
+    def review(self, result_id: UUID, decision: str, reason: str, sample_id: UUID | None,
+               fail_category: str | None = None, fail_reference: str | None = None) -> int: ...
+    def acknowledge_fail(self, result_id: UUID, note: str) -> int: ...
     def prepare_bulk(self, revision_id: UUID) -> str: ...
     def bulk_approve(self, sample_id: UUID) -> int: ...
     def sign(self, revision_id: UUID, gate: str, registration: str | None) -> int: ...
@@ -33,7 +37,8 @@ class ReviewService(Protocol):
 
 
 class ShareService(Protocol):
-    def open(self, token: str, client: str | None) -> dict[str, Any] | None: ...
+    def exchange(self, token: str, client: str | None) -> tuple[str, int] | None: ...
+    def read(self, session: str, what: str) -> dict[str, Any] | None: ...
 
 
 def current_user() -> CurrentUser:
@@ -68,6 +73,13 @@ class DecisionBody(BaseModel):
     decision: Literal["approve", "reject", "request_changes"]
     reason: Annotated[str, Field(min_length=3, max_length=2000)]
     sample_id: UUID | None = None
+    fail_category: Literal["performance_solution", "rule_disputed", "out_of_scope"] | None = None
+    fail_reference: Annotated[str, Field(max_length=500)] | None = None
+
+
+class AckBody(BaseModel):
+    result_id: UUID
+    note: Annotated[str, Field(min_length=3, max_length=2000)]
 
 
 class SampleBody(BaseModel):
@@ -91,7 +103,14 @@ def get_worksheet(revision_id: UUID, user: Annotated[CurrentUser, Depends(curren
 @router.post("/revisions/{revision_id}/review/decisions")
 def post_decision(revision_id: UUID, body: DecisionBody, user: Annotated[CurrentUser, Depends(current_user)],
                   svc: Service) -> dict[str, Any]:
-    return {"seq": _run(svc.review, body.result_id, body.decision, body.reason, body.sample_id)}
+    return {"seq": _run(svc.review, body.result_id, body.decision, body.reason, body.sample_id, body.fail_category, body.fail_reference)}
+
+
+@router.post("/revisions/{revision_id}/review/acknowledge-fail")
+def acknowledge_fail(revision_id: UUID, body: AckBody, user: Annotated[CurrentUser, Depends(current_user)],
+                     svc: Service) -> dict[str, Any]:
+    """The approver acknowledges ONE accepted FAIL (there is no bulk form)."""
+    return {"id": _run(svc.acknowledge_fail, body.result_id, body.note)}
 
 
 @router.post("/revisions/{revision_id}/review/bulk/prepare")
@@ -164,24 +183,59 @@ def revoke_share(revision_id: UUID, link_id: Annotated[str, Path(pattern=r"^[0-9
 
 
 # ---- the public, read-only door -------------------------------------------------------------------------------------
+# The link token travels in the URL FRAGMENT (never sent to a server), the page POSTs it once to /share/exchange and gets a short-lived
+# HttpOnly session cookie; nothing below has a token in its URL, so no access log, proxy log or Referer can carry one.
 
-def _open(share: ShareService, token: str, request: Request) -> dict[str, Any]:
-    package = share.open(token, request.headers.get("user-agent"))
-    if package is None:      # unknown, expired and revoked look the same
-        raise _err(404, "not_found", "this link is not valid")
+EXCHANGES_PER_MINUTE = 20
+COOKIE = "mep_share"
+_attempts: dict[str, list[float]] = {}
+
+
+def _throttle(client: str) -> None:
+    now = time.monotonic()
+    recent = [t for t in _attempts.get(client, []) if now - t < 60]
+    if len(recent) >= EXCHANGES_PER_MINUTE:
+        raise _err(429, "too_many_requests", "too many attempts; wait a minute")
+    _attempts[client] = [*recent, now]
+    if len(_attempts) > 10_000:
+        _attempts.clear()
+
+
+class ExchangeBody(BaseModel):
+    token: Annotated[str, Field(min_length=20, max_length=200)]
+
+
+@router.post("/share/exchange")
+def share_exchange(body: ExchangeBody, request: Request, share: Share) -> Response:
+    import json
+    _throttle(request.client.host if request.client else "?")
+    got = share.exchange(body.token, request.headers.get("user-agent"))
+    if got is None:      # unknown, expired and revoked look the same
+        raise _err(404, "not_found", "this link is not valid or has expired")
+    session, seconds = got
+    secure = request.url.scheme == "https" or os.environ.get("MEP_COOKIE_SECURE") == "1"
+    response = Response(content=json.dumps({"ok": True, "expires_in": seconds}), media_type="application/json",
+                        headers={"Cache-Control": "no-store", "Referrer-Policy": "no-referrer"})
+    response.set_cookie(COOKIE, session, max_age=seconds, httponly=True, samesite="strict", secure=secure, path="/")
+    return response
+
+
+def _session(share: ShareService, request: Request, what: str) -> dict[str, Any]:
+    package = share.read(request.cookies.get(COOKIE, ""), what)
+    if package is None:
+        raise _err(401, "no_session", "open the link again: this session has ended")
     return package
 
 
-@router.get("/share/{token}")
-def share_package(token: str, request: Request, share: Share) -> Response:
+@router.get("/share/package")
+def share_package(request: Request, share: Share) -> Response:
     import json
-    package = _open(share, token, request)
-    return Response(content=json.dumps(package), media_type="application/json",
+    return Response(content=json.dumps(_session(share, request, "package")), media_type="application/json",
                     headers={"Cache-Control": "no-store", "Referrer-Policy": "no-referrer"})
 
 
-@router.get("/share/{token}/report.pdf")
-def share_pdf(token: str, request: Request, share: Share) -> Response:
-    data, _ = _validated_pdf(_open(share, token, request))
+@router.get("/share/report.pdf")
+def share_pdf(request: Request, share: Share) -> Response:
+    data, _ = _validated_pdf(_session(share, request, "pdf"))
     return Response(content=data, media_type="application/pdf", headers={
         "Cache-Control": "no-store", "Referrer-Policy": "no-referrer", "Content-Disposition": 'inline; filename="compliance-package.pdf"'})

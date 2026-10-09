@@ -13,6 +13,15 @@ export async function getToken(): Promise<string | null> {
   return data.session?.access_token ?? null;
 }
 
+/** Small firms: the role the person has chosen to act in (the server checks it against the roles the firm gave them). */
+const ACTING_KEY = "mep.acting_role";
+export function getActingRole(): string | null {
+  try { return window.localStorage.getItem(ACTING_KEY); } catch { return null; }
+}
+export function setActingRole(role: string | null): void {
+  try { if (role) window.localStorage.setItem(ACTING_KEY, role); else window.localStorage.removeItem(ACTING_KEY); } catch { /* storage blocked */ }
+}
+
 /** Error carrying the API's code and message verbatim. */
 export class ApiError extends Error {
   constructor(public status: number, public code: string | null, message: string) {
@@ -22,6 +31,8 @@ export class ApiError extends Error {
 
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
+  const acting = getActingRole();
+  if (acting) headers.set("X-Acting-Role", acting);
   const token = await getToken();
   if (token) headers.set("Authorization", `Bearer ${token}`);
   if (init.body && !(init.body instanceof FormData) && !headers.has("Content-Type")) {
@@ -84,8 +95,10 @@ export const api = {
   results: (r: string) => apiFetch<RevisionResults>(`${rev(r)}/results`),
   freeze: (r: string) => apiFetch<{ frozen: boolean }>(`${rev(r)}/freeze`, { method: "POST" }),
   worksheet: (r: string) => apiFetch<Worksheet>(`${rev(r)}/review`),
-  decide: (r: string, resultId: string, decision: string, reason: string, sampleId?: string) =>
-    apiFetch<{ seq: number }>(`${rev(r)}/review/decisions`, json("POST", { result_id: resultId, decision, reason, sample_id: sampleId ?? null })),
+  decide: (r: string, resultId: string, decision: string, reason: string, sampleId?: string, failCategory?: string, failReference?: string) =>
+    apiFetch<{ seq: number }>(`${rev(r)}/review/decisions`, json("POST", {
+      result_id: resultId, decision, reason, sample_id: sampleId ?? null,
+      fail_category: failCategory ?? null, fail_reference: failReference || null })),
   prepareBulk: (r: string) => apiFetch<{ sample_id: string }>(`${rev(r)}/review/bulk/prepare`, { method: "POST" }),
   bulkApprove: (r: string, sampleId: string) =>
     apiFetch<{ approved: number }>(`${rev(r)}/review/bulk/approve`, json("POST", { sample_id: sampleId })),
@@ -103,12 +116,20 @@ export const api = {
   createShare: (r: string, days: number, label?: string) =>
     apiFetch<{ token: string; expires_at: string }>(`${rev(r)}/share-links`, json("POST", { days, label: label || null })),
   revokeShare: (r: string, id: string) => apiFetch<{ revoked: boolean }>(`${rev(r)}/share-links/${id}`, { method: "DELETE" }),
-  /** The public, read-only certifier view: no sign-in, the token is the credential. */
-  shared: async (token: string): Promise<Package> => {
-    const res = await fetch(`${BASE_URL}/share/${encodeURIComponent(token)}`);
+  /** The public certifier view. The link token comes from the URL fragment and is sent ONCE, in a POST body, to this site's own
+   *  /share-api (a rewrite to the API), which answers with a short-lived HttpOnly session cookie. No token is ever in a request URL. */
+  sharedExchange: async (token: string): Promise<void> => {
+    const res = await fetch("/share-api/exchange", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token }), credentials: "same-origin" });
     if (!res.ok) throw new ApiError(res.status, null, "This link is not valid or has expired.");
+  },
+  sharedPackage: async (): Promise<Package> => {
+    const res = await fetch("/share-api/package", { credentials: "same-origin" });
+    if (!res.ok) throw new ApiError(res.status, null, "This link is not valid, or this session has ended: open the link again.");
     return (await res.json()) as Package;
   },
-  sharedPdfUrl: (token: string) => `${BASE_URL}/share/${encodeURIComponent(token)}/report.pdf`,
+  sharedPdfUrl: () => "/share-api/report.pdf",
+  acknowledgeFail: (r: string, resultId: string, note: string) =>
+    apiFetch<{ id: number }>(`${rev(r)}/review/acknowledge-fail`, json("POST", { result_id: resultId, note })),
   runRules: (r: string) => apiFetch<RunRulesResponse>(`${rev(r)}/run-rules`, { method: "POST" }),
 };

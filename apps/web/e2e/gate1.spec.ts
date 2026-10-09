@@ -259,8 +259,15 @@ test("designer froze it; checker reviews (spot-check, line by line) and signs Ga
     const open = checker.locator("[data-testid='review-line'][data-decision='']");
     const n = await open.count();
     if (n === 0) break;
-    await open.first().getByPlaceholder("reason (required)").fill("reviewed line by line against the cited clause");
-    await open.first().getByRole("button", { name: "Approve", exact: true }).click();
+    const line = open.first();
+    if (await line.getByRole("combobox").count()) {            // a FAIL: accepting it needs a reason category and an explanation
+      await line.getByRole("combobox").selectOption("out_of_scope");
+      await line.getByPlaceholder("reason (required)").fill("outside the scope of this engagement, noted by the checker");
+      await line.getByRole("button", { name: "Accept this FAIL" }).click();
+    } else {
+      await line.getByPlaceholder("reason (required)").fill("reviewed line by line against the cited clause");
+      await line.getByRole("button", { name: "Approve", exact: true }).click();
+    }
     await expect(open).toHaveCount(n - 1);
   }
   await expect(checker.locator("[data-testid='review-line'][data-decision='']")).toHaveCount(0);
@@ -271,6 +278,18 @@ test("designer froze it; checker reviews (spot-check, line by line) and signs Ga
 
   // ---- the approver: Gate 3 with the registration number -------------------------------------------------------------
   const approver = await asUser(s.approver_email!);
+  // accepted FAILs are acknowledged one by one; Gate 3 is refused until each has been
+  const acks = approver.getByTestId("ack-row");
+  await expect(acks.first()).toBeVisible();
+  await approver.getByLabel("Registration number").fill("RPEQ 12345");
+  await approver.getByRole("button", { name: "Sign Gate 3 (approver)" }).click();
+  await expect(approver.getByRole("alert").filter({ hasText: "need the approver's individual acknowledgement" })).toBeVisible();
+  for (let i = 0, n = await acks.count(); i < n; i++) {
+    const row = acks.nth(i);
+    await row.getByPlaceholder("acknowledgement (required)").fill("acknowledged after reading the checker's explanation");
+    await row.getByRole("button", { name: "Acknowledge" }).click();
+    await expect(row).toContainText("acknowledged");
+  }
   await approver.getByLabel("Registration number").fill("RPEQ 99999");
   await approver.getByRole("button", { name: "Sign Gate 3 (approver)" }).click();
   await expect(approver.getByRole("alert").filter({ hasText: "does not match" })).toBeVisible();
@@ -280,23 +299,33 @@ test("designer froze it; checker reviews (spot-check, line by line) and signs Ga
   await expect(approver.getByTestId("signoffs")).toContainText("RPEQ 12345");
   await expect(approver.getByTestId("draft-banner")).toHaveText("DRAFT RULES: NOT ENGINEER-APPROVED");
   await expect(approver.getByTestId("ledger-status")).toContainText("verified");
+  await expect(approver.getByTestId("accepted-fails").getByRole("row")).not.toHaveCount(1);            // accepted FAILs are listed first
+  await expect(approver.getByTestId("independence-notice")).toHaveCount(0);                            // a strict firm
 
   // ---- the certifier link ---------------------------------------------------------------------------------------------
   await approver.getByRole("button", { name: "Create share link" }).click();
   const url = (await approver.getByTestId("share-url").innerText()).trim();
-  expect(url).toMatch(/\/share\/[A-Za-z0-9_-]{40,}$/);
+  expect(url).toMatch(/\/share#[A-Za-z0-9_-]{40,}$/);
+  expect(url).toContain("/share#");                                                                  // the token is in the FRAGMENT
   const certifier = await (await browser.newContext()).newPage();                                    // no sign-in at all
+  const token = url.split("#")[1];
+  const seen: string[] = [];
+  certifier.on("request", (r) => seen.push(`${r.url()} ${r.headers()["referer"] ?? ""}`));
   await certifier.goto(url);
   await expect(certifier.getByRole("heading", { name: "Compliance package (read-only)" })).toBeVisible();
   await expect(certifier.getByTestId("package-status")).toContainText("SIGNED: Gate 1");
   await expect(certifier.getByTestId("package-results").getByRole("row")).not.toHaveCount(1);
+  await expect(certifier.getByTestId("accepted-fails")).toBeVisible();
+  expect(certifier.url()).not.toContain(token);                                                      // gone from the address bar
   const pdf = await certifier.request.get((await certifier.getByTestId("shared-pdf").getAttribute("href")) as string);
   expect(pdf.status()).toBe(200);
   expect((await pdf.body()).subarray(0, 5).toString()).toBe("%PDF-");
+  expect(seen.length).toBeGreaterThan(2);
+  expect(seen.filter((x) => x.includes(token))).toEqual([]);                                         // no request URL and no Referer carried it
   await approver.reload();
-  await expect(approver.getByTestId("share-links")).toContainText("opened 2 time(s)");                // the page and the PDF were logged
+  await expect(approver.getByTestId("share-links")).toContainText("opened 1 time(s)");                // the exchange is the counted opening; reads are logged too
   await approver.getByRole("button", { name: "Revoke" }).click();
   await expect(approver.getByTestId("share-links")).toContainText("REVOKED");
   await certifier.reload();
-  await expect(certifier.getByRole("alert").filter({ hasText: "not valid or has expired" })).toBeVisible();
+  await expect(certifier.getByRole("alert").filter({ hasText: "not valid" })).toBeVisible();
 });

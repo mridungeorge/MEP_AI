@@ -208,7 +208,7 @@ def test_bulk_approval_after_a_clean_spot_check_approves_the_rest_with_the_reaso
     refused(f["checker"], "select gate2_bulk_approve(%s)", (sample,), "already used")
     # the one exception is still open, so Gate 2 cannot be signed until it is reviewed line by line
     refused(f["checker"], "select sign_gate(%s, 'gate2')", (f["revision"],), "1 result(s)")
-    call(f["checker"], "select gate2_review(%s, 'approve', 'accepted: designer will lower the load', null)", (f["results"][0],))
+    call(f["checker"], "select gate2_review(%s, 'approve', 'accepted: designer will lower the load', null, 'performance_solution', 'AS 1668.2 clause 3 solution')", (f["results"][0],))
     call(f["checker"], "select sign_gate(%s, 'gate2')", (f["revision"],))
 
 
@@ -286,10 +286,11 @@ def test_the_chain_verifies_and_every_gate_action_is_in_it(admin):
 
 def test_a_caller_cannot_choose_the_sequence_or_the_hashes(admin):
     f = seed(admin, results=1)
+    before = admin.execute("select count(*) from ledger_event where firm_id = %s", (f["firm"],)).fetchone()[0]
     admin.execute("insert into ledger_event (firm_id, revision_id, kind, payload, seq, prev_hash, row_hash)"
                   " values (%s, %s, 'forged', '{}', 99, %s, %s)", (f["firm"], f["revision"], "a" * 64, "b" * 64))
     assert verify(admin, f["firm"])[0] is True
-    assert admin.execute("select seq from ledger_event where firm_id = %s and kind = 'forged'", (f["firm"],)).fetchone()[0] == 1
+    assert admin.execute("select seq from ledger_event where firm_id = %s and kind = 'forged'", (f["firm"],)).fetchone()[0] == before + 1
 
 
 @pytest.mark.parametrize("tamper", ["payload", "delete_middle", "reorder", "hash", "kind"])
@@ -358,12 +359,13 @@ def test_concurrent_writers_keep_one_unbroken_chain_per_firm(admin):
         except Exception as exc:  # noqa: BLE001
             errors.append(exc)
 
+    base = admin.execute("select count(*) from ledger_event where firm_id = %s", (f["firm"],)).fetchone()[0]
     threads = [threading.Thread(target=writer, args=(n,)) for n in range(6)]
     [t.start() for t in threads]
     [t.join() for t in threads]
     assert not errors
     ok = verify(admin, f["firm"])
-    assert ok[0] is True and ok[1] == 90
+    assert ok[0] is True and ok[1] == base + 90
 
 
 # ---- share links ---------------------------------------------------------------------------------------------------
@@ -397,27 +399,42 @@ def test_only_a_gate3_signed_revision_can_be_shared_by_a_designer_or_approver(ad
     refused(f["checker"], "select token from ledger_link", (), "permission denied")                    # clients never read tokens
 
 
-def test_opening_a_link_is_logged_counted_and_stops_when_expired_or_revoked(admin):
+def test_a_link_is_exchanged_once_for_a_short_session_and_every_use_is_logged(admin):
     f = signed_all(admin)
-    call(f["designer"], "select create_share_link(%s, %s, 7)", (f["revision"], sha("good-" + f["revision"])))
-    call(f["designer"], "select create_share_link(%s, %s, 7)", (f["revision"], sha("old-" + f["revision"])))
+    good, old = sha("good-" + f["revision"]), sha("old-" + f["revision"])
+    call(f["designer"], "select create_share_link(%s, %s, 7)", (f["revision"], good))
+    call(f["designer"], "select create_share_link(%s, %s, 7)", (f["revision"], old))
     admin.execute("update ledger_link set created_at = now() - interval '9 days', expires_at = now() - interval '2 days' where token = %s",
-                  (sha("old-" + f["revision"]),))
-    opened = admin.execute("select * from open_share_link(%s, 'curl/8')", (sha("good-" + f["revision"]),)).fetchall()
+                  (old,))
+    s1, s2 = sha("session-1-" + f["revision"]), sha("session-2-" + f["revision"])
+    opened = admin.execute("select * from exchange_share_link(%s, %s, 15, 'curl/8')", (good, s1)).fetchall()
     assert len(opened) == 1 and str(opened[0][1]) == f["revision"]
-    admin.execute("select * from open_share_link(%s)", (sha("good-" + f["revision"]),))
-    assert admin.execute("select views from ledger_link where token = %s", (sha("good-" + f["revision"]),)).fetchone()[0] == 2
-    assert admin.execute("select * from open_share_link(%s)", (sha("old-" + f["revision"]),)).fetchall() == []               # expired
-    assert admin.execute("select * from open_share_link(%s)", (sha("nope"),)).fetchall() == []              # unknown
-    assert admin.execute("select count(*) from ledger_event where firm_id = %s and kind = 'share_link_viewed'",
+    assert admin.execute("select * from exchange_share_link(%s, %s, 15)", (old, s2)).fetchall() == []                  # expired link
+    assert admin.execute("select * from exchange_share_link(%s, %s, 15)", (sha("nope"), s2)).fetchall() == []          # unknown link
+    assert admin.execute("select views from ledger_link where token = %s", (good,)).fetchone()[0] == 1
+    # the session reads, each read logged; it dies with its link and with its own short expiry
+    assert len(admin.execute("select * from read_share_session(%s, 'package')", (s1,)).fetchall()) == 1
+    assert len(admin.execute("select * from read_share_session(%s, 'pdf')", (s1,)).fetchall()) == 1
+    assert admin.execute("select * from read_share_session(%s, 'package')", (sha("not-a-session"),)).fetchall() == []
+    assert admin.execute("select count(*) from ledger_event where firm_id = %s and kind = 'share_link_read'",
                          (f["firm"],)).fetchone()[0] == 2
-    call(f["designer"], "select revoke_share_link(%s, %s)", (f["revision"], sha("good-" + f["revision"])))
-    assert admin.execute("select * from open_share_link(%s)", (sha("good-" + f["revision"]),)).fetchall() == []
-    refused(f["checker"], "select revoke_share_link(%s, %s)", (f["revision"], sha("good-" + f["revision"])), "only a designer or approver")
+    assert admin.execute("select count(*) from ledger_event where firm_id = %s and kind = 'share_link_viewed'",
+                         (f["firm"],)).fetchone()[0] == 1
+    assert admin.execute("select expires_at - created_at <= interval '15 minutes' from share_session where id_hash = %s", (s1,)).fetchone()[0]
+    admin.execute("update share_session set created_at = now() - interval '20 minutes', expires_at = now() - interval '5 minutes'"
+                  " where id_hash = %s", (s1,))
+    assert admin.execute("select * from read_share_session(%s, 'package')", (s1,)).fetchall() == []                   # session expired
+    s3 = sha("session-3-" + f["revision"])
+    admin.execute("select * from exchange_share_link(%s, %s, 15)", (good, s3))
+    call(f["designer"], "select revoke_share_link(%s, %s)", (f["revision"], good))
+    assert admin.execute("select * from read_share_session(%s, 'package')", (s3,)).fetchall() == []                   # revoked link
+    refused(f["checker"], "select revoke_share_link(%s, %s)", (f["revision"], good), "only a designer or approver")
     kinds = [r[0] for r in admin.execute("select kind from ledger_event where firm_id = %s", (f["firm"],))]
     assert "share_link_created" in kinds and "share_link_revoked" in kinds
     assert verify(admin, f["firm"])[0] is True
-    refused(f["designer"], "select * from open_share_link(%s)", (sha("good-" + f["revision"]),), "permission denied")        # not a client door
+    for sql in ("select * from exchange_share_link(%s, %s, 15)", "select * from read_share_session(%s, %s)"):
+        refused(f["designer"], sql, (good, "x"), "permission denied")                                                 # not client doors
+    refused(f["designer"], "select id_hash from share_session", (), "permission denied")
 
 
 # ---- Phase 3 review fixes (migration 0011) -------------------------------------------------------------------------

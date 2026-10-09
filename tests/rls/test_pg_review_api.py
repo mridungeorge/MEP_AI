@@ -1,6 +1,7 @@
 """Phase 4a through the API: classify -> Gate 2 (line by line, bulk after a spot-check) -> Gate 3 with the registration number ->
 signed package (JSON, PDF, artifact) -> certifier share link -> ledger check. Needs the local Supabase."""
 import io
+import json
 
 import pytest
 from fastapi.testclient import TestClient
@@ -45,10 +46,25 @@ def review_all(client, f, only_open=True):
     ws = client.get(f"/revisions/{f['revision']}/review", headers=auth(f, "checker")).json()
     for r in ws["results"]:
         if r["decision"] is None or not only_open:
-            resp = client.post(f"/revisions/{f['revision']}/review/decisions", headers=auth(f, "checker"),
-                               json={"result_id": r["id"], "decision": "approve", "reason": "checked against the clause and inputs"})
+            body = {"result_id": r["id"], "decision": "approve", "reason": "checked against the clause and inputs"}
+            if r["outcome"] == "FAIL":                   # an accepted FAIL needs a category and a fuller explanation
+                body |= {"fail_category": "out_of_scope", "reason": "outside the scope of this engagement, noted by the checker"}
+            resp = client.post(f"/revisions/{f['revision']}/review/decisions", headers=auth(f, "checker"), json=body)
             assert resp.status_code == 200, resp.text
     return ws
+
+
+def acknowledge_all(client, f):
+    """The approver acknowledges every accepted FAIL individually (Gate 3 refuses otherwise)."""
+    ws = client.get(f"/revisions/{f['revision']}/review", headers=auth(f, "approver")).json()
+    n = 0
+    for r in ws["results"]:
+        if r["fail_category"] and not r["acknowledged"]:
+            resp = client.post(f"/revisions/{f['revision']}/review/acknowledge-fail", headers=auth(f, "approver"),
+                               json={"result_id": r["id"], "note": "acknowledged: I have read the checker's explanation"})
+            assert resp.status_code == 200, resp.text
+            n += 1
+    return n
 
 
 def test_the_whole_chain_designer_checker_approver_package_and_share_link(admin, client, pack):
@@ -76,6 +92,9 @@ def test_the_whole_chain_designer_checker_approver_package_and_share_link(admin,
     assert client.post(f"/revisions/{rev}/sign/gate2", headers=ck, json={}).status_code == 409                # one signer per gate
     wrong = client.post(f"/revisions/{rev}/sign/gate3", headers=ap, json={"registration": "RPEQ 99999"})
     assert wrong.status_code == 409 and "does not match" in wrong.text
+    unacked = client.post(f"/revisions/{rev}/sign/gate3", headers=ap, json={"registration": "RPEQ 12345"})
+    assert unacked.status_code == 409 and "acknowledgement" in unacked.text                                     # accepted FAILs first
+    assert acknowledge_all(client, f) >= 1
     assert client.post(f"/revisions/{rev}/sign/gate3", headers=ap, json={"registration": "RPEQ 12345"}).status_code == 200
 
     # a decision after signing is refused
@@ -106,37 +125,49 @@ def test_the_whole_chain_designer_checker_approver_package_and_share_link(admin,
     token = link["token"]
     assert len(token) >= 40 and not admin.execute("select 1 from ledger_link where token = %s", (token,)).fetchall()
     public = TestClient(client.app)                                                                           # no Authorization header
-    got = public.get(f"/share/{token}")
+    assert public.get("/share/package").status_code == 401                                                    # no session, nothing
+    assert public.post("/share/exchange", json={"token": "not-a-real-token-at-all"}).status_code == 404
+    ex = public.post("/share/exchange", json={"token": token})
+    assert ex.status_code == 200 and ex.json()["expires_in"] == 900
+    cookie = ex.headers["set-cookie"].lower()
+    assert "mep_share=" in cookie and "httponly" in cookie and "samesite=strict" in cookie and token not in cookie
+    got = public.get("/share/package")                                                                         # the session cookie, no token in the URL
     assert got.status_code == 200 and got.json()["status"]["complete"] and got.headers["cache-control"] == "no-store"
-    shared_pdf = public.get(f"/share/{token}/report.pdf")
+    assert "reviewed_by" not in json.dumps(got.json())
+    shared_pdf = public.get("/share/report.pdf")
     assert shared_pdf.status_code == 200 and shared_pdf.content[:5] == b"%PDF-"
-    assert public.get("/share/not-a-real-token").status_code == 404
-    assert public.post(f"/share/{token}").status_code == 405 and public.delete(f"/share/{token}").status_code == 405
-    views = admin.execute("select count(*) from ledger_event where revision_id = %s and kind = 'share_link_viewed'", (rev,)).fetchone()[0]
-    assert views == 2
+    assert TestClient(client.app).get("/share/package").status_code == 401                                    # a fresh client has no session
+    assert public.get(f"/share/{token}").status_code in (404, 405) and public.post("/share/package").status_code == 405
+    log = admin.execute("select kind, payload ->> 'what' from ledger_event where revision_id = %s and kind like 'share_link_%%' "
+                        "and kind <> 'share_link_created' order by seq", (rev,)).fetchall()
+    assert [k for k, _ in log] == ["share_link_viewed", "share_link_read", "share_link_read"]
     listed = client.get(f"/revisions/{rev}/share-links", headers=de).json()
-    assert listed[0]["views"] == 2 and "token" not in listed[0]
+    assert listed[0]["views"] == 1 and "token" not in listed[0]
     assert client.delete(f"/revisions/{rev}/share-links/{listed[0]['id']}", headers=ap).status_code == 200
-    assert public.get(f"/share/{token}").status_code == 404
+    assert public.get("/share/package").status_code == 401                                                     # revoking ends live sessions
+    assert TestClient(client.app).post("/share/exchange", json={"token": token}).status_code == 404
 
     ver = client.get("/ledger/verify", headers=ck).json()
     assert ver["ok"] is True and ver["checked"] > 10
 
 
-def test_a_share_link_never_opens_another_revision_and_expired_links_are_dead(admin, client, pack):
+def test_a_share_session_never_opens_another_revision_and_expired_links_are_dead(admin, client, pack):
     f, g = frozen(admin, client, pack), frozen(admin, client, pack)
     for x in (f, g):
         review_all(client, x)
         client.post(f"/revisions/{x['revision']}/sign/gate2", headers=auth(x, "checker"), json={})
+        acknowledge_all(client, x)
         client.post(f"/revisions/{x['revision']}/sign/gate3", headers=auth(x, "approver"), json={"registration": "RPEQ 12345"})
     token = client.post(f"/revisions/{f['revision']}/share-links", headers=auth(f, "approver"), json={"days": 1}).json()["token"]
     public = TestClient(client.app)
-    assert public.get(f"/share/{token}").json()["revision"]["id"] == str(f["revision"])
+    assert public.post("/share/exchange", json={"token": token}).status_code == 200
+    assert public.get("/share/package").json()["revision"]["id"] == str(f["revision"])
     assert client.get(f"/revisions/{f['revision']}/share-links", headers=auth(g, "approver")).json() == []   # another firm sees nothing
     assert client.post(f"/revisions/{f['revision']}/share-links", headers=auth(g, "approver"), json={}).status_code in (403, 404, 409)
     admin.execute("update ledger_link set created_at = now() - interval '3 days', expires_at = now() - interval '1 day'"
                   " where revision_id = %s", (f["revision"],))
-    assert public.get(f"/share/{token}").status_code == 404
+    assert public.get("/share/package").status_code == 401                                                    # the link died, so did its session
+    assert TestClient(client.app).post("/share/exchange", json={"token": token}).status_code == 404
 
 
 def test_an_unsigned_revision_cannot_be_shared_and_its_package_says_so(admin, client, pack):

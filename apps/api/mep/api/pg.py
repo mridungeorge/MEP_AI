@@ -13,7 +13,6 @@ as they do for a Supabase client. Provenance is never taken from request JSON:
 The tag is a label. The system type is stored both on `system.type` (closed domain) and as a `system_type` input row, so
 it is confirmed at Gate 1 like every other input; rules are assigned from the CONFIRMED input, never from the label.
 """
-import json
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from decimal import Decimal
@@ -92,7 +91,7 @@ class PgRepository(RevisionMethods):
         with psycopg.connect(self._dsn, autocommit=False, row_factory=dict_row) as conn:
             conn.execute("set local role authenticated")
             conn.execute("select set_config('request.jwt.claims', %s, true)",
-                         (json.dumps({"sub": str(self._user.user_id), "role": "authenticated"}),))
+                         (self._user.claims_json(),))
             yield conn            # the connection context commits on a clean exit and rolls back on an exception
 
     @contextmanager
@@ -452,9 +451,17 @@ class PgRepository(RevisionMethods):
     # ---- MeRepository -----------------------------------------------------------------------------------------
     def me(self, user: CurrentUser) -> dict[str, Any]:
         with self._as_user() as conn:
-            firm = conn.execute("select name from firm where id = %s", (user.firm_id,)).fetchone()
+            firm = conn.execute("select name, signer_mode from firm where id = %s", (user.firm_id,)).fetchone()
+            me = conn.execute("select role::text as role, also_roles::text[] as also from app_user where id = %s",
+                              (user.user_id,)).fetchone()
+        small = firm is not None and firm["signer_mode"] == "small_firm"
         return {"user_id": str(user.user_id), "role": user.role, "firm_id": str(user.firm_id),
-                "firm_name": None if firm is None else firm["name"]}
+                "firm_name": None if firm is None else firm["name"],
+                "signer_mode": None if firm is None else firm["signer_mode"],
+                "own_role": None if me is None else me["role"],
+                "available_roles": [me["role"], *(me["also"] or [])] if (small and me is not None) else
+                                   ([me["role"]] if me is not None else []),
+                "independence_notice": "NOT INDEPENDENTLY CHECKED" if small else None}
 
     def list_revisions(self, user: CurrentUser) -> list[dict[str, Any]]:
         with self._as_user() as conn:

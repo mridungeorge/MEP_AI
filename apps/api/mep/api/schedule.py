@@ -56,7 +56,16 @@ class InputsChangedError(Exception):
 class CurrentUser:
     user_id: UUID
     firm_id: UUID
-    role: str
+    role: str                          # the role the user is ACTING in (their own, unless a small firm lets them act in another)
+    acting_role: str | None = None     # set when `role` was chosen with X-Acting-Role (small_firm only; the database re-checks it)
+
+    def claims_json(self) -> str:
+        """The request.jwt.claims the database sees for this user (acting_role only when one was chosen)."""
+        import json
+        claims = {"sub": str(self.user_id), "role": "authenticated"}
+        if self.acting_role:
+            claims["acting_role"] = self.acting_role
+        return json.dumps(claims)
 
 
 class ScheduleRepository(Protocol):

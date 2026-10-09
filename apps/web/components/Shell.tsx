@@ -1,7 +1,7 @@
 "use client";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
-import { api } from "@/lib/api";
+import { api, getActingRole, setActingRole } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import { supabase } from "@/lib/supabase";
 import type { Me } from "@/lib/types";
@@ -20,6 +20,15 @@ function Header({ email }: { email: string | undefined }) {
       <a href="/" style={{ fontWeight: 600, textDecoration: "none", color: "inherit" }}>MEP Co-pilot</a>
       <span style={{ flex: 1 }} />
       <span data-testid="user-email">{email}</span>
+      {me && me.independence_notice && <strong style={{ color: "#7f1d1d" }}>{me.independence_notice}</strong>}
+      {me && (me.available_roles?.length ?? 0) > 1 ? (
+        <label>acting as{" "}
+          <select aria-label="Acting role" value={getActingRole() ?? me.own_role ?? me.role}
+                  onChange={(e) => { setActingRole(e.target.value === me.own_role ? null : e.target.value); window.location.reload(); }}>
+            {me.available_roles!.map((r) => <option key={r} value={r}>{r}</option>)}
+          </select>
+        </label>
+      ) : null}
       {me && <span data-testid="user-role" title={me.firm_name ?? ""}>role: {me.role}</span>}
       {error && <span role="alert" style={{ color: "#b91c1c" }}>{error}</span>}
       <button type="button" onClick={() => void supabase().auth.signOut()}>Sign out</button>
@@ -32,7 +41,7 @@ export function Shell({ children }: { children: ReactNode }) {
   const { session, loading } = useSession();
   const path = usePathname();
   const router = useRouter();
-  const isPublic = PUBLIC_PATHS.includes(path ?? "") || (path ?? "").startsWith("/share/");
+  const isPublic = PUBLIC_PATHS.includes(path ?? "") || path === "/share" || (path ?? "").startsWith("/share/");
   useEffect(() => {
     if (!loading && !session && !isPublic) router.replace("/login");
   }, [loading, session, isPublic, router]);

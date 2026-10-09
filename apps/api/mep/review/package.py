@@ -20,7 +20,8 @@ from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, Tabl
 
 from mep.review.classifier import classify
 
-PACKAGE_VERSION = 1
+PACKAGE_VERSION = 2
+INDEPENDENCE_NOTICE = "NOT INDEPENDENTLY CHECKED"
 DRAFT_BANNER = "DRAFT RULES: NOT ENGINEER-APPROVED"
 GATES = ("gate1", "gate2", "gate3")
 
@@ -64,11 +65,14 @@ def assemble(conn: psycopg.Connection[Any], firm_id: UUID, revision_id: UUID) ->
     results = cur.execute(
         "select rr.id, rr.subject_id, rr.rule_id, rr.part, rr.result::text as outcome, rr.citation, rr.causes, rr.near_miss,"
         " rr.fix_hypotheses, rr.review_class, rr.review_reasons, rr.stale, rr.inputs, v.decision, v.reason, v.bulk, v.spot_check, v.created_at as reviewed_at,"
+        " v.fail_category, v.fail_reference, fa.note as ack_note, fa.acknowledged_at, fu.email as ack_by,"
         " u.email as reviewer from rule_result rr left join review_latest v on v.rule_result_id = rr.id"
-        " left join auth.users u on u.id = v.user_id where rr.revision_id = %s and rr.firm_id = %s and rr.current"
+        " left join auth.users u on u.id = v.user_id left join fail_ack fa on fa.rule_result_id = rr.id"
+        " left join auth.users fu on fu.id = fa.user_id where rr.revision_id = %s and rr.firm_id = %s and rr.current"
         " order by rr.subject_id, rr.rule_id", (revision_id, firm_id)).fetchall()
     signoffs = cur.execute(
-        "select s.gate::text as gate, s.signed_at, s.signer_role::text as role, s.registration_no, s.anchor_seq, s.anchor_hash, s.statement, u.email"
+        "select s.gate::text as gate, s.signed_at, s.signer_role::text as role, s.registration_no, s.anchor_seq, s.anchor_hash, s.statement,"
+        " s.signer_mode, s.user_id, u.email"
         " from signoff s left join auth.users u on u.id = s.user_id where s.revision_id = %s and s.firm_id = %s order by s.gate",
         (revision_id, firm_id)).fetchall()
     ledger = cur.execute("select ok, checked, broken_seq, reason, head_seq, head_hash from verify_ledger(%s)", (firm_id,)).fetchone()
@@ -86,12 +90,20 @@ def assemble(conn: psycopg.Connection[Any], firm_id: UUID, revision_id: UUID) ->
             "subject": r["subject_id"], "rule_id": r["rule_id"], "part": r["part"], "outcome": r["outcome"],
             "citation": r["citation"], "review_class": r["review_class"], "reasons": _reasons(r), "stale": r["stale"],
             "decision": r["decision"], "reason": r["reason"], "bulk": bool(r["bulk"]), "spot_check": bool(r["spot_check"]),
+            "accepted_fail": None if not r["fail_category"] else {
+                "category": r["fail_category"], "reference": r["fail_reference"], "explanation": r["reason"],
+                "acknowledged": r["ack_note"] is not None, "acknowledged_by": r["ack_by"], "acknowledgement": r["ack_note"],
+                "acknowledged_at": r["acknowledged_at"]},
             "reviewed_by": r["reviewer"], "reviewed_at": r["reviewed_at"], "fix_hypotheses": r["fix_hypotheses"]})
+    lines.sort(key=lambda x: (x["accepted_fail"] is None, x["subject"], x["rule_id"]))      # accepted FAILs first
+    firm_row = cur.execute("select signer_mode from firm where id = %s", (firm_id,)).fetchone()
+    not_independent = (firm_row is not None and firm_row["signer_mode"] == "small_firm") or any(s["signer_mode"] != "strict" for s in signoffs)
     counts: dict[str, int] = {}
     for line in lines:
         counts[line["outcome"]] = counts.get(line["outcome"], 0) + 1
     out = {
         "package_version": PACKAGE_VERSION,
+        "independence_notice": INDEPENDENCE_NOTICE if not_independent else None,
         "banner": DRAFT_BANNER if (not drafts or any(d != "approved" for d in drafts)) else None,
         "revision": {"id": rev["id"], "architect_rev": rev["architect_rev"], "status": rev["status"], "frozen_at": rev["frozen_at"],
                      "derived_from": [a["architect_rev"] for a in ancestors]},
@@ -100,6 +112,7 @@ def assemble(conn: psycopg.Connection[Any], firm_id: UUID, revision_id: UUID) ->
                     "building_parts": [{"class": p["building_class"], "storeys": p["storeys"], "area_m2": float(p["area_m2_value"] or 0)}
                                        for p in parts]},
         "summary": counts,
+        "accepted_fails": [x for x in lines if x["accepted_fail"] is not None],
         "results": lines,
         "signoffs": [{"gate": s["gate"], "role": s["role"], "email": s["email"], "signed_at": s["signed_at"],
                       "registration_no": s["registration_no"], "ledger_anchor_seq": s["anchor_seq"],
@@ -116,6 +129,11 @@ def assemble(conn: psycopg.Connection[Any], firm_id: UUID, revision_id: UUID) ->
 
 
 def status_line(pkg: dict[str, Any]) -> str:
+    base = _status(pkg)
+    return f"{base} | {INDEPENDENCE_NOTICE}" if pkg.get("independence_notice") else base
+
+
+def _status(pkg: dict[str, Any]) -> str:
     st = pkg["status"]
     if st["complete"] and not pkg["ledger"]["verified"]:
         return "NOT VERIFIED: the audit ledger hash chain does not verify"
@@ -161,8 +179,25 @@ def to_pdf(pkg: dict[str, Any]) -> bytes:
                          + (f" (derived from {' > '.join(reversed(rv['derived_from']))})" if rv["derived_from"] else "")
                          + f" | status {rv['status']} | frozen {rv['frozen_at']}"), styles["Normal"]),
         Paragraph("Summary: " + ", ".join(f"{k} {v}" for k, v in sorted(pkg["summary"].items())), styles["Normal"]),
-        Spacer(1, 3 * mm), Paragraph("Sign-offs", styles["Heading3"]),
+        Spacer(1, 3 * mm),
     ]
+    if pkg.get("independence_notice"):
+        story.append(Paragraph(escape(f"{pkg['independence_notice']}: one person may have held more than one gate in this firm."),
+                               ParagraphStyle("notice", parent=styles["Normal"], textColor=colors.HexColor("#B00020"))))
+    if pkg["accepted_fails"]:
+        story.append(Paragraph("Accepted FAILs (an engineer decided to accept a failed rule)", styles["Heading3"]))
+        fr: list[list[Any]] = [[Paragraph(h, cell) for h in ("Subject", "Rule / clause", "Category", "Reference", "Explanation",
+                                                              "Approver acknowledgement")]]
+        for r in pkg["accepted_fails"]:
+            a, c = r["accepted_fail"], r["citation"]
+            fr.append([Paragraph(escape(str(v or "-")), cell) for v in (
+                r["subject"], f"{r['rule_id']} - {c.get('document', '')} {c.get('clause', '')}", a["category"], a["reference"],
+                a["explanation"], (f"{a['acknowledgement']} ({a['acknowledged_by'] or ''})" if a["acknowledged"] else "NOT ACKNOWLEDGED"))])
+        ft = Table(fr, repeatRows=1, colWidths=[24 * mm, 62 * mm, 28 * mm, 34 * mm, 65 * mm, 52 * mm])
+        ft.setStyle(TableStyle([("GRID", (0, 0), (-1, -1), 0.25, colors.grey), ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#FDE68A")),
+                                ("VALIGN", (0, 0), (-1, -1), "TOP")]))
+        story += [ft, Spacer(1, 3 * mm)]
+    story.append(Paragraph("Sign-offs", styles["Heading3"]))
     rows: list[list[Any]] = [[Paragraph(h, cell) for h in ("Gate", "Role", "Signer", "Registration no.", "Signed at (UTC)", "Attests")]]
     for s in pkg["signoffs"]:
         rows.append([Paragraph(escape(str(v or "-")), cell) for v in (
@@ -209,6 +244,7 @@ def validate_pdf(data: bytes, pkg: dict[str, Any]) -> dict[str, Any]:
     checks["shows_sign_off_status"] = status_line(pkg) in flat
     checks["shows_ledger_anchor"] = str(pkg["ledger"]["anchor_hash"])[:16] in flat
     checks["every_result_listed"] = all(r["rule_id"] in flat for r in pkg["results"])
+    checks["accepted_fails_listed"] = (not pkg["accepted_fails"]) or "Accepted FAILs" in flat
     checks["banner_when_draft"] = (not pkg.get("banner")) or DRAFT_BANNER in flat
     checks["registration_shown"] = all((s["registration_no"] or "") in flat for s in pkg["signoffs"])
     return {"passed": all(checks.values()), "checks": checks, "sha256": hashlib.sha256(data).hexdigest()}

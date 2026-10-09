@@ -29,7 +29,10 @@ def mini(admin):
     for table in ("equipment", "space", "system", "revision", "project", "app_user"):
         admin.execute(f"delete from {table} where firm_id = %s", (f,))
     admin.execute("delete from auth.users where id = %s", (user,))
-    admin.execute("delete from firm where id = %s", (f,))
+    try:      # the ledger is append-only and references the firm: a firm that has ledger entries stays (it is a throwaway)
+        admin.execute("delete from firm where id = %s", (f,))
+    except psycopg.errors.ForeignKeyViolation:
+        pass
 
 
 def client_conn(user):
