@@ -8,6 +8,7 @@ from typing import Annotated, Any, Protocol
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 
 from mep.api.gate1 import ConfirmRefused, _project
 from mep.api.schedule import CurrentUser, RevisionFrozenError
@@ -18,6 +19,10 @@ from mep.engine.loader import RulePack
 from mep.engine.model import InputValue, Provenance, Subject
 
 router = APIRouter()
+
+
+class ConfirmDiffBody(BaseModel):
+    hash: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
 DESIGNER_ROLES = frozenset({"designer"})
 
 
@@ -130,7 +135,7 @@ def get_diff(revision_id: UUID, user: User, repo: Repo, graph: Graph, pack: Pack
 
 
 @router.post("/revisions/{revision_id}/diff/confirm")
-def confirm_diff(revision_id: UUID, user: User, repo: Repo, graph: Graph) -> dict[str, Any]:
+def confirm_diff(revision_id: UUID, body: ConfirmDiffBody, user: User, repo: Repo, graph: Graph) -> dict[str, Any]:
     """Confirm the diff AS IT STANDS: every changed or added space must already be confirmed (Gate 1, changed values only)."""
     if user.role not in DESIGNER_ROLES:
         raise _err(403, "forbidden", "only a designer confirms a revision diff")
@@ -142,6 +147,8 @@ def confirm_diff(revision_id: UUID, user: User, repo: Repo, graph: Graph) -> dic
     if data["parent"] is None:
         raise _err(409, "no_parent", "this revision has no parent: there is no diff to confirm")
     diff = build_diff(data, graph)
+    if diff["hash"] != body.hash:       # the designer confirms the diff they SAW: if it has changed since, they must look again
+        raise _err(409, "diff_changed", "the differences changed since you opened this page: review them again")
     if diff["needs_confirmation"]:
         raise _err(409, "gate1_required", f"{len(diff['needs_confirmation'])} changed or added space(s) are not confirmed at Gate 1")
     try:

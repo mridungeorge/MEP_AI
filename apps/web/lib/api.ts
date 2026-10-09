@@ -79,7 +79,8 @@ export const api = {
   confirm: (r: string, rows: RowRef[]) => apiFetch<ConfirmResponse>(`${rev(r)}/gate1/confirm`, json("POST", { rows })),
   lineage: (r: string) => apiFetch<Lineage>(`${rev(r)}/lineage`),
   diff: (r: string) => apiFetch<RevisionDiff>(`${rev(r)}/diff`),
-  confirmDiff: (r: string) => apiFetch<{ confirmed: boolean; hash: string }>(`${rev(r)}/diff/confirm`, { method: "POST" }),
+  confirmDiff: (r: string, hash: string) =>
+    apiFetch<{ confirmed: boolean; hash: string }>(`${rev(r)}/diff/confirm`, json("POST", { hash })),
   results: (r: string) => apiFetch<RevisionResults>(`${rev(r)}/results`),
   freeze: (r: string) => apiFetch<{ frozen: boolean }>(`${rev(r)}/freeze`, { method: "POST" }),
   runRules: (r: string) => apiFetch<RunRulesResponse>(`${rev(r)}/run-rules`, { method: "POST" }),

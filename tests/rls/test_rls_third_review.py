@@ -92,9 +92,9 @@ def test_clients_cannot_read_unreleased_artifacts_or_share_tokens(actor):
 def test_review_decision_is_a_closed_set(admin, world):
     a = world.firms["A"]
     with pytest.raises(psycopg.errors.CheckViolation):
-        admin.execute("insert into review (firm_id, rule_result_id, gate, user_id, decision)"
-                      " values (%s, %s, %s, %s, 'PASS')",
-                      (a.id, a.rule_result, GATE_FOR["designer"], a.users["designer"]))
+        admin.execute("insert into review (firm_id, rule_result_id, revision_id, gate, user_id, decision, reason)"
+                      " values (%s, %s, %s, %s, %s, 'PASS', 'a reason')",
+                      (a.id, a.rule_result, a.revision, GATE_FOR["designer"], a.users["designer"]))
 
 
 def test_stored_results_cannot_be_rewritten_even_by_the_service_role(admin, world):

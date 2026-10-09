@@ -386,6 +386,7 @@ class PgRepository(RevisionMethods):
                 " i.provenance::text as provenance, i.confirmed_by from system_input i join system s on s.id ="
                 " i.system_id where s.revision_id = %s and i.firm_id = %s order by i.name",
                 (revision_id, firm_id)).fetchall()
+            inputs_hash = conn.execute("select live_inputs_hash(%s) as h", (revision_id,)).fetchone()["h"]
         by_system: dict[Any, list[dict[str, Any]]] = {}
         for i in inputs:
             value = i["value_number"] if i["value_number"] is not None else (
@@ -405,7 +406,8 @@ class PgRepository(RevisionMethods):
             run_systems.append({"id": s["tag"] or str(s["id"]), "rules": rules, "part": part, "inputs": rows})
         building_class: Any = [{"building_class": p["building_class"], "storeys": p["storeys"],
                                 "area_m2": _num(p["area_m2_value"]), "confirmed_by": p["confirmed_by"]} for p in parts]
-        return {"project": {"state": proj["state"], "ncc_edition": proj["ncc_edition"],
+        return {"frozen": bool(rev["frozen"]), "inputs_hash": inputs_hash,
+                "project": {"state": proj["state"], "ncc_edition": proj["ncc_edition"],
                             "climate_zone": proj["climate_zone"],
                             "building_class": building_class or (proj["building_class"] or ""),
                             "approval_date": proj["approval_date"], "confirmed_by": proj["confirmed_by"]},

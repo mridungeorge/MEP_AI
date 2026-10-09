@@ -5,6 +5,7 @@ file already ingested into this revision -> PARSE the file (an unreadable file l
 `uploads` bucket as the USER (storage RLS: own firm, own revision, designer only) -> write ingest_run, extraction evidence and
 the space rows on a service connection. Spaces are always provenance 'extracted'.
 """
+import contextlib
 import hashlib
 import json
 import tempfile
@@ -18,6 +19,7 @@ import psycopg
 
 from mep.api.lineage_pg import (
     LABEL_OK,
+    DuplicateChild,
     carry_confirmations,
     create_child,
     drop_empty_child,
@@ -88,6 +90,14 @@ class PgUploads:
         if got.status_code != 200 or hashlib.sha256(got.content).digest() != hashlib.sha256(data).digest():
             raise UploadRefused(409, "storage_conflict", "a different file is already stored under this file's name")
 
+    @staticmethod
+    def _undo_child(svc: psycopg.Connection[Any], user: CurrentUser, child: UUID | None) -> None:
+        """Best effort: a child whose file could not be stored or ingested must not linger empty."""
+        if child is None:
+            return
+        with contextlib.suppress(Exception):
+            drop_empty_child(svc, user.firm_id, child)
+
     def ingest(self, *, user: CurrentUser, token: str, revision_id: UUID, name: str, kind: str, data: bytes,
                architect_rev: str | None = None) -> dict[str, Any]:
         """Ingest into an open revision; for a FROZEN revision make a child revision (the architect re-issued the model) and
@@ -112,25 +122,32 @@ class PgUploads:
         target, child = revision_id, None
         with psycopg.connect(self._dsn, autocommit=True) as svc:
             if frozen:
-                child = target = create_child(svc, user.firm_id, revision_id, label)
+                try:
+                    child = target = create_child(svc, user.firm_id, revision_id, label, sha)
+                except DuplicateChild:
+                    raise UploadRefused(409, "already_uploaded", "this file already produced a new revision of this one") from None
             path = f"{user.firm_id}/{target}/{sha}.{kind}"
             try:
                 self._store(token, path, data)
             except UploadRefused:
-                if child is not None:
-                    drop_empty_child(svc, user.firm_id, child)
+                self._undo_child(svc, user, child)
                 raise
             result.source_name = name
             result.metadata["storage_path"] = f"{BUCKET}/{path}"
             try:
                 stored = store_ingest(svc, firm_id=str(user.firm_id), revision_id=str(target), result=result)
             except AlreadyIngested:
+                self._undo_child(svc, user, child)
                 raise UploadRefused(409, "already_uploaded", "this file was already uploaded to this revision") from None
             except psycopg.errors.RaiseException as exc:
+                self._undo_child(svc, user, child)
                 if "frozen" in str(exc):
                     raise UploadRefused(409, "revision_frozen", "revision is frozen") from None
                 raise
-            carried = 0
+            except Exception:
+                self._undo_child(svc, user, child)
+                raise
+            carried: list[dict[str, Any]] = []
             if child is not None:
                 carried = carry_confirmations(svc, user.firm_id, revision_id, child)
                 ledger_created(svc, user.firm_id, child, revision_id, user.user_id, label, sha, carried)
@@ -142,5 +159,5 @@ class PgUploads:
             "problems": list(result.problems)}
         if child is not None:
             out["new_revision"] = {"id": str(child), "project_id": str(project_id), "architect_rev": label,
-                                   "parent_revision_id": str(revision_id), "spaces_carried_unchanged": carried}
+                                   "parent_revision_id": str(revision_id), "spaces_carried_unchanged": len(carried)}
         return out

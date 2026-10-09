@@ -26,7 +26,7 @@ from pydantic import (
     model_validator,
 )
 
-from mep.api.schedule import CurrentUser, RevisionFrozenError
+from mep.api.schedule import CurrentUser, InputsChangedError, RevisionFrozenError
 from mep.engine.loader import RulePack
 from mep.engine.model import BuildingPart, InputValue, ProjectFacts, Provenance, RunRequest, Subject
 from mep.engine.runner import RunRefused, run
@@ -340,7 +340,11 @@ def _project(p: dict[str, Any], revision_id: UUID, firm_id: UUID) -> ProjectFact
 @router.post("/revisions/{revision_id}/run-rules")
 def run_rules(revision_id: UUID, user: User, repo: Repo, pack: Pack, ledger: Ledger) -> Any:
     _view(repo, revision_id, user)
+    if user.role not in CONFIRM_ROLES:
+        raise _err(403, "forbidden", "only a designer runs the rules")
     data = repo.load_run_inputs(revision_id, user.firm_id)
+    if data.get("frozen"):
+        raise _err(409, "revision_frozen", "revision is frozen: its results are final; a new architect revision gets its own run")
     unconfirmed_parts = _unconfirmed_parts(data["project"])
     if unconfirmed_parts:
         return _refuse("gate1_required", unconfirmed_parts)
@@ -381,8 +385,10 @@ def run_rules(revision_id: UUID, user: User, repo: Repo, pack: Pack, ledger: Led
     if save is None:
         return {"run_id": str(uuid.uuid4()), "report": report}
     try:
-        run_id = save(revision_id, user.firm_id, report)
+        run_id = save(revision_id, user.firm_id, report, data.get("inputs_hash"))
     except RevisionFrozenError:
         raise _err(409, "revision_frozen", "revision is frozen") from None
+    except InputsChangedError:
+        raise _err(409, "inputs_changed", "an input changed while the rules were running: run them again") from None
     extras = getattr(repo, "run_extras", None)
     return {"run_id": run_id, "report": report, **({} if extras is None else extras(revision_id, user.firm_id))}

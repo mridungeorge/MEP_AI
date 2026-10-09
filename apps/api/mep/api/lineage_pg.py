@@ -17,6 +17,11 @@ from psycopg.rows import dict_row
 
 from mep.diff.revision import diff_spaces
 
+
+def _f(v: Any) -> float | None:
+    return None if v is None else float(v)
+
+
 LABEL_OK = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._-]{0,19}$")
 
 
@@ -31,15 +36,24 @@ def next_label(label: str) -> str:
     return f"{label}-2"[:20] if label else "B"
 
 
-def create_child(svc: psycopg.Connection[Any], firm_id: UUID, parent_id: UUID, label: str) -> UUID:
+class DuplicateChild(Exception):
+    """This file already produced a child of this revision."""
+
+
+def create_child(svc: psycopg.Connection[Any], firm_id: UUID, parent_id: UUID, label: str, sha256: str) -> UUID:
     """A child revision with the parent's systems and inputs copied (confirmations included)."""
     child = uuid.uuid4()
     with svc.transaction():
         project = svc.execute("select project_id from revision where id = %s and firm_id = %s", (parent_id, firm_id)).fetchone()
         if project is None:
             raise LookupError("parent revision not found")
-        svc.execute("insert into revision (id, firm_id, project_id, architect_rev, status, parent_revision_id)"
-                    " values (%s, %s, %s, %s, 'open', %s)", (child, firm_id, project[0], label, parent_id))
+        try:
+            with svc.transaction():
+                svc.execute("insert into revision (id, firm_id, project_id, architect_rev, status, parent_revision_id,"
+                            " created_from_sha256) values (%s, %s, %s, %s, 'open', %s, %s)",
+                            (child, firm_id, project[0], label, parent_id, sha256))
+        except psycopg.errors.UniqueViolation:
+            raise DuplicateChild from None
         cur = svc.cursor(row_factory=dict_row)
         for s in cur.execute("select id, type, tag, controls from system where revision_id = %s and firm_id = %s",
                              (parent_id, firm_id)).fetchall():
@@ -74,27 +88,31 @@ def _rows(svc: psycopg.Connection[Any], firm_id: UUID, revision_id: UUID) -> lis
     return rows
 
 
-def carry_confirmations(svc: psycopg.Connection[Any], firm_id: UUID, parent_id: UUID, child_id: UUID) -> int:
+def carry_confirmations(svc: psycopg.Connection[Any], firm_id: UUID, parent_id: UUID, child_id: UUID) -> list[dict[str, Any]]:
     """For each child space that matches a CONFIRMED parent space with no change, take the parent's values and confirmation."""
     parent, child = _rows(svc, firm_id, parent_id), _rows(svc, firm_id, child_id)
-    carried = 0
+    carried: list[dict[str, Any]] = []
     with svc.transaction():
         for item in diff_spaces(parent, child):
             if item.change != "unchanged" or item.old is None or item.new is None or item.old["confirmed_by"] is None:
                 continue
-            o = item.old
+            o, n = item.old, item.new
             svc.execute(
                 "update space set name = %s, use = %s, storey = %s, area_m2_value = %s, area_m2_provenance = %s,"
                 " ceiling_void_mm_value = %s, ceiling_void_mm_provenance = %s, confirmed_by = %s, confirmed_at = %s"
                 " where id = %s and firm_id = %s",
                 (o["name"], o["use"], o["storey"], o["area_m2_value"], o["area_m2_provenance"], o["ceiling_void_mm_value"],
                  o["ceiling_void_mm_provenance"], o["confirmed_by"], o["confirmed_at"], item.new["id"], firm_id))
-            carried += 1
+            carried.append({"space": o["name"], "kept": {"name": o["name"], "area_m2": _f(o["area_m2_value"]),
+                                                          "ceiling_void_mm": _f(o["ceiling_void_mm_value"])},
+                            "discarded_new_model_values": {"name": n["name"], "area_m2": _f(n["area_m2_value"]),
+                                                           "ceiling_void_mm": _f(n["ceiling_void_mm_value"])}})
     return carried
 
 
 def ledger_created(svc: psycopg.Connection[Any], firm_id: UUID, child: UUID, parent: UUID, user_id: UUID, label: str,
-                   sha: str, carried: int) -> None:
+                   sha: str, carried: list[dict[str, Any]]) -> None:
     svc.execute("insert into ledger_event (firm_id, revision_id, kind, payload) values (%s, %s, 'revision_created', %s::jsonb)",
                 (firm_id, child, json.dumps({"parent": str(parent), "architect_rev": label, "source_sha256": sha,
-                                              "created_by": str(user_id), "spaces_carried_unchanged": carried})))
+                                              "created_by": str(user_id), "spaces_carried_unchanged": len(carried),
+                                              "carried": carried})))

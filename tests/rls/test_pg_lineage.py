@@ -105,10 +105,14 @@ def test_a_new_upload_on_a_frozen_revision_makes_a_child_with_the_diff_to_confir
 
     # nothing runs, and the diff cannot be confirmed, until the changed spaces are confirmed at Gate 1
     assert client.post(f"/revisions/{cid}/run-rules", headers=d).status_code == 409
-    assert code(client.post(f"/revisions/{cid}/diff/confirm", headers=d)) == "gate1_required"
+    stale_hash = client.get(f"/revisions/{cid}/diff", headers=d).json()["hash"]
+    assert code(client.post(f"/revisions/{cid}/diff/confirm", headers=d, json={"hash": stale_hash})) == "gate1_required"
+    assert client.post(f"/revisions/{cid}/diff/confirm", headers=d).status_code == 422                 # the hash is required
     c = confirm_all(client, f, cid)
     assert c.status_code == 200, c.text
-    ok = client.post(f"/revisions/{cid}/diff/confirm", headers=d)
+    live = client.get(f"/revisions/{cid}/diff", headers=d).json()["hash"]
+    assert code(client.post(f"/revisions/{cid}/diff/confirm", headers=d, json={"hash": "0" * 64})) == "diff_changed"
+    ok = client.post(f"/revisions/{cid}/diff/confirm", headers=d, json={"hash": live})
     assert ok.status_code == 200 and ok.json()["hash"] == client.get(f"/revisions/{cid}/diff", headers=d).json()["hash"]
     assert client.get(f"/revisions/{cid}/diff", headers=d).json()["confirmed"] is True
 
@@ -126,8 +130,27 @@ def test_the_checker_cannot_confirm_or_freeze_and_other_firms_see_nothing(admin,
     r = up(client, f, f["revision"], dxf([(0, 7, 5), (10, 4, 4)]))
     cid = r.json()["new_revision"]["id"]
     ck = h.auth(f["checker"])
-    assert client.post(f"/revisions/{cid}/diff/confirm", headers=ck).status_code == 403
+    assert client.post(f"/revisions/{cid}/diff/confirm", headers=ck, json={"hash": "0" * 64}).status_code == 403
     assert client.post(f"/revisions/{cid}/freeze", headers=ck).status_code == 403
     assert client.get(f"/revisions/{cid}/diff", headers=h.auth(other["designer"])).status_code == 404
     assert client.get(f"/revisions/{cid}/lineage", headers=h.auth(other["designer"])).status_code == 404
     assert client.post(f"/revisions/{cid}/freeze", headers=h.auth(f["designer"])).status_code == 409   # diff not confirmed
+
+
+def test_a_frozen_revision_cannot_be_re_run_and_only_a_designer_runs(admin, client, pack):
+    f = frozen_parent(admin, client, pack)
+    before = admin.execute("select run_id from rule_result where revision_id = %s and current limit 1", (f["revision"],)).fetchone()
+    again = client.post(f"/revisions/{f['revision']}/run-rules", headers=h.auth(f["designer"]))
+    assert again.status_code == 409 and code(again) == "revision_frozen"
+    assert client.post(f"/revisions/{f['revision']}/run-rules", headers=h.auth(f["checker"])).status_code == 403
+    after = admin.execute("select run_id from rule_result where revision_id = %s and current limit 1", (f["revision"],)).fetchone()
+    assert before == after
+
+
+def test_the_same_file_twice_makes_one_child_not_two(admin, client, pack):
+    f = frozen_parent(admin, client, pack)
+    data = dxf([(0, 8, 5), (10, 4, 4), (20, 3, 3)])
+    assert up(client, f, f["revision"], data).status_code == 200
+    second = up(client, f, f["revision"], data)
+    assert second.status_code == 409 and code(second) == "already_uploaded"
+    assert admin.execute("select count(*) from revision where parent_revision_id = %s", (f["revision"],)).fetchone()[0] == 1

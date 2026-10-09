@@ -80,23 +80,29 @@ def cross_rule_rerun(*, subject: Subject, project: ProjectFacts, changes: Mappin
     after = _outcomes(subject, project, pack, dependents, changes)
     result.moves = [Move(rid, before[rid], after[rid]) for rid in dependents if before[rid] != after[rid]]
     better = [m for m in result.moves if m.better]
-    worse = [m for m in result.moves if m.worse]
+    # A conflict is named after the ONE input whose change, applied alone, moves one rule up and another down. Blaming every changed
+    # input that both rules read would name inputs that caused nothing when several inputs change together.
+    single: dict[str, list[Move]] = {}
+    for name in changed:
+        rules_n = sorted(reach[name])
+        if not rules_n:
+            continue
+        b4, af = _outcomes(subject, project, pack, rules_n, {}), _outcomes(subject, project, pack, rules_n, {name: changes[name]})
+        single[name] = [Move(rid, b4[rid], af[rid]) for rid in rules_n if b4[rid] != af[rid]]
     if target_rule is not None:
         target = next((m for m in better if m.rule_id == target_rule), None)
-        for w in worse:
-            if w.rule_id == target_rule:
+        for name, moves in single.items():
+            if target_rule not in reach[name]:
                 continue
-            for name in changed:
-                if w.rule_id in reach[name] and target_rule in reach[name]:
-                    result.conflicts.append(Conflict(subject.id, name, target or Move(target_rule, before.get(target_rule, Outcome.FAIL),
-                                                                                     after.get(target_rule, Outcome.FAIL)), w))
+            for w in (m for m in moves if m.worse and m.rule_id != target_rule):
+                result.conflicts.append(Conflict(subject.id, name, target or Move(
+                    target_rule, before.get(target_rule, Outcome.FAIL), after.get(target_rule, Outcome.FAIL)), w))
         result.withdrawn = bool(result.conflicts) or after.get(target_rule) != Outcome.PASS
     else:
-        for b in better:
-            for w in worse:
-                for name in changed:
-                    if b.rule_id in reach[name] and w.rule_id in reach[name]:
-                        result.conflicts.append(Conflict(subject.id, name, b, w))
+        for name, moves in single.items():
+            for b in (m for m in moves if m.better):
+                for w in (m for m in moves if m.worse):
+                    result.conflicts.append(Conflict(subject.id, name, b, w))
         result.withdrawn = bool(result.conflicts)
     return result
 

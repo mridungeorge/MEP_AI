@@ -12,7 +12,7 @@ from uuid import UUID
 import psycopg
 
 from mep.api.gate1 import ConfirmRefused
-from mep.api.schedule import RevisionFrozenError
+from mep.api.schedule import InputsChangedError, RevisionFrozenError
 
 
 def _num(v: Decimal | float | None) -> float | int | None:
@@ -77,24 +77,27 @@ class RevisionMethods:
                  "inputs_used": r["inputs"], "near_miss": r["near_miss"], "fix_hypotheses": r["fix_hypotheses"],
                  "stale": r["stale"]} for r in rows]
 
-    def save_results(self, revision_id: UUID, firm_id: UUID, report: dict[str, Any]) -> str:
+    def save_results(self, revision_id: UUID, firm_id: UUID, report: dict[str, Any], inputs_hash: str | None = None) -> str:
         """Store a run's results as the revision's current results (the previous run's become history). Service connection:
         no client can write a compliance result."""
         run_id = str(uuid.uuid4())
         edition = report["project"]["ncc_edition"]
         try:
             with self._as_service() as conn:
+                live = conn.execute("select live_inputs_hash(%s) as h", (revision_id,)).fetchone()["h"]
+                if inputs_hash is not None and live != inputs_hash:
+                    raise InputsChangedError
                 conn.execute("update rule_result set current = false where revision_id = %s and firm_id = %s and current",
                              (revision_id, firm_id))
                 for r in report["results"]:
                     conn.execute(
                         "insert into rule_result (firm_id, revision_id, rule_id, edition, result, inputs, citation, fix_hypotheses,"
-                        " stale, subject_id, part, run_id, causes, near_miss, current) values (%s, %s, %s, %s, %s, %s::jsonb,"
-                        " %s::jsonb, %s::jsonb, false, %s, %s, %s, %s::jsonb, %s::jsonb, true)",
+                        " stale, subject_id, part, run_id, causes, near_miss, current, inputs_hash) values (%s, %s, %s, %s, %s, %s::jsonb,"
+                        " %s::jsonb, %s::jsonb, false, %s, %s, %s, %s::jsonb, %s::jsonb, true, %s)",
                         (firm_id, revision_id, r["rule_id"], edition, r["outcome"], json.dumps(r["inputs_used"], default=str),
                          json.dumps(r["citation"]), json.dumps(r["fix_hypotheses"]), r["subject_id"], r.get("part"), run_id,
                          json.dumps(r["causes"], default=str),
-                         None if r["near_miss"] is None else json.dumps(r["near_miss"], default=str)))
+                         None if r["near_miss"] is None else json.dumps(r["near_miss"], default=str), live))
         except psycopg.errors.RaiseException as exc:
             if "frozen" in str(exc):
                 raise RevisionFrozenError from None
@@ -115,8 +118,8 @@ class RevisionMethods:
     def _inputs(self, conn: Any, revision_id: UUID, firm_id: UUID) -> dict[str, dict[str, tuple[Any, str | None]]]:
         out: dict[str, dict[str, tuple[Any, str | None]]] = {}
         for r in conn.execute(
-                "select s.tag, i.name, i.value_number, i.value_text, i.value_bool, i.unit from system_input i join system s"
-                " on s.id = i.system_id where s.revision_id = %s and i.firm_id = %s and s.tag is not null",
+                "select coalesce(s.tag, s.id::text) as tag, i.name, i.value_number, i.value_text, i.value_bool, i.unit from system_input i"
+                " join system s on s.id = i.system_id where s.revision_id = %s and i.firm_id = %s",
                 (revision_id, firm_id)).fetchall():
             value = r["value_number"] if r["value_number"] is not None else (
                 r["value_text"] if r["value_text"] is not None else r["value_bool"])

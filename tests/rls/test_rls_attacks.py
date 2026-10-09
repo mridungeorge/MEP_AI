@@ -84,15 +84,17 @@ def test_forged_signoff_blocked(actor):
                         (mine.id, mine.rule_result, GATE_FOR[victim_role], victim))
 
 
-def test_own_gate_signoff_allowed_but_not_across_firms(actor):
+def test_no_client_can_write_a_signoff_or_a_review_directly(actor):
+    """Phase 4a: sign-offs and reviews go only through sign_gate / gate2_* (which check role, order and state)."""
     role, user, mine, theirs = actor
-    with as_user(user) as cur:
-        cur.execute("insert into signoff (firm_id, revision_id, gate, user_id) values (%s, %s, %s, %s)",
-                    (mine.id, mine.revision, GATE_FOR[role], user))
-        assert cur.rowcount == 1
-    with as_user(user) as cur, pytest.raises(BLOCKED):
-        cur.execute("insert into signoff (firm_id, revision_id, gate, user_id) values (%s, %s, %s, %s)",
-                    (theirs.id, theirs.revision, GATE_FOR[role], user))
+    for firm in (mine, theirs):
+        with as_user(user) as cur, pytest.raises(BLOCKED):
+            cur.execute("insert into signoff (firm_id, revision_id, gate, user_id) values (%s, %s, %s, %s)",
+                        (firm.id, firm.revision, GATE_FOR[role], user))
+        with as_user(user) as cur, pytest.raises(BLOCKED):
+            cur.execute("insert into review (firm_id, rule_result_id, revision_id, gate, user_id, decision, reason)"
+                        " values (%s, %s, %s, %s, %s, 'approve', 'looks fine')",
+                        (firm.id, firm.rule_result, firm.revision, GATE_FOR[role], user))
 
 
 def test_cross_firm_read_blocked(actor):

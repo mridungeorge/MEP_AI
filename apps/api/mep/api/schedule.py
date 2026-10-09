@@ -48,6 +48,10 @@ class RevisionFrozenError(Exception):
     """The revision is frozen; its schedule can no longer change."""
 
 
+class InputsChangedError(Exception):
+    """An input changed between reading it for a run and storing the run's results."""
+
+
 @dataclass(frozen=True)
 class CurrentUser:
     user_id: UUID

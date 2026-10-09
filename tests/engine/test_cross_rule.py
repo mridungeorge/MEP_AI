@@ -95,3 +95,23 @@ def test_an_input_no_assigned_rule_reads_changes_nothing(pack):
     r = cross_rule_rerun(subject=subject(3), project=project(), pack=pack, graph=build_graph(pack),
                          changes={"duct_insulation_r_value": InputValue(2, "m^2.K/W", Provenance.ENGINEER_CONFIRMED)})
     assert r.dependents == [] and r.moves == [] and not r.conflicts
+
+
+def test_a_conflict_names_only_the_input_that_caused_it_when_several_inputs_change():
+    """Review finding: blaming every changed input both rules read named mv_airflow, which moves nothing on its own."""
+    real = load_pack(ROOT / "rules")
+    graph = build_graph(real)
+
+    def c(v, u=None):
+        return InputValue(v, u, Provenance.ENGINEER_CONFIRMED)
+
+    ts, vsd = "NCC2022-J6D4-mv-time-switch", "NCC2022-J6D4-mv-fan-vsd"
+    base = {"mv_airflow": c(1500, "L/s"), "time_switch_provided": c(False), "time_switch_variable_times_and_days": c(False),
+            "serves_single_sou_class_2_3_9c": c(False), "serves_class_4_part": c(False), "building_needs_24h_ventilation": c(False),
+            "electricity_network_substation": c(False), "system_type": c("mechanical_ventilation"), "variable_speed_fan": c(True),
+            "f6_requires_constant_downstream_airflow": c(False), "serves_single_sou_class_2": c(False)}
+    changes = {"time_switch_provided": c(True), "time_switch_variable_times_and_days": c(True), "variable_speed_fan": c(False),
+               "mv_airflow": c(1600, "L/s")}
+    result = cross_rule_rerun(subject=Subject("mv-1", [ts, vsd], base), project=ProjectFacts("VIC", "NCC2022", 6, "5", date(2024, 10, 1)),
+                              changes=changes, pack=real, graph=graph)
+    assert "mv_airflow" not in {x.input_name for x in result.conflicts}

@@ -131,7 +131,7 @@ export function RevisionScreen({ projectId, revisionId }: { projectId: string; r
             <>
               {pending > 0 && <p data-testid="diff-pending">{pending} changed or added space(s) must be confirmed at Gate 1 first. <a href={gate1}>Open Gate 1</a></p>}
               <button type="button" disabled={diff.confirmed || pending > 0}
-                      onClick={() => act(async () => { await api.confirmDiff(revisionId); return "Diff confirmed."; })}>
+                      onClick={() => act(async () => { await api.confirmDiff(revisionId, diff.hash ?? ""); return "Diff confirmed."; })}>
                 {diff.confirmed ? "Diff confirmed" : "Confirm this diff"}
               </button>{" "}
             </>
