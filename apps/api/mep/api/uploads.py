@@ -10,7 +10,7 @@ import re
 from typing import Annotated, Any, Protocol
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile
 
 from mep.api.schedule import CurrentUser
 
@@ -84,8 +84,10 @@ class UploadRefused(Exception):
 
 
 class UploadService(Protocol):
-    def ingest(self, *, user: CurrentUser, token: str, revision_id: UUID, name: str, kind: str, data: bytes) -> dict[str, Any]:
-        """Store the file under the firm, ingest it, return the summary. Raises UploadRefused."""
+    def ingest(self, *, user: CurrentUser, token: str, revision_id: UUID, name: str, kind: str, data: bytes,
+               architect_rev: str | None = None) -> dict[str, Any]:
+        """Store the file under the firm, ingest it, return the summary. A FROZEN revision gets a child revision instead (the
+        architect re-issued the model); `architect_rev` labels it. Raises UploadRefused."""
 
 
 def current_user() -> CurrentUser:
@@ -134,7 +136,8 @@ def _err(status: int, code: str, message: str) -> HTTPException:
 
 @router.post("/revisions/{revision_id}/uploads")
 def upload(revision_id: UUID, user: User, service: Service, file: Annotated[UploadFile, File()],
-           authorization: Annotated[str | None, Header()] = None) -> dict[str, Any]:
+           authorization: Annotated[str | None, Header()] = None,
+           architect_rev: Annotated[str | None, Form()] = None) -> dict[str, Any]:
     if user.role not in UPLOAD_ROLES:
         raise _err(403, "forbidden", "only a designer uploads files")
     data = file.file.read(MAX_UPLOAD_BYTES + 1)
@@ -146,6 +149,6 @@ def upload(revision_id: UUID, user: User, service: Service, file: Annotated[Uplo
     token = (authorization or "").partition(" ")[2].strip()
     try:
         return service.ingest(user=user, token=token, revision_id=revision_id, name=safe_name(file.filename), kind=kind,
-                              data=data)
+                              data=data, architect_rev=(architect_rev or "").strip() or None)
     except UploadRefused as exc:
         raise _err(exc.status, exc.code, exc.message) from None

@@ -140,9 +140,18 @@ def test_only_a_designer_of_the_firm_may_upload_to_an_open_revision(admin, clien
     r = client.post(f"{h.base(f)}/uploads", headers=h.auth(other["designer"]), files={"file": ("a.ifc", IFC)})
     assert r.status_code == 404                                            # another firm's revision does not exist for them
     admin.execute("update revision set frozen_at = now() where id = %s", (f["revision"],))
-    r = post(client, f, IFC)
-    assert r.status_code == 409 and r.json()["detail"]["code"] == "revision_frozen"
+    r = post(client, f, IFC)             # a frozen revision is never changed: the new model becomes a CHILD revision
+    assert r.status_code == 200, r.text
+    child = r.json()["new_revision"]
+    assert child["parent_revision_id"] == str(f["revision"]) and child["id"] == r.json()["revision_id"] != str(f["revision"])
     assert admin.execute("select count(*) from ingest_run where revision_id = %s", (f["revision"],)).fetchone()[0] == 0
+    assert admin.execute("select count(*) from ingest_run where revision_id = %s", (child["id"],)).fetchone()[0] == 1
+    assert admin.execute("select parent_revision_id, status from revision where id = %s", (child["id"],)).fetchone() == (uuid.UUID(str(f["revision"])), "open")
+    assert admin.execute("select count(*) from ledger_event where revision_id = %s and kind = 'revision_created'",
+                         (child["id"],)).fetchone()[0] == 1
+    bad = client.post(f"{h.base(f)}/uploads", headers=h.auth(f["designer"]), files={"file": ("a.ifc", IFC)},
+                      data={"architect_rev": "bad/label"})
+    assert bad.status_code == 422
 
 
 def test_without_a_storage_endpoint_the_route_refuses(admin, pack):

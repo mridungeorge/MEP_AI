@@ -16,6 +16,14 @@ from uuid import UUID
 import httpx
 import psycopg
 
+from mep.api.lineage_pg import (
+    LABEL_OK,
+    carry_confirmations,
+    create_child,
+    drop_empty_child,
+    ledger_created,
+    next_label,
+)
 from mep.api.pg import health_view
 from mep.api.schedule import CurrentUser
 from mep.api.uploads import UploadRefused
@@ -80,36 +88,59 @@ class PgUploads:
         if got.status_code != 200 or hashlib.sha256(got.content).digest() != hashlib.sha256(data).digest():
             raise UploadRefused(409, "storage_conflict", "a different file is already stored under this file's name")
 
-    def ingest(self, *, user: CurrentUser, token: str, revision_id: UUID, name: str, kind: str, data: bytes) -> dict[str, Any]:
+    def ingest(self, *, user: CurrentUser, token: str, revision_id: UUID, name: str, kind: str, data: bytes,
+               architect_rev: str | None = None) -> dict[str, Any]:
+        """Ingest into an open revision; for a FROZEN revision make a child revision (the architect re-issued the model) and
+        ingest into that."""
         sha = hashlib.sha256(data).hexdigest()
         with psycopg.connect(self._dsn, autocommit=False) as conn:
             conn.execute("set local role authenticated")
             conn.execute("select set_config('request.jwt.claims', %s, true)",
                          (json.dumps({"sub": str(user.user_id), "role": "authenticated"}),))
-            rev = conn.execute("select frozen_at is not null from revision where id = %s and firm_id = %s",
-                               (revision_id, user.firm_id)).fetchone()
+            rev = conn.execute("select frozen_at is not null, architect_rev, project_id from revision"
+                               " where id = %s and firm_id = %s", (revision_id, user.firm_id)).fetchone()
             if rev is None:
                 raise UploadRefused(404, "not_found", "revision not found")
-            if rev[0]:
-                raise UploadRefused(409, "revision_frozen", "revision is frozen")
+            frozen, parent_label, project_id = bool(rev[0]), str(rev[1]), rev[2]
             if conn.execute("select 1 from ingest_run where revision_id = %s and source_sha256 = %s",
                             (revision_id, sha)).fetchone():
                 raise UploadRefused(409, "already_uploaded", "this file was already uploaded to this revision")
+        label = architect_rev or next_label(parent_label)
+        if architect_rev is not None and not LABEL_OK.match(architect_rev):
+            raise UploadRefused(422, "bad_label", "the architect revision label is 1-20 letters, digits, spaces, dots, dashes")
         result = read_file(kind, name, data)
-        path = f"{user.firm_id}/{revision_id}/{sha}.{kind}"
-        self._store(token, path, data)
-        result.source_name = name
-        result.metadata["storage_path"] = f"{BUCKET}/{path}"
+        target, child = revision_id, None
         with psycopg.connect(self._dsn, autocommit=True) as svc:
+            if frozen:
+                child = target = create_child(svc, user.firm_id, revision_id, label)
+            path = f"{user.firm_id}/{target}/{sha}.{kind}"
             try:
-                stored = store_ingest(svc, firm_id=str(user.firm_id), revision_id=str(revision_id), result=result)
+                self._store(token, path, data)
+            except UploadRefused:
+                if child is not None:
+                    drop_empty_child(svc, user.firm_id, child)
+                raise
+            result.source_name = name
+            result.metadata["storage_path"] = f"{BUCKET}/{path}"
+            try:
+                stored = store_ingest(svc, firm_id=str(user.firm_id), revision_id=str(target), result=result)
             except AlreadyIngested:
                 raise UploadRefused(409, "already_uploaded", "this file was already uploaded to this revision") from None
             except psycopg.errors.RaiseException as exc:
                 if "frozen" in str(exc):
                     raise UploadRefused(409, "revision_frozen", "revision is frozen") from None
                 raise
+            carried = 0
+            if child is not None:
+                carried = carry_confirmations(svc, user.firm_id, revision_id, child)
+                ledger_created(svc, user.firm_id, child, revision_id, user.user_id, label, sha, carried)
         health = stored.get("health")
-        return {"kind": kind, "name": name, "sha256": sha, "bytes": len(data), "storage_path": f"{BUCKET}/{path}",
-                "ingest_run": stored["ingest_run"], "spaces": stored["spaces"], "extractions": stored["extractions"],
-                "health": None if health is None else health_view(health), "problems": list(result.problems)}
+        out: dict[str, Any] = {
+            "kind": kind, "name": name, "sha256": sha, "bytes": len(data), "storage_path": f"{BUCKET}/{path}",
+            "revision_id": str(target), "ingest_run": stored["ingest_run"], "spaces": stored["spaces"],
+            "extractions": stored["extractions"], "health": None if health is None else health_view(health),
+            "problems": list(result.problems)}
+        if child is not None:
+            out["new_revision"] = {"id": str(child), "project_id": str(project_id), "architect_rev": label,
+                                   "parent_revision_id": str(revision_id), "spaces_carried_unchanged": carried}
+        return out
