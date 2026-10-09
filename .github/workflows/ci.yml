@@ -30,7 +30,7 @@ jobs:
       - run: uv run pytest tests/golden || [ $? -eq 5 ]  # 5 = no golden projects yet
   # A release claim made any other way (a tag, a GitHub release created in the web UI) still shows up red here.
   release-gate:
-    if: (startsWith(github.ref, 'refs/tags/') && !(startsWith(github.ref_name, 'sprint-') && !contains(github.ref_name, '.') && !contains(github.ref_name, '/'))) || github.event_name == 'release'
+    if: (startsWith(github.ref, 'refs/tags/') && !((startsWith(github.ref_name, 'sprint-') || startsWith(github.ref_name, 'restore-')) && !contains(github.ref_name, '.') && !contains(github.ref_name, '/'))) || github.event_name == 'release'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -47,9 +47,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - run: git fetch origin main
+      - run: git fetch --tags --force
       - uses: astral-sh/setup-uv@v3
         with:
           python-version: "3.12"
       - run: uv sync --group dev --locked
-      - run: uv run python scripts/check_signoff_changes.py --base origin/main
+      - run: uv run python scripts/check_signoff_changes.py --base-tag

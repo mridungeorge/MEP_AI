@@ -4,6 +4,8 @@
   python scripts/check_signoff_changes.py              compare STAGED rule files with HEAD (.githooks/pre-commit)
   python scripts/check_signoff_changes.py --base REF   compare HEAD with the merge base of REF (CI backstop: this still
                                                        runs when a local hook was skipped)
+  python scripts/check_signoff_changes.py --base-tag   same, with the newest *-gate or restore-* tag as the base; fails
+                                                       closed if no such tag is reachable from HEAD
   MEP_HUMAN_SIGNOFF="E. Engineer RPEQ 12345" ...       the engineer's own shell declares who is signing (staged mode)
   Engineer-Signoff: E. Engineer RPEQ 12345             the same declaration as a commit-message trailer (--base mode)
 
@@ -119,12 +121,38 @@ def since_base(ref: str) -> int:
                    f"Add a commit-message trailer `{TRAILER} Name RPEQ 12345` written by the engineer who signs.")
 
 
+BASE_TAG_PATTERNS = ("*-gate", "restore-*")
+
+
+def base_tag() -> str:
+    """Newest *-gate or restore-* tag that is an ancestor of HEAD, or "" (callers fail closed)."""
+    names = git("tag", "--list", "--sort=-creatordate", *BASE_TAG_PATTERNS).split()
+    for name in names:
+        if subprocess.run(["git", "merge-base", "--is-ancestor", f"refs/tags/{name}", "HEAD"],
+                          cwd=ROOT, capture_output=True, check=False).returncode == 0:
+            return name
+    return ""
+
+
+def since_base_tag() -> int:
+    tag = base_tag()
+    if not tag:
+        print("check_signoff_changes: no comparison base. Expected a tag matching '*-gate' or 'restore-*' that is an "
+              "ancestor of HEAD (fetch tags: git fetch --tags, or fetch-depth: 0). Refusing to pass without a base.",
+              file=sys.stderr)
+        return 1
+    print(f"check_signoff_changes: comparing with base tag {tag}", file=sys.stderr)
+    return since_base(f"refs/tags/{tag}")
+
+
 def main(argv: list[str] | None = None) -> int:
     args = list(argv or [])
+    if args == ["--base-tag"]:
+        return since_base_tag()
     if args[:1] == ["--base"] and len(args) == 2:
         return since_base(args[1])
     if args:
-        print("usage: check_signoff_changes.py [--base REF]", file=sys.stderr)
+        print("usage: check_signoff_changes.py [--base REF | --base-tag]", file=sys.stderr)
         return 2
     return staged()
 

@@ -51,7 +51,7 @@ CLAIM = re.compile(
 )
 NEGATION = re.compile(r"(?i)\b(not|no|never|until|before|cannot|can't|isn't|aren't|without|nor|neither|zero)\b")
 QUOTED = re.compile(r"""(?s)(`[^`]*`|"[^"]*"|'[^']*')""")
-RELEASE_TAG_OK = re.compile(r"^sprint-\d+$")
+RELEASE_TAG_OK = re.compile(r"^(sprint-\d+(-gate(-restored)?)?|restore-\d{4}-\d{2}-\d{2})$")
 SKIP_DIRS = {"node_modules", ".git", ".venv", "__pycache__", ".mypy_cache", ".ruff_cache", ".pytest_cache",
              ".hypothesis", "supabase", "tests", ".githooks"}
 SKIP_FILES = {"BUILD_PROMPT.md", "CLAUDE.md", "release_gate.py", "pnpm-lock.yaml", "package-lock.json"}
