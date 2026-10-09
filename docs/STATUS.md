@@ -4,6 +4,13 @@ Sprint: 2 (prove the data) rebuilt and finished after the 2026-10-09 recovery; t
 local devcontainer gate is the reference (tag `sprint-2-gate`). GitHub CI has never run (no remote CI evidence).
 Updated: 2026-10-09 (recovery after a device change; see "Recovery 2026-10-09")
 
+## Resume here (updated 2026-10-10)
+Unattended multi-phase build in progress. Order: PHASE 2.5 finish -> PHASE 3 (revision diff) -> PHASE 4a (review, sign-off, deliverable); STOP after 4a.
+A phase is done when its `*-gate` tag exists. Current phase: **2.5**. Items 1-4 are built and tested; what remains is the phase close:
+adversarial review (max two rounds) -> `scripts/ci.sh` green on a fresh clone in the devcontainer -> GitHub CI green -> tag `sprint-2.5-gate` -> push.
+Notes for the next session: the local Supabase signs tokens with ES256 (JWKS); the API verifies both that and HS256 (`auth.py`). Mail for the
+magic-link tests goes to Mailpit (`http://127.0.0.1:54324`). Run everything through `.claude/hooks/devcontainer_exec.py` or inside the container.
+
 ## Recovery 2026-10-09
 - **What happened:** the work was moved to a new device. The GitHub repo `mridungeorge/MEP_AI` holds ONE snapshot commit of
   the old worktree (under `mep-duct-fab/`). Git history, tags and branches did not survive.

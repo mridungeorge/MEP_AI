@@ -43,7 +43,7 @@ export function SchedulePanel({
               <td><input type="checkbox" checked={selected.has(i.id)} onChange={() => onToggle(i.id)} aria-label={`Select ${i.system ?? ""} ${i.name}`} /></td>
               <td>{i.system ?? ""}</td>
               <td>{i.name}</td>
-              <td>{typeof i.value === "boolean" ? String(i.value) : (i.value ?? "")}</td>
+              <td>{i.name === "building_part" && typeof i.value === "number" ? `Part ${i.value + 1}` : typeof i.value === "boolean" ? String(i.value) : (i.value ?? "")}</td>
               <td>{i.unit ?? ""}</td>
               <td><ProvenanceBadge provenance={i.provenance} /></td>
             </tr>

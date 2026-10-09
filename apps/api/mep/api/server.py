@@ -31,7 +31,8 @@ DEMO_JWT_SECRET = "super-secret-jwt-token-with-at-least-32-characters-long"   # 
 
 def create_pg_app(dsn: str, jwt_secret: str, pack: RulePack, cors_origins: list[str] | None = None,
                   supabase_url: str | None = None, anon_key: str | None = None) -> FastAPI:
-    current_user = make_current_user(dsn, jwt_secret)
+    jwks_url = f"{supabase_url.rstrip('/')}/auth/v1/.well-known/jwks.json" if supabase_url else None
+    current_user = make_current_user(dsn, jwt_secret, jwks_url)
     app = create_app(None, current_user, pack, ledger=PgLedger(dsn))
 
     def repository(user: CurrentUser = Depends(current_user)) -> PgRepository:  # noqa: B008

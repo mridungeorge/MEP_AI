@@ -147,3 +147,38 @@ export interface RunRulesResponse {
 /** Edit payloads. Provenance is not sendable: the server forces 'default' on any edit. */
 export type SpaceInput = Partial<Omit<SpaceRow, "id" | "provenance">>;
 export type SystemInputInput = Partial<Omit<SystemInputRow, "id" | "provenance">>;
+
+/** GET /me: the role and firm are the database's, not the token's. */
+export interface Me {
+  user_id: string;
+  role: string;
+  firm_id: string;
+  firm_name: string | null;
+}
+
+/** GET /revisions: the revisions of the signed-in user's firm. */
+export interface RevisionSummary {
+  id: string;
+  project_id: string;
+  address: string;
+  state: string;
+  ncc_edition: string;
+  architect_rev: string;
+  status: string;
+  frozen: boolean;
+  parent_revision_id: string | null;
+}
+
+/** POST /revisions/{id}/uploads */
+export interface UploadResponse {
+  kind: "ifc" | "dxf";
+  name: string;
+  sha256: string;
+  bytes: number;
+  storage_path: string;
+  ingest_run: string;
+  spaces: number;
+  extractions: number;
+  health: IngestHealth | null;
+  problems: string[];
+}

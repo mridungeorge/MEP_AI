@@ -4,11 +4,13 @@ import { ApiError, api } from "@/lib/api";
 import { applyEdit, canConfirm, canRun, unconfirmedRefs, withEtags } from "@/lib/gate1";
 import type { Gate1State, Report, RowKind, RowRef, SpaceInput } from "@/lib/types";
 import { HealthPanel } from "./HealthPanel";
+import { PartAssignmentPanel } from "./PartAssignmentPanel";
 import { PartsEditor } from "./PartsEditor";
 import { ProjectFactsPanel } from "./ProjectFactsPanel";
 import { RunReport } from "./RunReport";
 import { SchedulePanel } from "./SchedulePanel";
 import { ManualTraceForm, SpaceTable } from "./SpaceTable";
+import { UploadPanel } from "./UploadPanel";
 
 /** Shows API refusals verbatim: code (if any) then message. */
 function refusal(e: unknown): string {
@@ -81,6 +83,7 @@ export function Gate1Screen({ revisionId }: { revisionId: string }) {
   return (
     <main>
       <h1>Gate 1: confirm inputs</h1>
+      <UploadPanel revisionId={revisionId} onUploaded={reload} />
       <HealthPanel health={state.health} />
       {state.project && (
         <ProjectFactsPanel project={state.project} selected={sel.project.has(state.project.id)}
@@ -104,6 +107,11 @@ export function Gate1Screen({ revisionId }: { revisionId: string }) {
         templateUrl={api.templateUrl(state.ncc_edition)}
         onAdd={async (i) => { await api.addInput(revisionId, i); await reload(); }}
         onImport={async (f) => { await api.importSchedule(revisionId, f); await reload(); }}
+      />
+      <PartAssignmentPanel
+        parts={state.parts}
+        inputs={state.inputs}
+        onAssign={async (tag, part) => { await guard(async () => { await api.assignPart(revisionId, tag, part); await reload(); }); }}
       />
       <section aria-label="Confirm">
         <button type="button"

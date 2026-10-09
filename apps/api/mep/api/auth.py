@@ -1,7 +1,13 @@
-"""Authentication: a Supabase-style HS256 access token names the user; the firm and role come from `app_user`.
+"""Authentication: a Supabase access token names the user; the firm and role come from `app_user`.
 
-Nothing in the token body other than `sub` (and `exp`) is trusted: a client-editable `role` or `firm_id` claim is
-ignored, so a token cannot grant a role. Unknown users are refused. Used by the Postgres-backed app (mep.api.server).
+Two kinds of token are accepted, each checked ONLY against its own key material (the algorithm is read from the token header,
+then enforced as the single allowed algorithm, so an HS256 token can never be verified with a public key):
+
+* HS256, signed with the project's JWT secret (`MEP_JWT_SECRET`): tests, seeds and legacy projects;
+* ES256 / RS256, signed by Supabase Auth's signing key, verified against its published JWKS (`<supabase>/auth/v1/.well-known/jwks.json`).
+
+Nothing in the token body other than `sub` (and `exp`, `aud`) is trusted: a client-editable `role` or `firm_id` claim is ignored, so
+a token cannot grant a role. Unknown users are refused. Used by the Postgres-backed app (mep.api.server).
 """
 import uuid
 from collections.abc import Callable
@@ -10,29 +16,44 @@ from typing import Annotated, Any
 import jwt
 import psycopg
 from fastapi import Header, HTTPException
+from jwt import PyJWKClient
 
 from mep.api.schedule import CurrentUser
 
 AUDIENCE = "authenticated"
 MIN_SECRET_BYTES = 32
+ASYMMETRIC = ("ES256", "RS256")
 
 
 def _unauthenticated(message: str) -> HTTPException:
     return HTTPException(status_code=401, detail={"code": "unauthenticated", "message": message})
 
 
-def make_current_user(dsn: str, jwt_secret: str) -> Callable[..., CurrentUser]:
+def make_current_user(dsn: str, jwt_secret: str, jwks_url: str | None = None) -> Callable[..., CurrentUser]:
     if len(jwt_secret.encode()) < MIN_SECRET_BYTES:
         raise ValueError("the JWT secret must be at least 32 bytes")
+    jwks = PyJWKClient(jwks_url, cache_keys=True, lifespan=600, timeout=5) if jwks_url else None
+
+    def decode(token: str) -> dict[str, Any]:
+        alg = jwt.get_unverified_header(token).get("alg")
+        options: Any = {"require": ["exp", "sub"]}
+        if alg == "HS256":
+            return jwt.decode(token, jwt_secret, algorithms=["HS256"], audience=AUDIENCE, options=options)
+        if alg in ASYMMETRIC and jwks is not None:
+            try:
+                key = jwks.get_signing_key_from_jwt(token).key
+            except jwt.PyJWKClientConnectionError:
+                raise HTTPException(status_code=503, detail={"code": "auth_unavailable",
+                                                             "message": "the sign-in service's keys could not be fetched"}) from None
+            return jwt.decode(token, key, algorithms=[alg], audience=AUDIENCE, options=options)
+        raise jwt.InvalidAlgorithmError("unsupported token algorithm")
 
     def current_user(authorization: Annotated[str | None, Header()] = None) -> CurrentUser:
         scheme, _, token = (authorization or "").partition(" ")
         if scheme.lower() != "bearer" or not token.strip():
             raise _unauthenticated("a bearer token is required")
         try:
-            claims: dict[str, Any] = jwt.decode(
-                token.strip(), jwt_secret, algorithms=["HS256"], audience=AUDIENCE,
-                options={"require": ["exp", "sub"]})
+            claims = decode(token.strip())
             user_id = uuid.UUID(str(claims["sub"]))
         except (jwt.PyJWTError, ValueError):
             raise _unauthenticated("the token is invalid or expired") from None
@@ -46,7 +67,7 @@ def make_current_user(dsn: str, jwt_secret: str) -> Callable[..., CurrentUser]:
 
 
 def mint_token(jwt_secret: str, user_id: uuid.UUID | str, *, ttl_seconds: int = 3600) -> str:
-    """Test and seed helper: sign an access token the way the local Supabase does."""
+    """Test and seed helper: sign an access token the way the local Supabase's legacy secret would."""
     import time
     now = int(time.time())
     return jwt.encode({"sub": str(user_id), "aud": AUDIENCE, "role": "authenticated", "iat": now,

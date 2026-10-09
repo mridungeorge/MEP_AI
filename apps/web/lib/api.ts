@@ -1,21 +1,16 @@
 /** Typed API client. Every call goes through apiFetch. */
+import { supabase } from "./supabase";
 import type {
   ApiErrorBody, BuildingPart, ConfirmResponse, Gate1State, ImportResponse, RowRef,
-  RunRulesResponse, SpaceInput, SpaceRow, SystemInputInput, SystemInputRow,
+  Me, RevisionSummary, RunRulesResponse, SpaceInput, SpaceRow, SystemInputInput, SystemInputRow, UploadResponse,
 } from "./types";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
-/** Key under which the signed-in session's access token is kept (the sign-in screen is a later sprint). */
-export const TOKEN_KEY = "mep_access_token";
-
-/** The access token the API verifies. The role and firm are looked up server-side; nothing is read from the token here. */
-export function getToken(): string | null {
-  try {
-    return typeof window === "undefined" ? null : window.localStorage.getItem(TOKEN_KEY);
-  } catch {
-    return null; // storage blocked: the API will answer 401 and the screen shows it
-  }
+/** The access token of the signed-in session (the API verifies it and looks the role up itself; nothing is read from it here). */
+export async function getToken(): Promise<string | null> {
+  const { data } = await supabase().auth.getSession();
+  return data.session?.access_token ?? null;
 }
 
 /** Error carrying the API's code and message verbatim. */
@@ -27,7 +22,7 @@ export class ApiError extends Error {
 
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
-  const token = getToken();
+  const token = await getToken();
   if (token) headers.set("Authorization", `Bearer ${token}`);
   if (init.body && !(init.body instanceof FormData) && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
@@ -54,6 +49,15 @@ const rev = (id: string) => `/revisions/${encodeURIComponent(id)}`;
 const json = (method: string, body: unknown): RequestInit => ({ method, body: JSON.stringify(body) });
 
 export const api = {
+  me: () => apiFetch<Me>("/me"),
+  revisions: () => apiFetch<RevisionSummary[]>("/revisions"),
+  upload: (r: string, file: File) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return apiFetch<UploadResponse>(`${rev(r)}/uploads`, { method: "POST", body: fd });
+  },
+  assignPart: (r: string, tag: string, part: number) =>
+    apiFetch<SystemInputRow>(`${rev(r)}/gate1/systems/${encodeURIComponent(tag)}/part`, json("PUT", { part })),
   getGate1: (r: string) => apiFetch<Gate1State>(`${rev(r)}/gate1`),
   /** Replaces all building parts. */
   putParts: (r: string, parts: Omit<BuildingPart, "id">[]) =>

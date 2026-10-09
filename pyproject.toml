@@ -3,7 +3,7 @@ name = "mep-copilot"
 version = "0.0.0"
 requires-python = ">=3.12"
 dependencies = ["pint>=0.24", "pyyaml>=6", "jsonschema>=4.21", "pydantic>=2", "fastapi>=0.110", "reportlab>=4",
-                "ifcopenshell>=0.8", "ezdxf>=1.3", "openpyxl>=3.1", "python-multipart>=0.0.9", "psycopg[binary]>=3.2", "pyjwt>=2.8",
+                "ifcopenshell>=0.8", "ezdxf>=1.3", "openpyxl>=3.1", "python-multipart>=0.0.9", "psycopg[binary]>=3.2", "pyjwt[crypto]>=2.8",
                 "uvicorn>=0.29", "httpx>=0.27"]
 
 [dependency-groups]
