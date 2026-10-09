@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Block commit messages that claim a release while there are zero real golden projects.
+set -euo pipefail
+root="$(git rev-parse --show-toplevel)"
+python "$root/scripts/release_gate.py" --message "$(cat "$1")"

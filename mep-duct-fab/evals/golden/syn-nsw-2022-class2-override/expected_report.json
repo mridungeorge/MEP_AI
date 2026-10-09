@@ -1,0 +1,102 @@
+{
+  "banner": "DRAFT RULES: NOT ENGINEER-APPROVED",
+  "report_version": 1,
+  "engine": {
+    "name": "mep-engine",
+    "version": "0.1.0"
+  },
+  "draft_rules": [
+    "NCC2022-J6D3-deadband"
+  ],
+  "unassigned_rules": [
+    "NCC2022-J6D3-ac-fan-vsd",
+    "NCC2022-J6D3-ac-time-switch",
+    "NCC2022-J6D3-econ-cycle",
+    "NCC2022-J6D4-exhaust-motor-stop",
+    "NCC2022-J6D4-mv-fan-vsd",
+    "NCC2022-J6D4-mv-time-switch",
+    "NCC2022-J6D6-duct-insulation",
+    "NCC2022-J6D7-duct-sealing",
+    "NCC2022-J6D9-pipe-insulation",
+    "NCC2022-NSW-J6D10-elec-heating-limit"
+  ],
+  "project": {
+    "state": "NSW",
+    "ncc_edition": "NCC2022",
+    "climate_zone": 5,
+    "building_class": "2",
+    "approval_date": "2026-10-06"
+  },
+  "jurisdiction": {
+    "decision": "overridden",
+    "warnings": [
+      "NSW: NCC2022 does not apply to class 2: Class 2 and Class 4 parts in NSW follow the BASIX certificate version, not a fixed NCC 2022 date"
+    ],
+    "refused_by": [
+      "applicability"
+    ],
+    "notes": [],
+    "override": {
+      "user_id": "approver-golden",
+      "role": "approver",
+      "reason": "BASIX certificate version confirmed with the certifier (golden test case)"
+    }
+  },
+  "rule_pack": [
+    {
+      "id": "NCC2022-J6D3-deadband",
+      "status": "draft"
+    }
+  ],
+  "summary": {
+    "PASS": 1,
+    "FAIL": 0,
+    "NEEDS_JUDGEMENT": 0,
+    "NOT_APPLICABLE": 0
+  },
+  "results": [
+    {
+      "subject_id": "ahu-1",
+      "rule_id": "NCC2022-J6D3-deadband",
+      "outcome": "PASS",
+      "causes": [],
+      "citation": {
+        "rule_id": "NCC2022-J6D3-deadband",
+        "document": "NCC 2022 Volume One",
+        "edition": "NCC2022",
+        "clause": "J6D3(1)(h)",
+        "url": "https://ncc.abcb.gov.au/editions/ncc-2022/adopted/volume-one/j-energy-efficiency/part-j6-air-conditioning-and-ventilation",
+        "rule_status": "draft"
+      },
+      "inputs_used": {
+        "system_type": {
+          "value": "air_conditioning",
+          "unit": null,
+          "provenance": "engineer_confirmed"
+        },
+        "electricity_network_substation": {
+          "value": false,
+          "unit": null,
+          "provenance": "engineer_confirmed"
+        },
+        "specialised_application_needs_smaller_deadband": {
+          "value": false,
+          "unit": null,
+          "provenance": "engineer_confirmed"
+        },
+        "control_deadband": {
+          "value": 2.5,
+          "unit": "K",
+          "provenance": "engineer_confirmed"
+        }
+      },
+      "near_miss": {
+        "fraction": 0.05,
+        "is_near_miss": false,
+        "flips": [],
+        "not_evaluated": []
+      },
+      "fix_hypotheses": []
+    }
+  ]
+}

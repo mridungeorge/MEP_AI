@@ -1,0 +1,11 @@
+description: "Synthetic QLD project on NCC 2022. The commercial Section J start is unverified, so the run is refused (not pilot data)"
+synthetic: true
+project: {state: QLD, ncc_edition: NCC2022, climate_zone: 2, building_class: "5", approval_date: "2026-10-06"}
+subjects:
+  - id: ahu-1
+    rules: [NCC2022-J6D3-deadband]
+    inputs:
+      system_type: {value: air_conditioning}
+      control_deadband: {value: 3, unit: K}
+      specialised_application_needs_smaller_deadband: {value: false}
+      electricity_network_substation: {value: false}

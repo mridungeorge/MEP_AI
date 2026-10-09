@@ -1,0 +1,259 @@
+id: NCC2025-NSW-J6D4-time-switch-mv
+source:
+  document: NCC 2025 Volume One (NSW variation)
+  edition: '2025'
+  clause: J6D4(4), J6D4(5), NSW J6D4(6), J6D4(7)
+  url: https://ncc.abcb.gov.au/editions/ncc-2025/adopted/volume-one/j-energy-efficiency/part-j6-air-conditioning-and-ventilation
+applies_when:
+  edition: NCC2025
+  state:
+  - NSW
+  building_class:
+  - '2'
+  - '3'
+  - '4'
+  - '5'
+  - '6'
+  - 7a
+  - 7b
+  - '8'
+  - 9a
+  - 9b
+  - 9c
+  system_type: mechanical_ventilation
+  exempt_when:
+  - serves_only_one_sou_class_3_or_9c == True
+  - building_needs_24h_mv_occupancy == True
+  - is_carpark_exhaust == True
+  - required_24_7_contaminant_or_pressurisation == True
+  - is_electricity_substation == True
+inputs:
+- name: mv_airflow
+  unit: L/s
+  type: number
+  provenance: engineer_confirmed
+- name: time_switch_provided
+  type: bool
+  provenance: engineer_confirmed
+- name: time_switch_programmable_times_and_days
+  type: bool
+  provenance: engineer_confirmed
+- name: time_switch_holidays_1yr_ahead
+  type: bool
+  provenance: engineer_confirmed
+- name: time_switch_override_demand_or_manual
+  type: bool
+  provenance: engineer_confirmed
+- name: time_switch_override_resume_period
+  unit: h
+  type: number
+  provenance: engineer_confirmed
+- name: serves_only_one_sou_class_3_or_9c
+  type: bool
+  provenance: engineer_confirmed
+- name: building_needs_24h_mv_occupancy
+  type: bool
+  provenance: engineer_confirmed
+- name: is_carpark_exhaust
+  type: bool
+  provenance: engineer_confirmed
+- name: required_24_7_contaminant_or_pressurisation
+  type: bool
+  provenance: engineer_confirmed
+- name: system_type
+  type: enum
+  provenance: engineer_confirmed
+  values:
+  - air_conditioning
+  - air_conditioning_heating
+  - mechanical_ventilation
+  - exhaust
+- name: is_electricity_substation
+  type: bool
+  provenance: engineer_confirmed
+- name: building_class
+  type: string
+  provenance: engineer_confirmed
+  values:
+  - '2'
+  - '3'
+  - '4'
+  - '5'
+  - '6'
+  - 7a
+  - 7b
+  - '8'
+  - 9a
+  - 9b
+  - 9c
+threshold:
+  values:
+    mv_trigger:
+      value: 1000
+      unit: L/s
+    max_override_resume:
+      value: 2
+      unit: h
+check: mv_airflow <= threshold('mv_trigger') or (time_switch_provided == True and time_switch_programmable_times_and_days == True and time_switch_holidays_1yr_ahead == True and time_switch_override_demand_or_manual == True and time_switch_override_resume_period <= threshold('max_override_resume'))
+outcomes:
+  'true': PASS
+  'false': FAIL
+  missing_input: NEEDS_JUDGEMENT
+near_miss: 0.05
+fix_hypotheses:
+- 'Hypothesis: verify. Provide a 7-day programmable time switch (or BMS schedule) with public-holiday programming at least 1 year ahead.'
+- 'Hypothesis: verify. Add a demand-operated or manual override that reverts to normal operation within 2 hours.'
+depends_on:
+- systems.mv_airflow
+- systems.time_switch_provided
+- systems.time_switch_programmable_times_and_days
+- systems.time_switch_holidays_1yr_ahead
+- systems.time_switch_override_demand_or_manual
+- systems.time_switch_override_resume_period
+- systems.serves_only_one_sou_class_3_or_9c
+- project.building_needs_24h_mv_occupancy
+- systems.is_carpark_exhaust
+- systems.required_24_7_contaminant_or_pressurisation
+- systems.system_type
+- project.is_electricity_substation
+- project.building_class
+tests:
+- name: compliant_time_switch
+  inputs:
+    mv_airflow: 1500
+    time_switch_provided: true
+    time_switch_programmable_times_and_days: true
+    time_switch_holidays_1yr_ahead: true
+    time_switch_override_demand_or_manual: true
+    time_switch_override_resume_period: 1
+    serves_only_one_sou_class_3_or_9c: false
+    building_needs_24h_mv_occupancy: false
+    is_carpark_exhaust: false
+    required_24_7_contaminant_or_pressurisation: false
+    system_type: mechanical_ventilation
+    is_electricity_substation: false
+    building_class: '5'
+  expect: PASS
+- name: class_4_part_no_switch_fails_in_nsw
+  inputs:
+    mv_airflow: 1500
+    time_switch_provided: false
+    time_switch_programmable_times_and_days: false
+    time_switch_holidays_1yr_ahead: false
+    time_switch_override_demand_or_manual: false
+    time_switch_override_resume_period: 0
+    serves_only_one_sou_class_3_or_9c: false
+    building_needs_24h_mv_occupancy: false
+    is_carpark_exhaust: false
+    required_24_7_contaminant_or_pressurisation: false
+    system_type: mechanical_ventilation
+    is_electricity_substation: false
+    building_class: '5'
+  expect: FAIL
+- name: boundary_1000_no_switch
+  inputs:
+    mv_airflow: 1000
+    time_switch_provided: false
+    time_switch_programmable_times_and_days: false
+    time_switch_holidays_1yr_ahead: false
+    time_switch_override_demand_or_manual: false
+    time_switch_override_resume_period: 0
+    serves_only_one_sou_class_3_or_9c: false
+    building_needs_24h_mv_occupancy: false
+    is_carpark_exhaust: false
+    required_24_7_contaminant_or_pressurisation: false
+    system_type: mechanical_ventilation
+    is_electricity_substation: false
+    building_class: '5'
+  expect: PASS
+- name: carpark_exhaust_exempt
+  inputs:
+    mv_airflow: 20000
+    time_switch_provided: false
+    serves_only_one_sou_class_3_or_9c: false
+    building_needs_24h_mv_occupancy: false
+    is_carpark_exhaust: true
+    required_24_7_contaminant_or_pressurisation: false
+    system_type: mechanical_ventilation
+    is_electricity_substation: false
+    building_class: '5'
+  expect: NOT_APPLICABLE
+- name: missing_exemption_flag
+  inputs:
+    mv_airflow: 1500
+    time_switch_provided: false
+    serves_only_one_sou_class_3_or_9c: false
+    building_needs_24h_mv_occupancy: false
+    required_24_7_contaminant_or_pressurisation: false
+    system_type: mechanical_ventilation
+    is_electricity_substation: false
+    building_class: '5'
+  expect: NEEDS_JUDGEMENT
+- name: exempt_serves_only_one_sou_class_3_or_9c_true
+  inputs:
+    mv_airflow: 1500
+    time_switch_provided: true
+    time_switch_programmable_times_and_days: true
+    time_switch_holidays_1yr_ahead: true
+    time_switch_override_demand_or_manual: true
+    time_switch_override_resume_period: 1
+    serves_only_one_sou_class_3_or_9c: true
+    building_needs_24h_mv_occupancy: false
+    is_carpark_exhaust: false
+    required_24_7_contaminant_or_pressurisation: false
+    system_type: mechanical_ventilation
+    is_electricity_substation: false
+    building_class: '5'
+  expect: NOT_APPLICABLE
+- name: exempt_building_needs_24h_mv_occupancy_true
+  inputs:
+    mv_airflow: 1500
+    time_switch_provided: true
+    time_switch_programmable_times_and_days: true
+    time_switch_holidays_1yr_ahead: true
+    time_switch_override_demand_or_manual: true
+    time_switch_override_resume_period: 1
+    serves_only_one_sou_class_3_or_9c: false
+    building_needs_24h_mv_occupancy: true
+    is_carpark_exhaust: false
+    required_24_7_contaminant_or_pressurisation: false
+    system_type: mechanical_ventilation
+    is_electricity_substation: false
+    building_class: '5'
+  expect: NOT_APPLICABLE
+- name: exempt_required_24_7_contaminant_or_pressurisation_true
+  inputs:
+    mv_airflow: 1500
+    time_switch_provided: true
+    time_switch_programmable_times_and_days: true
+    time_switch_holidays_1yr_ahead: true
+    time_switch_override_demand_or_manual: true
+    time_switch_override_resume_period: 1
+    serves_only_one_sou_class_3_or_9c: false
+    building_needs_24h_mv_occupancy: false
+    is_carpark_exhaust: false
+    required_24_7_contaminant_or_pressurisation: true
+    system_type: mechanical_ventilation
+    is_electricity_substation: false
+    building_class: '5'
+  expect: NOT_APPLICABLE
+- name: exempt_is_electricity_substation_true
+  inputs:
+    mv_airflow: 1500
+    time_switch_provided: true
+    time_switch_programmable_times_and_days: true
+    time_switch_holidays_1yr_ahead: true
+    time_switch_override_demand_or_manual: true
+    time_switch_override_resume_period: 1
+    serves_only_one_sou_class_3_or_9c: false
+    building_needs_24h_mv_occupancy: false
+    is_carpark_exhaust: false
+    required_24_7_contaminant_or_pressurisation: false
+    system_type: mechanical_ventilation
+    is_electricity_substation: true
+    building_class: '5'
+  expect: NOT_APPLICABLE
+notes: NSW state variation of the J6D4 MV time switch requirement, encoded from the NSW J6D4(6) replacement on the ABCB NCC 2025 page. Same logic as NCC2025-J6D4-time-switch-mv except the Class 4 part exemption is absent. J6D4(7) exemptions (24 h occupancy, carpark exhaust, 24/7 contaminant or pressurisation) are not varied for NSW. Engineer to confirm NSW adoption of NCC 2025 Section J.
+reviewed_by: null
+reviewed_on: null
+status: draft

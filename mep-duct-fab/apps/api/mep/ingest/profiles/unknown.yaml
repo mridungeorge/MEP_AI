@@ -1,0 +1,15 @@
+id: unknown
+status: unverified
+verified_against: []
+match:
+  originating_system: []        # fallback when no other profile matches
+area:
+  quantities: [[Qto_SpaceBaseQuantities, NetFloorArea], [Qto_SpaceBaseQuantities, GrossFloorArea]]
+  geometry_fallback: true
+use:
+  properties: [[Pset_SpaceCommon, OccupancyType], [Pset_SpaceCommon, Category]]
+  object_type_fallback: true
+ceiling_void:
+  properties: []
+known_issues:
+  - The exporting program was not recognised; every value should be checked at Gate 1.

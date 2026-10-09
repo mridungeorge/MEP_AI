@@ -1,0 +1,32 @@
+# Applicability: which building classes a rule pack can be applied to, separate from WHICH NCC EDITION is in force.
+#
+# rules/adoption.yaml decides the NCC edition only (state + approval date). This file decides, for a given
+# state, edition and building class (or part), whether the rule pack for that edition applies at all. The two
+# checks are independent: both are evaluated, either can refuse a run, and an approver can override either with a
+# reason that is written to the ledger (docs/engine-conventions.md section 6).
+#
+# Official sources only (CLAUDE.md rule 6). Add a carve-out only when an official page states it.
+as_of: "2026-10-07"
+
+# The one list of building classes the engine accepts. Rule data cannot widen it; CI checks every rule's
+# building_class values and every carve-out class against it.
+building_classes: ["2", "3", "4", "5", "6", "7a", "7b", "8", "9a", "9b", "9c"]
+
+# effect: refuse  -> the rule pack for this edition does not apply to these classes in this state
+carve_outs:
+  - id: NSW-NCC2022-class-2-4
+    state: NSW
+    edition: NCC2022
+    classes: ["2", "4"]
+    effect: refuse
+    reason: "Class 2 and Class 4 parts in NSW follow the BASIX certificate version, not a fixed NCC 2022 date"
+    source: https://www.planning.nsw.gov.au/sites/default/files/2023-09/guidance-material-national-construction-code-and-basix.pdf
+    status: regulator_verified
+  - id: TAS-NCC2022-class-2-4
+    state: TAS
+    edition: NCC2022
+    classes: ["2", "4"]
+    effect: refuse
+    reason: "Class 2 and Class 4 parts in Tasmania use NCC 2019 Amendment 1 Section J (ABCB note), not NCC 2022"
+    source: https://www.abcb.gov.au/ncc-2022-state-and-territory-adoption-dates
+    status: abcb_listed

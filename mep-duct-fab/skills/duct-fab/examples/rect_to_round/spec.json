@@ -1,0 +1,11 @@
+{
+  "spec_version": "1",
+  "fitting": "rect_to_round",
+  "mark": "T-01",
+  "units": "mm",
+  "sheet_thickness_mm": 1.0,
+  "material": "GALV",
+  "seam": { "type": "pittsburgh", "allowance_mm": 25 },
+  "connection": { "type": "tdc", "allowance_mm": 30 },
+  "geometry": { "width_mm": 600, "height_mm": 400, "diameter_mm": 300, "length_mm": 450 }
+}

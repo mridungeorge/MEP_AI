@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Tripwire: a commit that changes rule sign-off or check fields (or sets status: approved) must come from the human
+# engineer (MEP_HUMAN_SIGNOFF="Name RPEQ 12345" in their own shell). See scripts/check_signoff_changes.py.
+set -euo pipefail
+root="$(git rev-parse --show-toplevel)"
+python "$root/scripts/check_signoff_changes.py"

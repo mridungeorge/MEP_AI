@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mep-copilot.local/skills/duct-fab/spec_card.json",
+  "title": "duct-fab spec card",
+  "description": "Inputs for one sheet-metal duct fitting. All lengths are millimetres. Sheet thickness, seam allowance and connection allowance are engineer inputs: this card holds no gauge or allowance tables.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["spec_version", "fitting", "mark", "units", "sheet_thickness_mm", "seam", "connection", "geometry"],
+  "properties": {
+    "spec_version": { "const": "1" },
+    "fitting": {
+      "enum": ["rect_to_round", "rect_reducer", "rect_offset"],
+      "description": "rect_to_round: W x H to diameter D. rect_reducer: W1 x H1 to W2 x H2. rect_offset: W x H shifted by an X/Y offset."
+    },
+    "mark": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$",
+      "description": "Duct mark. Used as the output file stem and printed in the title block."
+    },
+    "units": { "const": "mm" },
+    "sheet_thickness_mm": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "maximum": 10,
+      "description": "Engineer input (no AS 4254 gauge table is encoded). Recorded in the manifest and title block; not used as a bend deduction in v1."
+    },
+    "material": {
+      "type": "string",
+      "maxLength": 40,
+      "description": "Free-text label for the title block, e.g. a firm material code. Optional."
+    },
+    "seam": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "allowance_mm"],
+      "properties": {
+        "type": { "enum": ["pittsburgh", "snap_lock", "grooved", "welded", "other"], "description": "Label only." },
+        "allowance_mm": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 200,
+          "description": "Engineer input. Extra material added beyond the net seam edge (one lap tab on the end of the pattern)."
+        }
+      }
+    },
+    "connection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "allowance_mm"],
+      "properties": {
+        "type": { "enum": ["tdc", "slip_and_drive", "angle_flange", "plain", "other"], "description": "Label only." },
+        "allowance_mm": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 200,
+          "description": "Engineer input. Extra material added beyond the net inlet edge and beyond the net outlet edge."
+        }
+      }
+    },
+    "geometry": { "type": "object" },
+    "notes": { "type": "string", "maxLength": 200 }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "fitting": { "const": "rect_to_round" } }, "required": ["fitting"] },
+      "then": { "properties": { "geometry": { "$ref": "#/$defs/rect_to_round" } } }
+    },
+    {
+      "if": { "properties": { "fitting": { "const": "rect_reducer" } }, "required": ["fitting"] },
+      "then": { "properties": { "geometry": { "$ref": "#/$defs/rect_reducer" } } }
+    },
+    {
+      "if": { "properties": { "fitting": { "const": "rect_offset" } }, "required": ["fitting"] },
+      "then": { "properties": { "geometry": { "$ref": "#/$defs/rect_offset" } } }
+    }
+  ],
+  "$defs": {
+    "dim": { "type": "number", "exclusiveMinimum": 0, "maximum": 10000 },
+    "offset": { "type": "number", "minimum": -5000, "maximum": 5000 },
+    "rect_to_round": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["width_mm", "height_mm", "diameter_mm", "length_mm"],
+      "properties": {
+        "width_mm": { "$ref": "#/$defs/dim", "description": "Rectangular end, X direction." },
+        "height_mm": { "$ref": "#/$defs/dim", "description": "Rectangular end, Y direction." },
+        "diameter_mm": { "$ref": "#/$defs/dim", "description": "Round end diameter." },
+        "length_mm": { "$ref": "#/$defs/dim", "description": "Distance between the two end planes along Z." },
+        "offset_x_mm": { "$ref": "#/$defs/offset", "default": 0, "description": "Round end centre relative to the rectangular end centre." },
+        "offset_y_mm": { "$ref": "#/$defs/offset", "default": 0 },
+        "circle_segments": {
+          "type": "integer",
+          "minimum": 8,
+          "maximum": 64,
+          "multipleOf": 8,
+          "default": 16,
+          "description": "Number of chords the round end is divided into for the triangulation development."
+        }
+      }
+    },
+    "rect_reducer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["width_in_mm", "height_in_mm", "width_out_mm", "height_out_mm", "length_mm", "alignment"],
+      "properties": {
+        "width_in_mm": { "$ref": "#/$defs/dim" },
+        "height_in_mm": { "$ref": "#/$defs/dim" },
+        "width_out_mm": { "$ref": "#/$defs/dim" },
+        "height_out_mm": { "$ref": "#/$defs/dim" },
+        "length_mm": { "$ref": "#/$defs/dim" },
+        "alignment": {
+          "enum": ["concentric", "flat_bottom", "flat_top", "flat_left", "flat_right"],
+          "description": "concentric: centres aligned. flat_*: that side of the inlet and outlet is flush (a flat side)."
+        }
+      }
+    },
+    "rect_offset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["width_mm", "height_mm", "length_mm", "offset_x_mm", "offset_y_mm"],
+      "properties": {
+        "width_mm": { "$ref": "#/$defs/dim" },
+        "height_mm": { "$ref": "#/$defs/dim" },
+        "length_mm": { "$ref": "#/$defs/dim" },
+        "offset_x_mm": { "$ref": "#/$defs/offset", "description": "Outlet centre relative to inlet centre, X." },
+        "offset_y_mm": { "$ref": "#/$defs/offset", "description": "Outlet centre relative to inlet centre, Y." }
+      }
+    }
+  }
+}

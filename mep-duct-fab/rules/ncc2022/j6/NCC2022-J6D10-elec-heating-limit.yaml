@@ -1,0 +1,352 @@
+id: NCC2022-J6D10-elec-heating-limit
+source:
+  document: NCC 2022 Volume One
+  edition: '2022'
+  clause: J6D10(1), Table J6D10
+  url: https://ncc.abcb.gov.au/editions/ncc-2022/adopted/volume-one/j-energy-efficiency/part-j6-air-conditioning-and-ventilation
+applies_when:
+  edition: NCC2022
+  state:
+  - ACT
+  - QLD
+  - SA
+  - TAS
+  - VIC
+  - WA
+  building_class:
+  - '3'
+  - '5'
+  - '6'
+  - 7a
+  - 7b
+  - '8'
+  - 9a
+  - 9b
+  - 9c
+  system_type: air_conditioning_heating
+  exempt_when:
+  - electricity_network_substation == True
+  - serves_class_4_part == True
+  needs_judgement_when:
+  - is_j6d10_2_bathroom_heater == True
+inputs:
+- name: building_class
+  type: string
+  provenance: engineer_confirmed
+  values:
+  - '2'
+  - '3'
+  - '4'
+  - '5'
+  - '6'
+  - 7a
+  - 7b
+  - '8'
+  - 9a
+  - 9b
+  - 9c
+- name: serves_class_4_part
+  type: bool
+  provenance: engineer_confirmed
+- name: electricity_network_substation
+  type: bool
+  provenance: engineer_confirmed
+- name: is_j6d10_2_bathroom_heater
+  type: bool
+  provenance: engineer_confirmed
+- name: climate_zone
+  type: int
+  provenance: address_lookup_confirmed
+- name: electric_heating_capacity
+  unit: W
+  type: number
+  provenance: engineer_confirmed
+- name: conditioned_floor_area
+  unit: m^2
+  type: number
+  provenance: engineer_confirmed
+- name: reticulated_gas_at_boundary
+  type: bool
+  provenance: engineer_confirmed
+- name: annual_heating_energy_intensity
+  unit: kW*h/m^2
+  type: number
+  provenance: calculated
+- name: in_duct_heater_complies_reheat_limit
+  type: bool
+  provenance: engineer_confirmed
+- name: system_type
+  type: enum
+  provenance: engineer_confirmed
+  values:
+  - air_conditioning
+  - air_conditioning_heating
+  - mechanical_ventilation
+  - exhaust
+threshold:
+  table: J6D10
+  values:
+    cz1_density:
+      value: 10
+      unit: W/m^2
+    cz2_density:
+      value: 40
+      unit: W/m^2
+    density:
+      unit: W/m^2
+      values:
+        3:
+          le_500: 50
+          gt_500: 40
+        4:
+          le_500: 60
+          gt_500: 50
+        5:
+          le_500: 55
+          gt_500: 45
+        6:
+          le_500: 65
+          gt_500: 55
+        7:
+          le_500: 70
+          gt_500: 60
+    allowed_capacity_cz1:
+      formula: threshold('cz1_density') * conditioned_floor_area
+      unit: W
+    allowed_capacity_cz2:
+      formula: threshold('cz2_density') * conditioned_floor_area
+      unit: W
+    area_split:
+      value: 500
+      unit: m^2
+    annual_energy:
+      value: 15
+      unit: kW*h/m^2
+    allowed_capacity_le_500:
+      formula: threshold('density', climate_zone, 'le_500') * conditioned_floor_area
+      unit: W
+    allowed_capacity_gt_500:
+      formula: threshold('density', climate_zone, 'gt_500') * conditioned_floor_area
+      unit: W
+check: (climate_zone == 1 and electric_heating_capacity <= threshold('allowed_capacity_cz1')) or (climate_zone == 2 and electric_heating_capacity <= threshold('allowed_capacity_cz2')) or (climate_zone >= 3 and climate_zone <= 7 and reticulated_gas_at_boundary == False and ((conditioned_floor_area <= threshold('area_split') and electric_heating_capacity <= threshold('allowed_capacity_le_500')) or (conditioned_floor_area > threshold('area_split') and electric_heating_capacity <= threshold('allowed_capacity_gt_500')))) or (climate_zone <= 5 and annual_heating_energy_intensity <= threshold('annual_energy')) or in_duct_heater_complies_reheat_limit == True
+outcomes:
+  'true': PASS
+  'false': FAIL
+  missing_input: NEEDS_JUDGEMENT
+near_miss: 0.05
+fix_hypotheses:
+- 'Hypothesis: verify - replace electric resistance heating with heat pump, gas, solar or reclaimed-heat heating (J6D10(1)(a)-(d))'
+- 'Hypothesis: verify - reduce electric heating capacity to the J6D10 W/m2 allowance for this climate zone and floor area'
+- 'Hypothesis: verify - in climate zones 1-5, calculate annual heating energy to show the J6D10(1)(e)(ii) limit is met'
+depends_on:
+- project.building_class
+- systems.serves_class_4_part
+- project.electricity_network_substation
+- equipment.is_j6d10_2_bathroom_heater
+- project.climate_zone
+- systems.electric_heating_capacity
+- spaces.conditioned_floor_area
+- project.reticulated_gas_at_boundary
+- systems.annual_heating_energy_intensity
+- systems.in_duct_heater_complies_reheat_limit
+- systems.system_type
+tests:
+- name: cz6_no_gas_small_area_pass
+  inputs:
+    building_class: '5'
+    serves_class_4_part: false
+    electricity_network_substation: false
+    is_j6d10_2_bathroom_heater: false
+    climate_zone: 6
+    electric_heating_capacity: 30000
+    conditioned_floor_area: 500
+    reticulated_gas_at_boundary: false
+    annual_heating_energy_intensity: 40
+    in_duct_heater_complies_reheat_limit: false
+    system_type: air_conditioning_heating
+  expect: PASS
+- name: boundary_cz6_no_gas_exactly_65_w_per_m2
+  inputs:
+    building_class: '5'
+    serves_class_4_part: false
+    electricity_network_substation: false
+    is_j6d10_2_bathroom_heater: false
+    climate_zone: 6
+    electric_heating_capacity: 32500
+    conditioned_floor_area: 500
+    reticulated_gas_at_boundary: false
+    annual_heating_energy_intensity: 40
+    in_duct_heater_complies_reheat_limit: false
+    system_type: air_conditioning_heating
+  expect: PASS
+- name: cz6_no_gas_just_over_fail
+  inputs:
+    building_class: '5'
+    serves_class_4_part: false
+    electricity_network_substation: false
+    is_j6d10_2_bathroom_heater: false
+    climate_zone: 6
+    electric_heating_capacity: 32600
+    conditioned_floor_area: 500
+    reticulated_gas_at_boundary: false
+    annual_heating_energy_intensity: 40
+    in_duct_heater_complies_reheat_limit: false
+    system_type: air_conditioning_heating
+  expect: FAIL
+- name: cz6_no_gas_large_area_column
+  inputs:
+    building_class: '5'
+    serves_class_4_part: false
+    electricity_network_substation: false
+    is_j6d10_2_bathroom_heater: false
+    climate_zone: 6
+    electric_heating_capacity: 60000
+    conditioned_floor_area: 1000
+    reticulated_gas_at_boundary: false
+    annual_heating_energy_intensity: 40
+    in_duct_heater_complies_reheat_limit: false
+    system_type: air_conditioning_heating
+  expect: FAIL
+- name: cz6_gas_available_fail
+  inputs:
+    building_class: '5'
+    serves_class_4_part: false
+    electricity_network_substation: false
+    is_j6d10_2_bathroom_heater: false
+    climate_zone: 6
+    electric_heating_capacity: 5000
+    conditioned_floor_area: 500
+    reticulated_gas_at_boundary: true
+    annual_heating_energy_intensity: 40
+    in_duct_heater_complies_reheat_limit: false
+    system_type: air_conditioning_heating
+  expect: FAIL
+- name: cz2_40_w_per_m2_pass
+  inputs:
+    building_class: '5'
+    serves_class_4_part: false
+    electricity_network_substation: false
+    is_j6d10_2_bathroom_heater: false
+    climate_zone: 2
+    electric_heating_capacity: 4000
+    conditioned_floor_area: 100
+    reticulated_gas_at_boundary: true
+    annual_heating_energy_intensity: 40
+    in_duct_heater_complies_reheat_limit: false
+    system_type: air_conditioning_heating
+  expect: PASS
+- name: cz5_annual_energy_path_pass
+  inputs:
+    building_class: '5'
+    serves_class_4_part: false
+    electricity_network_substation: false
+    is_j6d10_2_bathroom_heater: false
+    climate_zone: 5
+    electric_heating_capacity: 20000
+    conditioned_floor_area: 200
+    reticulated_gas_at_boundary: true
+    annual_heating_energy_intensity: 15
+    in_duct_heater_complies_reheat_limit: false
+    system_type: air_conditioning_heating
+  expect: PASS
+- name: cz8_no_path_fail
+  inputs:
+    building_class: '5'
+    serves_class_4_part: false
+    electricity_network_substation: false
+    is_j6d10_2_bathroom_heater: false
+    climate_zone: 8
+    electric_heating_capacity: 5000
+    conditioned_floor_area: 500
+    reticulated_gas_at_boundary: false
+    annual_heating_energy_intensity: 5
+    in_duct_heater_complies_reheat_limit: false
+    system_type: air_conditioning_heating
+  expect: FAIL
+- name: in_duct_reheat_path_pass
+  inputs:
+    building_class: '5'
+    serves_class_4_part: false
+    electricity_network_substation: false
+    is_j6d10_2_bathroom_heater: false
+    climate_zone: 8
+    electric_heating_capacity: 50000
+    conditioned_floor_area: 500
+    reticulated_gas_at_boundary: true
+    annual_heating_energy_intensity: 50
+    in_duct_heater_complies_reheat_limit: true
+    system_type: air_conditioning_heating
+  expect: PASS
+- name: class_2_excluded
+  inputs:
+    building_class: '2'
+    serves_class_4_part: false
+    electricity_network_substation: false
+    is_j6d10_2_bathroom_heater: false
+    climate_zone: 6
+    electric_heating_capacity: 50000
+    conditioned_floor_area: 100
+    reticulated_gas_at_boundary: true
+    annual_heating_energy_intensity: 50
+    in_duct_heater_complies_reheat_limit: false
+    system_type: air_conditioning_heating
+  expect: NOT_APPLICABLE
+- name: class_4_part_excluded
+  inputs:
+    building_class: '6'
+    serves_class_4_part: true
+    electricity_network_substation: false
+    is_j6d10_2_bathroom_heater: false
+    climate_zone: 6
+    electric_heating_capacity: 50000
+    conditioned_floor_area: 100
+    reticulated_gas_at_boundary: true
+    annual_heating_energy_intensity: 50
+    in_duct_heater_complies_reheat_limit: false
+    system_type: air_conditioning_heating
+  expect: NOT_APPLICABLE
+- name: missing_annual_energy_cz5
+  inputs:
+    building_class: '5'
+    serves_class_4_part: false
+    electricity_network_substation: false
+    is_j6d10_2_bathroom_heater: false
+    climate_zone: 5
+    electric_heating_capacity: 50000
+    conditioned_floor_area: 500
+    reticulated_gas_at_boundary: true
+    in_duct_heater_complies_reheat_limit: false
+    system_type: air_conditioning_heating
+  expect: NEEDS_JUDGEMENT
+- name: exempt_electricity_network_substation_true
+  inputs:
+    building_class: '5'
+    serves_class_4_part: false
+    electricity_network_substation: true
+    is_j6d10_2_bathroom_heater: false
+    climate_zone: 6
+    electric_heating_capacity: 30000
+    conditioned_floor_area: 500
+    reticulated_gas_at_boundary: false
+    annual_heating_energy_intensity: 40
+    in_duct_heater_complies_reheat_limit: false
+    system_type: air_conditioning_heating
+  expect: NOT_APPLICABLE
+- name: needs_is_j6d10_2_bathroom_heater_true
+  inputs:
+    building_class: '5'
+    serves_class_4_part: false
+    electricity_network_substation: false
+    is_j6d10_2_bathroom_heater: true
+    climate_zone: 6
+    electric_heating_capacity: 30000
+    conditioned_floor_area: 500
+    reticulated_gas_at_boundary: false
+    annual_heating_energy_intensity: 40
+    in_duct_heater_complies_reheat_limit: false
+    system_type: air_conditioning_heating
+  expect: NEEDS_JUDGEMENT
+notes: 'Values typed from ABCB J6D10(1)(e) and Table J6D10. Table J6D10 has CZ3-7 columns only, applies only without reticulated gas at the boundary. (e)(ii) is CZ1-5 only. Check relies on short-circuit and/or. TAS: Class 2/4 Section J is BCA 2019 (excluded here anyway). NT has its own Part J6 variation, not reviewed.'
+reviewed_by: null
+reviewed_on: null
+status: draft

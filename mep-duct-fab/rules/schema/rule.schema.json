@@ -1,0 +1,370 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MEP Co-pilot rule",
+  "type": "object",
+  "required": [
+    "id",
+    "source",
+    "applies_when",
+    "inputs",
+    "check",
+    "outcomes",
+    "depends_on",
+    "tests",
+    "status"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^NCC(2022|2025)(-[A-Z]{2,3})?-[A-Z0-9]+-[a-z0-9-]+$|^AS[0-9.]+-[A-Za-z0-9.]+-[a-z0-9-]+$"
+    },
+    "source": {
+      "type": "object",
+      "required": [
+        "document",
+        "edition",
+        "clause",
+        "url"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "document": {
+          "type": "string"
+        },
+        "edition": {
+          "enum": [
+            "2022",
+            "2025"
+          ]
+        },
+        "clause": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      }
+    },
+    "applies_when": {
+      "type": "object",
+      "required": [
+        "edition",
+        "state"
+      ],
+      "properties": {
+        "edition": {
+          "enum": [
+            "NCC2022",
+            "NCC2025"
+          ]
+        },
+        "state": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "ALL",
+              "NSW",
+              "VIC",
+              "QLD",
+              "WA",
+              "SA",
+              "TAS",
+              "ACT",
+              "NT"
+            ]
+          }
+        },
+        "climate_zone": {
+          "type": "object"
+        },
+        "building_class": {
+          "type": "array"
+        }
+      }
+    },
+    "inputs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "provenance"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "number",
+              "int",
+              "bool",
+              "enum",
+              "string"
+            ]
+          },
+          "provenance": {
+            "enum": [
+              "engineer_confirmed",
+              "address_lookup_confirmed",
+              "calculated"
+            ]
+          },
+          "values": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string"
+            },
+            "description": "Closed domain for enum/string inputs; any other value gives NEEDS_JUDGEMENT"
+          }
+        }
+      }
+    },
+    "threshold": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Every number carries an explicit pint unit: a leaf {value, unit}, a group {unit, values} whose numbers share that unit, or a typed formula {formula, unit}. Values typed from the official source, or TODO_FROM_SOURCE.",
+      "properties": {
+        "table": {
+          "type": "string"
+        },
+        "values": {
+          "type": "object",
+          "additionalProperties": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/leaf"
+              },
+              {
+                "$ref": "#/$defs/formula"
+              },
+              {
+                "$ref": "#/$defs/group"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "check": {
+      "type": "string",
+      "minLength": 1
+    },
+    "outcomes": {
+      "type": "object",
+      "required": [
+        "true",
+        "false",
+        "missing_input"
+      ],
+      "properties": {
+        "true": {
+          "enum": [
+            "PASS",
+            "FAIL"
+          ]
+        },
+        "false": {
+          "enum": [
+            "PASS",
+            "FAIL"
+          ]
+        },
+        "missing_input": {
+          "const": "NEEDS_JUDGEMENT"
+        }
+      },
+      "additionalProperties": false
+    },
+    "near_miss": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 0.5
+    },
+    "fix_hypotheses": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "depends_on": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string"
+      }
+    },
+    "tests": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "inputs",
+          "expect"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "inputs": {
+            "type": "object"
+          },
+          "expect": {
+            "enum": [
+              "PASS",
+              "FAIL",
+              "NEEDS_JUDGEMENT",
+              "NOT_APPLICABLE"
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "notes": {
+      "type": "string",
+      "maxLength": 500
+    },
+    "reviewed_by": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "reviewed_on": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        }
+      ]
+    },
+    "status": {
+      "enum": [
+        "draft",
+        "approved",
+        "retired"
+      ]
+    },
+    "reviewer_registration_no": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Engineer's registration number: required to approve"
+    },
+    "checked_by": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Non-approving first-pass value check (who typed-checked the thresholds)"
+    },
+    "checked_on": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "leaf": {
+      "type": "object",
+      "required": [
+        "value",
+        "unit"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "const": "TODO_FROM_SOURCE"
+            }
+          ]
+        },
+        "unit": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "formula": {
+      "type": "object",
+      "required": [
+        "formula",
+        "unit"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "formula": {
+          "type": "string",
+          "minLength": 1
+        },
+        "unit": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "group": {
+      "type": "object",
+      "required": [
+        "unit",
+        "values"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "unit": {
+          "type": "string",
+          "minLength": 1
+        },
+        "values": {
+          "$ref": "#/$defs/body"
+        }
+      }
+    },
+    "body": {
+      "type": "object",
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "const": "TODO_FROM_SOURCE"
+          },
+          {
+            "$ref": "#/$defs/leaf"
+          },
+          {
+            "$ref": "#/$defs/group"
+          },
+          {
+            "$ref": "#/$defs/body"
+          }
+        ]
+      }
+    }
+  }
+}

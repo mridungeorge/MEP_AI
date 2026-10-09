@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Block pushing a non-sprint tag while there are zero real (non-synthetic) golden projects.
+# Enable with: git config core.hooksPath .githooks   (the devcontainer post-create script does this)
+set -euo pipefail
+root="$(git rev-parse --show-toplevel)"
+while read -r local_ref _local_sha _remote_ref _remote_sha; do
+  case "$local_ref" in
+    refs/tags/*) python "$root/scripts/release_gate.py" --tag "${local_ref#refs/tags/}" ;;
+  esac
+done

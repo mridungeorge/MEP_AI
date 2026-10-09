@@ -1,0 +1,409 @@
+{
+  "banner": "DRAFT RULES: NOT ENGINEER-APPROVED",
+  "report_version": 1,
+  "engine": {
+    "name": "mep-engine",
+    "version": "0.1.0"
+  },
+  "draft_rules": [
+    "NCC2025-J6D3-econ-cycle",
+    "NCC2025-J6D3-deadband",
+    "NCC2025-J6D7-duct-sealing"
+  ],
+  "unassigned_rules": [
+    "NCC2025-J6D10-elec-resistance-heat",
+    "NCC2025-J6D3-time-switch-ac",
+    "NCC2025-J6D4-exhaust-motor-stop",
+    "NCC2025-J6D4-time-switch-mv",
+    "NCC2025-J6D5-fan-vsd",
+    "NCC2025-J6D6-duct-insulation",
+    "NCC2025-J6D9-pipe-insulation"
+  ],
+  "project": {
+    "state": "VIC",
+    "ncc_edition": "NCC2025",
+    "climate_zone": 6,
+    "building_class": "5",
+    "approval_date": "2026-09-01"
+  },
+  "jurisdiction": {
+    "decision": "confirmed",
+    "warnings": [],
+    "refused_by": [],
+    "notes": [],
+    "override": null
+  },
+  "rule_pack": [
+    {
+      "id": "NCC2025-J6D3-econ-cycle",
+      "status": "draft"
+    },
+    {
+      "id": "NCC2025-J6D3-deadband",
+      "status": "draft"
+    },
+    {
+      "id": "NCC2025-J6D7-duct-sealing",
+      "status": "draft"
+    }
+  ],
+  "summary": {
+    "PASS": 2,
+    "FAIL": 2,
+    "NEEDS_JUDGEMENT": 1,
+    "NOT_APPLICABLE": 1
+  },
+  "results": [
+    {
+      "subject_id": "ahu-1",
+      "rule_id": "NCC2025-J6D3-econ-cycle",
+      "outcome": "FAIL",
+      "causes": [],
+      "citation": {
+        "rule_id": "NCC2025-J6D3-econ-cycle",
+        "document": "NCC 2025 Volume One",
+        "edition": "NCC2025",
+        "clause": "J6D3(1)(d), Table J6D3",
+        "url": "https://ncc.abcb.gov.au/editions/ncc-2025/adopted/volume-one/j-energy-efficiency/part-j6-air-conditioning-and-ventilation",
+        "rule_status": "draft"
+      },
+      "inputs_used": {
+        "building_class": {
+          "value": "5",
+          "unit": null,
+          "provenance": "engineer_confirmed"
+        },
+        "climate_zone": {
+          "value": 6,
+          "unit": null,
+          "provenance": "engineer_confirmed"
+        },
+        "system_type": {
+          "value": "air_conditioning",
+          "unit": null,
+          "provenance": "engineer_confirmed"
+        },
+        "is_electricity_substation": {
+          "value": false,
+          "unit": null,
+          "provenance": "engineer_confirmed"
+        },
+        "provides_required_mech_ventilation": {
+          "value": true,
+          "unit": null,
+          "provenance": "engineer_confirmed"
+        },
+        "dehumidification_control_needed": {
+          "value": false,
+          "unit": null,
+          "provenance": "engineer_confirmed"
+        },
+        "max_airside_component_airflow": {
+          "value": 1500,
+          "unit": "L/s",
+          "provenance": "engineer_confirmed"
+        },
+        "economy_cycle": {
+          "value": false,
+          "unit": null,
+          "provenance": "engineer_confirmed"
+        }
+      },
+      "near_miss": {
+        "fraction": 0.05,
+        "is_near_miss": false,
+        "flips": [],
+        "not_evaluated": []
+      },
+      "fix_hypotheses": [
+        "Hypothesis: verify. Add an outdoor air economy cycle to this air-conditioning system.",
+        "Hypothesis: verify. Confirm whether dehumidification control is genuinely needed for the space; if so the requirement does not apply."
+      ]
+    },
+    {
+      "subject_id": "ahu-1",
+      "rule_id": "NCC2025-J6D3-deadband",
+      "outcome": "PASS",
+      "causes": [],
+      "citation": {
+        "rule_id": "NCC2025-J6D3-deadband",
+        "document": "NCC 2025 Volume One",
+        "edition": "NCC2025",
+        "clause": "J6D3(1)(h)",
+        "url": "https://ncc.abcb.gov.au/editions/ncc-2025/adopted/volume-one/j-energy-efficiency/part-j6-air-conditioning-and-ventilation",
+        "rule_status": "draft"
+      },
+      "inputs_used": {
+        "building_class": {
+          "value": "5",
+          "unit": null,
+          "provenance": "engineer_confirmed"
+        },
+        "system_type": {
+          "value": "air_conditioning",
+          "unit": null,
+          "provenance": "engineer_confirmed"
+        },
+        "is_electricity_substation": {
+          "value": false,
+          "unit": null,
+          "provenance": "engineer_confirmed"
+        },
+        "specialised_application_smaller_range_claimed": {
+          "value": false,
+          "unit": null,
+          "provenance": "engineer_confirmed"
+        },
+        "control_deadband": {
+          "value": 2,
+          "unit": "K",
+          "provenance": "engineer_confirmed"
+        }
+      },
+      "near_miss": {
+        "fraction": 0.05,
+        "is_near_miss": true,
+        "flips": [
+          {
+            "input": "control_deadband",
+            "change": -0.05,
+            "becomes": "FAIL"
+          }
+        ],
+        "not_evaluated": []
+      },
+      "fix_hypotheses": []
+    },
+    {
+      "subject_id": "ahu-1",
+      "rule_id": "NCC2025-J6D7-duct-sealing",
+      "outcome": "FAIL",
+      "causes": [],
+      "citation": {
+        "rule_id": "NCC2025-J6D7-duct-sealing",
+        "document": "NCC 2025 Volume One",
+        "edition": "NCC2025",
+        "clause": "J6D7",
+        "url": "https://ncc.abcb.gov.au/editions/ncc-2025/adopted/volume-one/j-energy-efficiency/part-j6-air-conditioning-and-ventilation",
+        "rule_status": "draft"
+      },
+      "inputs_used": {
+        "building_class": {
+          "value": "5",
+          "unit": null,
+          "provenance": "engineer_confirmed"
+        },
+        "system_type": {
+          "value": "air_conditioning",
+          "unit": null,
+          "provenance": "engineer_confirmed"
+        },
+        "duct_in_only_or_last_room_served": {
+          "value": false,
+          "unit": null,
+          "provenance": "engineer_confirmed"
+        },
+        "is_electricity_substation": {
+          "value": false,
+          "unit": null,
+          "provenance": "engineer_confirmed"
+        },
+        "ac_system_airflow": {
+          "value": 3000,
+          "unit": "L/s",
+          "provenance": "engineer_confirmed"
+        },
+        "duct_sealed_to_as4254_for_static_pressure": {
+          "value": false,
+          "unit": null,
+          "provenance": "engineer_confirmed"
+        }
+      },
+      "near_miss": {
+        "fraction": 0.05,
+        "is_near_miss": true,
+        "flips": [
+          {
+            "input": "ac_system_airflow",
+            "change": -0.05,
+            "becomes": "PASS"
+          }
+        ],
+        "not_evaluated": []
+      },
+      "fix_hypotheses": [
+        "Hypothesis: verify. Specify duct sealing to the AS 4254.1 / AS 4254.2 class for the system static pressure and record it on the drawings."
+      ]
+    },
+    {
+      "subject_id": "ahu-2",
+      "rule_id": "NCC2025-J6D3-econ-cycle",
+      "outcome": "PASS",
+      "causes": [],
+      "citation": {
+        "rule_id": "NCC2025-J6D3-econ-cycle",
+        "document": "NCC 2025 Volume One",
+        "edition": "NCC2025",
+        "clause": "J6D3(1)(d), Table J6D3",
+        "url": "https://ncc.abcb.gov.au/editions/ncc-2025/adopted/volume-one/j-energy-efficiency/part-j6-air-conditioning-and-ventilation",
+        "rule_status": "draft"
+      },
+      "inputs_used": {
+        "building_class": {
+          "value": "5",
+          "unit": null,
+          "provenance": "engineer_confirmed"
+        },
+        "climate_zone": {
+          "value": 6,
+          "unit": null,
+          "provenance": "engineer_confirmed"
+        },
+        "system_type": {
+          "value": "air_conditioning",
+          "unit": null,
+          "provenance": "engineer_confirmed"
+        },
+        "is_electricity_substation": {
+          "value": false,
+          "unit": null,
+          "provenance": "engineer_confirmed"
+        },
+        "provides_required_mech_ventilation": {
+          "value": true,
+          "unit": null,
+          "provenance": "engineer_confirmed"
+        },
+        "dehumidification_control_needed": {
+          "value": false,
+          "unit": null,
+          "provenance": "engineer_confirmed"
+        },
+        "max_airside_component_airflow": {
+          "value": 1199,
+          "unit": "L/s",
+          "provenance": "engineer_confirmed"
+        }
+      },
+      "near_miss": {
+        "fraction": 0.05,
+        "is_near_miss": true,
+        "flips": [
+          {
+            "input": "max_airside_component_airflow",
+            "change": 0.05,
+            "becomes": "FAIL"
+          }
+        ],
+        "not_evaluated": []
+      },
+      "fix_hypotheses": []
+    },
+    {
+      "subject_id": "ahu-3",
+      "rule_id": "NCC2025-J6D3-econ-cycle",
+      "outcome": "NOT_APPLICABLE",
+      "causes": [
+        {
+          "kind": "exempt",
+          "detail": "dehumidification_control_needed == True"
+        }
+      ],
+      "citation": {
+        "rule_id": "NCC2025-J6D3-econ-cycle",
+        "document": "NCC 2025 Volume One",
+        "edition": "NCC2025",
+        "clause": "J6D3(1)(d), Table J6D3",
+        "url": "https://ncc.abcb.gov.au/editions/ncc-2025/adopted/volume-one/j-energy-efficiency/part-j6-air-conditioning-and-ventilation",
+        "rule_status": "draft"
+      },
+      "inputs_used": {
+        "building_class": {
+          "value": "5",
+          "unit": null,
+          "provenance": "engineer_confirmed"
+        },
+        "climate_zone": {
+          "value": 6,
+          "unit": null,
+          "provenance": "engineer_confirmed"
+        },
+        "system_type": {
+          "value": "air_conditioning",
+          "unit": null,
+          "provenance": "engineer_confirmed"
+        },
+        "is_electricity_substation": {
+          "value": false,
+          "unit": null,
+          "provenance": "engineer_confirmed"
+        },
+        "provides_required_mech_ventilation": {
+          "value": true,
+          "unit": null,
+          "provenance": "engineer_confirmed"
+        },
+        "dehumidification_control_needed": {
+          "value": true,
+          "unit": null,
+          "provenance": "engineer_confirmed"
+        }
+      },
+      "near_miss": null,
+      "fix_hypotheses": []
+    },
+    {
+      "subject_id": "ahu-4",
+      "rule_id": "NCC2025-J6D3-econ-cycle",
+      "outcome": "NEEDS_JUDGEMENT",
+      "causes": [
+        {
+          "kind": "missing_input",
+          "detail": "max_airside_component_airflow"
+        }
+      ],
+      "citation": {
+        "rule_id": "NCC2025-J6D3-econ-cycle",
+        "document": "NCC 2025 Volume One",
+        "edition": "NCC2025",
+        "clause": "J6D3(1)(d), Table J6D3",
+        "url": "https://ncc.abcb.gov.au/editions/ncc-2025/adopted/volume-one/j-energy-efficiency/part-j6-air-conditioning-and-ventilation",
+        "rule_status": "draft"
+      },
+      "inputs_used": {
+        "building_class": {
+          "value": "5",
+          "unit": null,
+          "provenance": "engineer_confirmed"
+        },
+        "climate_zone": {
+          "value": 6,
+          "unit": null,
+          "provenance": "engineer_confirmed"
+        },
+        "system_type": {
+          "value": "air_conditioning",
+          "unit": null,
+          "provenance": "engineer_confirmed"
+        },
+        "is_electricity_substation": {
+          "value": false,
+          "unit": null,
+          "provenance": "engineer_confirmed"
+        },
+        "provides_required_mech_ventilation": {
+          "value": true,
+          "unit": null,
+          "provenance": "engineer_confirmed"
+        },
+        "dehumidification_control_needed": {
+          "value": false,
+          "unit": null,
+          "provenance": "engineer_confirmed"
+        }
+      },
+      "near_miss": null,
+      "fix_hypotheses": []
+    }
+  ]
+}

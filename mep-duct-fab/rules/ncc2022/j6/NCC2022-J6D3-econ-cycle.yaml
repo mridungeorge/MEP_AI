@@ -1,0 +1,171 @@
+id: NCC2022-J6D3-econ-cycle
+source:
+  document: NCC 2022 Volume One
+  edition: '2022'
+  clause: J6D3(1)(c), Table J6D3
+  url: https://ncc.abcb.gov.au/editions/ncc-2022/adopted/volume-one/j-energy-efficiency/part-j6-air-conditioning-and-ventilation
+applies_when:
+  edition: NCC2022
+  state:
+  - ALL
+  climate_zone:
+    not_in:
+    - 1
+  system_type: air_conditioning
+  exempt_when:
+  - electricity_network_substation == True
+  - provides_required_mech_ventilation == False
+  - dehumidification_control_needed == True
+inputs:
+- name: airside_component_airflow
+  unit: L/s
+  type: number
+  provenance: engineer_confirmed
+- name: climate_zone
+  type: int
+  provenance: address_lookup_confirmed
+- name: economy_cycle
+  type: bool
+  provenance: engineer_confirmed
+- name: provides_required_mech_ventilation
+  type: bool
+  provenance: engineer_confirmed
+- name: dehumidification_control_needed
+  type: bool
+  provenance: engineer_confirmed
+- name: electricity_network_substation
+  type: bool
+  provenance: engineer_confirmed
+- name: system_type
+  type: enum
+  provenance: engineer_confirmed
+  values:
+  - air_conditioning
+  - air_conditioning_heating
+  - mechanical_ventilation
+  - exhaust
+threshold:
+  table: J6D3
+  values:
+    by_climate_zone:
+      unit: L/s
+      values:
+        2: 9000
+        3: 7500
+        4: 3500
+        5: 3000
+        6: 2000
+        7: 2500
+        8: 4000
+check: airside_component_airflow < threshold('by_climate_zone', climate_zone) or economy_cycle == True
+outcomes:
+  'true': PASS
+  'false': FAIL
+  missing_input: NEEDS_JUDGEMENT
+near_miss: 0.05
+fix_hypotheses:
+- 'Hypothesis: verify - add an outdoor air economy cycle to this air-conditioner'
+- 'Hypothesis: verify - confirm whether dehumidification control is needed for the space served (J6D3(1)(c) exemption)'
+- 'Hypothesis: verify - split the duty across smaller airside components so each is below the Table J6D3 flow rate'
+depends_on:
+- systems.airside_component_airflow
+- systems.economy_cycle
+- systems.provides_required_mech_ventilation
+- spaces.dehumidification_control_needed
+- project.climate_zone
+- project.electricity_network_substation
+- systems.system_type
+tests:
+- name: below_threshold_no_cycle
+  inputs:
+    airside_component_airflow: 1999
+    climate_zone: 6
+    economy_cycle: false
+    provides_required_mech_ventilation: true
+    dehumidification_control_needed: false
+    electricity_network_substation: false
+    system_type: air_conditioning
+  expect: PASS
+- name: boundary_equal_threshold_no_cycle
+  inputs:
+    airside_component_airflow: 2000
+    climate_zone: 6
+    economy_cycle: false
+    provides_required_mech_ventilation: true
+    dehumidification_control_needed: false
+    electricity_network_substation: false
+    system_type: air_conditioning
+  expect: FAIL
+- name: above_threshold_no_cycle_cz2
+  inputs:
+    airside_component_airflow: 9500
+    climate_zone: 2
+    economy_cycle: false
+    provides_required_mech_ventilation: true
+    dehumidification_control_needed: false
+    electricity_network_substation: false
+    system_type: air_conditioning
+  expect: FAIL
+- name: above_threshold_with_cycle
+  inputs:
+    airside_component_airflow: 5000
+    climate_zone: 6
+    economy_cycle: true
+    provides_required_mech_ventilation: true
+    dehumidification_control_needed: false
+    electricity_network_substation: false
+    system_type: air_conditioning
+  expect: PASS
+- name: climate_zone_1_exempt
+  inputs:
+    airside_component_airflow: 99999
+    climate_zone: 1
+    economy_cycle: false
+    provides_required_mech_ventilation: true
+    dehumidification_control_needed: false
+    electricity_network_substation: false
+    system_type: air_conditioning
+  expect: NOT_APPLICABLE
+- name: dehumidification_exempt
+  inputs:
+    airside_component_airflow: 5000
+    climate_zone: 6
+    economy_cycle: false
+    provides_required_mech_ventilation: true
+    dehumidification_control_needed: true
+    electricity_network_substation: false
+    system_type: air_conditioning
+  expect: NOT_APPLICABLE
+- name: not_providing_required_ventilation
+  inputs:
+    airside_component_airflow: 5000
+    climate_zone: 6
+    economy_cycle: false
+    provides_required_mech_ventilation: false
+    dehumidification_control_needed: false
+    electricity_network_substation: false
+    system_type: air_conditioning
+  expect: NOT_APPLICABLE
+- name: substation_excluded
+  inputs:
+    airside_component_airflow: 5000
+    climate_zone: 6
+    economy_cycle: false
+    provides_required_mech_ventilation: true
+    dehumidification_control_needed: false
+    electricity_network_substation: true
+    system_type: air_conditioning
+  expect: NOT_APPLICABLE
+- name: missing_airflow
+  inputs:
+    climate_zone: 6
+    economy_cycle: false
+    provides_required_mech_ventilation: true
+    dehumidification_control_needed: false
+    electricity_network_substation: false
+    system_type: air_conditioning
+  expect: NEEDS_JUDGEMENT
+notes: 'Table J6D3 values typed from ABCB NCC 2022 online text. Trigger is airflow >= table value, per airside component (ABCB Guide: each air-conditioner, not the sum). Only exemptions in the clause: climate zone 1 and dehumidification control needed. Sub-clause letter (c) confirmed by Guide cross-reference.'
+reviewed_by: null
+reviewed_on: null
+status: draft

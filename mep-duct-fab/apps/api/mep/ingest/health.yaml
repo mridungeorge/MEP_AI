@@ -1,0 +1,11 @@
+# Health score policy (engineering policy of this product, not a standards threshold).
+# Weights sum to 100. A file scoring below `minimum_percent` gets a recommendation to request a clean IFC/DXF.
+minimum_percent: 70
+weights:
+  closed_boundaries: 25
+  scale: 20
+  layers: 10
+  duplicates: 10
+  names: 10
+  schema: 15
+  exporter: 10

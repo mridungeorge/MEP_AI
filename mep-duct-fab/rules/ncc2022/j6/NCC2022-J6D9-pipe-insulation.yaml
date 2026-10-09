@@ -1,0 +1,308 @@
+id: NCC2022-J6D9-pipe-insulation
+source:
+  document: NCC 2022 Volume One
+  edition: '2022'
+  clause: J6D9(1)(b), Table J6D9a
+  url: https://ncc.abcb.gov.au/editions/ncc-2022/adopted/volume-one/j-energy-efficiency/part-j6-air-conditioning-and-ventilation
+applies_when:
+  edition: NCC2022
+  state:
+  - ALL
+  system_type: air_conditioning
+  fluid_service:
+    in:
+    - heating
+    - cooling
+  exempt_when:
+  - electricity_network_substation == True
+  needs_judgement_when:
+  - fluid_temp > threshold('t_chilled_max') and fluid_temp <= threshold('t_heated_min')
+  - pipe_exemption != 'none'
+  - refill_or_pressure_relief_pipe == True
+  - penetrates_structural_member == True
+inputs:
+- name: fluid_service
+  type: enum
+  provenance: engineer_confirmed
+  values:
+  - heating
+  - cooling
+  - condenser_water
+- name: fluid_temp
+  unit: degC
+  type: number
+  provenance: engineer_confirmed
+- name: pipe_dn
+  unit: mm
+  type: number
+  provenance: engineer_confirmed
+- name: pipe_r_value
+  unit: m^2*K/W
+  type: number
+  provenance: engineer_confirmed
+- name: pipe_exemption
+  type: enum
+  provenance: engineer_confirmed
+  values:
+  - none
+  - inside_ahu_or_fcu
+- name: refill_or_pressure_relief_pipe
+  type: bool
+  provenance: engineer_confirmed
+- name: penetrates_structural_member
+  type: bool
+  provenance: engineer_confirmed
+- name: electricity_network_substation
+  type: bool
+  provenance: engineer_confirmed
+- name: system_type
+  type: enum
+  provenance: engineer_confirmed
+  values:
+  - air_conditioning
+  - air_conditioning_heating
+  - mechanical_ventilation
+  - exhaust
+threshold:
+  table: J6D9a
+  values:
+    low_temp_chilled:
+      unit: m^2*K/W
+      values:
+        dn_le_40: 1.3
+        dn_gt_40_le_80: 1.7
+        dn_gt_80_le_150: 2.0
+        dn_gt_150: 2.7
+    chilled:
+      unit: m^2*K/W
+      values:
+        dn_le_40: 1.0
+        dn_gt_40_le_80: 1.5
+        dn_gt_80_le_150: 2.0
+        dn_gt_150: 2.0
+    heated:
+      unit: m^2*K/W
+      values:
+        dn_le_40: 1.7
+        dn_gt_40_le_80: 1.7
+        dn_gt_80_le_150: 1.7
+        dn_gt_150: 1.7
+    high_temp_heated:
+      unit: m^2*K/W
+      values:
+        dn_le_40: 2.7
+        dn_gt_40_le_80: 2.7
+        dn_gt_80_le_150: 2.7
+        dn_gt_150: 2.7
+    t_edge_low:
+      value: 2
+      unit: degC
+    t_chilled_max:
+      value: 20
+      unit: degC
+    t_heated_min:
+      value: 30
+      unit: degC
+    t_high:
+      value: 85
+      unit: degC
+    dn_1:
+      value: 40
+      unit: mm
+    dn_2:
+      value: 80
+      unit: mm
+    dn_3:
+      value: 150
+      unit: mm
+check: (fluid_temp <= threshold('t_edge_low') and ((pipe_dn <= threshold('dn_1') and pipe_r_value >= threshold('low_temp_chilled', 'dn_le_40')) or (pipe_dn > threshold('dn_1') and pipe_dn <= threshold('dn_2') and pipe_r_value >= threshold('low_temp_chilled', 'dn_gt_40_le_80')) or (pipe_dn > threshold('dn_2') and pipe_dn <= threshold('dn_3') and pipe_r_value >= threshold('low_temp_chilled', 'dn_gt_80_le_150')) or (pipe_dn > threshold('dn_3') and pipe_r_value >= threshold('low_temp_chilled', 'dn_gt_150')))) or (fluid_temp > threshold('t_edge_low') and fluid_temp <= threshold('t_chilled_max') and ((pipe_dn <= threshold('dn_1') and pipe_r_value >= threshold('chilled', 'dn_le_40')) or (pipe_dn > threshold('dn_1') and pipe_dn <= threshold('dn_2') and pipe_r_value >= threshold('chilled', 'dn_gt_40_le_80')) or (pipe_dn > threshold('dn_2') and pipe_dn <= threshold('dn_3') and pipe_r_value >= threshold('chilled', 'dn_gt_80_le_150')) or (pipe_dn > threshold('dn_3') and pipe_r_value >= threshold('chilled', 'dn_gt_150')))) or (fluid_temp > threshold('t_heated_min') and fluid_temp <= threshold('t_high') and ((pipe_dn <= threshold('dn_1') and pipe_r_value >= threshold('heated', 'dn_le_40')) or (pipe_dn > threshold('dn_1') and pipe_dn <= threshold('dn_2') and pipe_r_value >= threshold('heated', 'dn_gt_40_le_80')) or (pipe_dn > threshold('dn_2') and pipe_dn <= threshold('dn_3') and pipe_r_value >= threshold('heated', 'dn_gt_80_le_150')) or (pipe_dn > threshold('dn_3') and pipe_r_value >= threshold('heated', 'dn_gt_150')))) or (fluid_temp > threshold('t_high') and ((pipe_dn <= threshold('dn_1') and pipe_r_value >= threshold('high_temp_heated', 'dn_le_40')) or (pipe_dn > threshold('dn_1') and pipe_dn <= threshold('dn_2') and pipe_r_value >= threshold('high_temp_heated', 'dn_gt_40_le_80')) or (pipe_dn > threshold('dn_2') and pipe_dn <= threshold('dn_3') and pipe_r_value >= threshold('high_temp_heated', 'dn_gt_80_le_150')) or (pipe_dn > threshold('dn_3') and pipe_r_value >= threshold('high_temp_heated', 'dn_gt_150'))))
+outcomes:
+  'true': PASS
+  'false': FAIL
+  missing_input: NEEDS_JUDGEMENT
+near_miss: 0.05
+fix_hypotheses:
+- 'Hypothesis: verify - increase pipe insulation thickness or change material to reach the Table J6D9a R-Value for this fluid temperature and pipe size'
+- 'Hypothesis: verify - check whether a J6D9(4) exemption applies (e.g. inside an AHU or FCU, or in the last room downstream of the control device)'
+depends_on:
+- systems.pipes.fluid_service
+- systems.pipes.fluid_temp
+- systems.pipes.pipe_dn
+- systems.pipes.pipe_r_value
+- systems.pipes.pipe_exemption
+- systems.pipes.refill_or_pressure_relief_pipe
+- systems.pipes.penetrates_structural_member
+- project.electricity_network_substation
+- systems.system_type
+tests:
+- name: chw_dn100_r2_pass
+  inputs:
+    fluid_service: cooling
+    fluid_temp: 6
+    pipe_dn: 100
+    pipe_r_value: 2.0
+    pipe_exemption: none
+    refill_or_pressure_relief_pipe: false
+    penetrates_structural_member: false
+    electricity_network_substation: false
+    system_type: air_conditioning
+  expect: PASS
+- name: chw_dn100_r1_5_fail
+  inputs:
+    fluid_service: cooling
+    fluid_temp: 6
+    pipe_dn: 100
+    pipe_r_value: 1.5
+    pipe_exemption: none
+    refill_or_pressure_relief_pipe: false
+    penetrates_structural_member: false
+    electricity_network_substation: false
+    system_type: air_conditioning
+  expect: FAIL
+- name: boundary_chw_dn40_exact_r1_0
+  inputs:
+    fluid_service: cooling
+    fluid_temp: 7
+    pipe_dn: 40
+    pipe_r_value: 1.0
+    pipe_exemption: none
+    refill_or_pressure_relief_pipe: false
+    penetrates_structural_member: false
+    electricity_network_substation: false
+    system_type: air_conditioning
+  expect: PASS
+- name: boundary_chw_dn50_needs_r1_5
+  inputs:
+    fluid_service: cooling
+    fluid_temp: 7
+    pipe_dn: 50
+    pipe_r_value: 1.0
+    pipe_exemption: none
+    refill_or_pressure_relief_pipe: false
+    penetrates_structural_member: false
+    electricity_network_substation: false
+    system_type: air_conditioning
+  expect: FAIL
+- name: boundary_2degC_is_low_temp_row
+  inputs:
+    fluid_service: cooling
+    fluid_temp: 2
+    pipe_dn: 25
+    pipe_r_value: 1.0
+    pipe_exemption: none
+    refill_or_pressure_relief_pipe: false
+    penetrates_structural_member: false
+    electricity_network_substation: false
+    system_type: air_conditioning
+  expect: FAIL
+- name: hhw_dn200_r1_7_pass
+  inputs:
+    fluid_service: heating
+    fluid_temp: 60
+    pipe_dn: 200
+    pipe_r_value: 1.7
+    pipe_exemption: none
+    refill_or_pressure_relief_pipe: false
+    penetrates_structural_member: false
+    electricity_network_substation: false
+    system_type: air_conditioning
+  expect: PASS
+- name: steam_r1_7_fail
+  inputs:
+    fluid_service: heating
+    fluid_temp: 120
+    pipe_dn: 50
+    pipe_r_value: 1.7
+    pipe_exemption: none
+    refill_or_pressure_relief_pipe: false
+    penetrates_structural_member: false
+    electricity_network_substation: false
+    system_type: air_conditioning
+  expect: FAIL
+- name: condenser_water_not_applicable
+  inputs:
+    fluid_service: condenser_water
+    fluid_temp: 29
+    pipe_dn: 150
+    pipe_r_value: 0
+    pipe_exemption: none
+    refill_or_pressure_relief_pipe: false
+    penetrates_structural_member: false
+    electricity_network_substation: false
+    system_type: air_conditioning
+  expect: NOT_APPLICABLE
+- name: inside_fcu_exemption_not_encoded
+  inputs:
+    fluid_service: cooling
+    fluid_temp: 6
+    pipe_dn: 20
+    pipe_r_value: 0
+    pipe_exemption: inside_ahu_or_fcu
+    refill_or_pressure_relief_pipe: false
+    penetrates_structural_member: false
+    electricity_network_substation: false
+    system_type: air_conditioning
+  expect: NEEDS_JUDGEMENT
+- name: gap_25degC_no_table_row
+  inputs:
+    fluid_service: heating
+    fluid_temp: 25
+    pipe_dn: 50
+    pipe_r_value: 0
+    pipe_exemption: none
+    refill_or_pressure_relief_pipe: false
+    penetrates_structural_member: false
+    electricity_network_substation: false
+    system_type: air_conditioning
+  expect: NEEDS_JUDGEMENT
+- name: missing_r_value
+  inputs:
+    fluid_service: cooling
+    fluid_temp: 6
+    pipe_dn: 100
+    pipe_exemption: none
+    refill_or_pressure_relief_pipe: false
+    penetrates_structural_member: false
+    electricity_network_substation: false
+    system_type: air_conditioning
+  expect: NEEDS_JUDGEMENT
+- name: exempt_electricity_network_substation_true
+  inputs:
+    fluid_service: cooling
+    fluid_temp: 6
+    pipe_dn: 100
+    pipe_r_value: 2.0
+    pipe_exemption: none
+    refill_or_pressure_relief_pipe: false
+    penetrates_structural_member: false
+    electricity_network_substation: true
+    system_type: air_conditioning
+  expect: NOT_APPLICABLE
+- name: needs_refill_or_pressure_relief_pipe_true
+  inputs:
+    fluid_service: cooling
+    fluid_temp: 6
+    pipe_dn: 100
+    pipe_r_value: 2.0
+    pipe_exemption: none
+    refill_or_pressure_relief_pipe: true
+    penetrates_structural_member: false
+    electricity_network_substation: false
+    system_type: air_conditioning
+  expect: NEEDS_JUDGEMENT
+- name: needs_penetrates_structural_member_true
+  inputs:
+    fluid_service: cooling
+    fluid_temp: 6
+    pipe_dn: 100
+    pipe_r_value: 2.0
+    pipe_exemption: none
+    refill_or_pressure_relief_pipe: false
+    penetrates_structural_member: true
+    electricity_network_substation: false
+    system_type: air_conditioning
+  expect: NEEDS_JUDGEMENT
+notes: 'Table J6D9a typed from ABCB text. R-Value is the insulation material R-Value. Not encoded here: halved R-Value at structural penetrations (table note), refill/relief piping (1)(d), vessels/tanks (1)(c), AS/NZS 4859.1 (1)(a). Fluid at >20 to <=30 degC has no table row and returns NOT_APPLICABLE; engineer to confirm.'
+reviewed_by: null
+reviewed_on: null
+status: draft

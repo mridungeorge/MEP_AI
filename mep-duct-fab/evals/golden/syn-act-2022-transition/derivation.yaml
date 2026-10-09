@@ -1,0 +1,16 @@
+# Derived by hand BEFORE the engine was run. ACT: NCC 2025 from 2026-05-01 with a 12-month transition, so
+# NCC 2022 is still allowed on 2026-10-06 until 2027-05-01. Thresholds: CZ7 2500 L/s; MV time switch 1000 L/s.
+jurisdiction: confirmed
+jurisdiction_notes:
+  - "ACT: NCC2022 allowed during the NCC2025 transition until 2027-05-01"
+results:
+  - subject: ahu-1
+    rule: NCC2022-J6D3-econ-cycle
+    outcome: PASS                # 2600 L/s is at or above 2500 L/s but an economy cycle is fitted
+    near_miss: false             # the cycle decides the result, so changing the airflow changes nothing
+  - subject: fan-1
+    rule: NCC2022-J6D4-mv-time-switch
+    outcome: PASS                # 1000 L/s is not above the 1000 L/s trigger
+    near_miss: true              # 5% more gives 1050 L/s with no time switch, which fails
+flips:
+  - {subject: fan-1, rule: NCC2022-J6D4-mv-time-switch, input: mv_airflow, change: 0.05, becomes: FAIL}

@@ -1,0 +1,22 @@
+description: "Synthetic NSW Class 2 project on NCC 2022 run under an approver override of the applicability refusal (not pilot data)"
+synthetic: true
+project:
+  state: NSW
+  ncc_edition: NCC2022
+  climate_zone: 5
+  building_class: "2"
+  approval_date: "2026-10-06"
+  firm_id: firm-golden
+  revision_id: rev-golden-2
+override:
+  user_id: approver-golden
+  role: approver
+  reason: BASIX certificate version confirmed with the certifier (golden test case)
+subjects:
+  - id: ahu-1
+    rules: [NCC2022-J6D3-deadband]
+    inputs:
+      system_type: {value: air_conditioning}
+      control_deadband: {value: 2.5, unit: K}
+      specialised_application_needs_smaller_deadband: {value: false}
+      electricity_network_substation: {value: false}

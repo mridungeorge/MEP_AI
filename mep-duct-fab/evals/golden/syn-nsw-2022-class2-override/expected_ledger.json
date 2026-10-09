@@ -1,0 +1,21 @@
+[
+  {
+    "kind": "applicability_override",
+    "firm_id": "firm-golden",
+    "revision_id": "rev-golden-2",
+    "payload": {
+      "user_id": "approver-golden",
+      "role": "approver",
+      "reason": "BASIX certificate version confirmed with the certifier (golden test case)",
+      "state": "NSW",
+      "edition": "NCC2022",
+      "approval_date": "2026-10-06",
+      "reasons": [
+        "NSW: NCC2022 does not apply to class 2: Class 2 and Class 4 parts in NSW follow the BASIX certificate version, not a fixed NCC 2022 date"
+      ],
+      "refused_by": [
+        "applicability"
+      ]
+    }
+  }
+]

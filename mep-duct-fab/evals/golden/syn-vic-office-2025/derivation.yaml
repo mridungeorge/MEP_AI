@@ -1,0 +1,33 @@
+# Derived by hand from the rule text (thresholds: CZ6 1200 L/s; dead band 2 K; sealing trigger 3000 L/s;
+# near-miss fraction 0.05 on each rule) BEFORE the engine was run.
+jurisdiction: confirmed          # VIC, NCC 2025, in force from 2026-05-01, approval 2026-09-01
+results:
+  - subject: ahu-1
+    rule: NCC2025-J6D3-econ-cycle
+    outcome: FAIL                # 1500 L/s is not below the 1200 L/s limit and no economy cycle
+    near_miss: false             # 1425 and 1575 are both still above 1200
+  - subject: ahu-1
+    rule: NCC2025-J6D3-deadband
+    outcome: PASS                # 2 K is at the 2 K minimum
+    near_miss: true              # 5% less gives 1.9 K, which fails
+  - subject: ahu-1
+    rule: NCC2025-J6D7-duct-sealing
+    outcome: FAIL                # 3000 L/s is not below 3000 L/s and the ductwork is not sealed
+    near_miss: true              # 5% less gives 2850 L/s, which would pass
+  - subject: ahu-2
+    rule: NCC2025-J6D3-econ-cycle
+    outcome: PASS                # 1199 L/s is below 1200 L/s
+    near_miss: true              # 5% more gives 1259 L/s, which fails
+  - subject: ahu-3
+    rule: NCC2025-J6D3-econ-cycle
+    outcome: NOT_APPLICABLE      # dehumidification control is needed: encoded exemption
+    near_miss: null
+  - subject: ahu-4
+    rule: NCC2025-J6D3-econ-cycle
+    outcome: NEEDS_JUDGEMENT     # the airflow is missing
+    near_miss: null
+# Near-miss flips derived by hand (each input perturbed by 5%; only PASS<->FAIL flips count):
+flips:
+  - {subject: ahu-1, rule: NCC2025-J6D3-deadband, input: control_deadband, change: -0.05, becomes: FAIL}
+  - {subject: ahu-1, rule: NCC2025-J6D7-duct-sealing, input: ac_system_airflow, change: -0.05, becomes: PASS}
+  - {subject: ahu-2, rule: NCC2025-J6D3-econ-cycle, input: max_airside_component_airflow, change: 0.05, becomes: FAIL}

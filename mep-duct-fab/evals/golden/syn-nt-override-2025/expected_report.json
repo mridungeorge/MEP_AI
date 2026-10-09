@@ -1,0 +1,104 @@
+{
+  "banner": "DRAFT RULES: NOT ENGINEER-APPROVED",
+  "report_version": 1,
+  "engine": {
+    "name": "mep-engine",
+    "version": "0.1.0"
+  },
+  "draft_rules": [
+    "NCC2025-J6D3-deadband"
+  ],
+  "unassigned_rules": [
+    "NCC2025-J6D10-elec-resistance-heat",
+    "NCC2025-J6D3-econ-cycle",
+    "NCC2025-J6D4-exhaust-motor-stop",
+    "NCC2025-J6D5-fan-vsd",
+    "NCC2025-J6D6-duct-insulation",
+    "NCC2025-J6D7-duct-sealing",
+    "NCC2025-J6D9-pipe-insulation"
+  ],
+  "project": {
+    "state": "NT",
+    "ncc_edition": "NCC2025",
+    "climate_zone": 3,
+    "building_class": "5",
+    "approval_date": "2026-10-06"
+  },
+  "jurisdiction": {
+    "decision": "overridden",
+    "warnings": [
+      "NT: NCC2025 is not adopted in NT (Gazette S31: NCC 2025 does not apply until the next NCC edition is published (open-ended).)"
+    ],
+    "refused_by": [
+      "jurisdiction"
+    ],
+    "notes": [],
+    "override": {
+      "user_id": "approver-golden",
+      "role": "approver",
+      "reason": "Permit lodged under NCC 2025 at the client's instruction (golden test case)"
+    }
+  },
+  "rule_pack": [
+    {
+      "id": "NCC2025-J6D3-deadband",
+      "status": "draft"
+    }
+  ],
+  "summary": {
+    "PASS": 1,
+    "FAIL": 0,
+    "NEEDS_JUDGEMENT": 0,
+    "NOT_APPLICABLE": 0
+  },
+  "results": [
+    {
+      "subject_id": "ahu-1",
+      "rule_id": "NCC2025-J6D3-deadband",
+      "outcome": "PASS",
+      "causes": [],
+      "citation": {
+        "rule_id": "NCC2025-J6D3-deadband",
+        "document": "NCC 2025 Volume One",
+        "edition": "NCC2025",
+        "clause": "J6D3(1)(h)",
+        "url": "https://ncc.abcb.gov.au/editions/ncc-2025/adopted/volume-one/j-energy-efficiency/part-j6-air-conditioning-and-ventilation",
+        "rule_status": "draft"
+      },
+      "inputs_used": {
+        "building_class": {
+          "value": "5",
+          "unit": null,
+          "provenance": "engineer_confirmed"
+        },
+        "system_type": {
+          "value": "air_conditioning",
+          "unit": null,
+          "provenance": "engineer_confirmed"
+        },
+        "is_electricity_substation": {
+          "value": false,
+          "unit": null,
+          "provenance": "engineer_confirmed"
+        },
+        "specialised_application_smaller_range_claimed": {
+          "value": false,
+          "unit": null,
+          "provenance": "engineer_confirmed"
+        },
+        "control_deadband": {
+          "value": 3,
+          "unit": "K",
+          "provenance": "engineer_confirmed"
+        }
+      },
+      "near_miss": {
+        "fraction": 0.05,
+        "is_near_miss": false,
+        "flips": [],
+        "not_evaluated": []
+      },
+      "fix_hypotheses": []
+    }
+  ]
+}

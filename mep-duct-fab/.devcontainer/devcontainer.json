@@ -1,0 +1,17 @@
+{
+  "name": "mep-copilot",
+  "build": { "dockerfile": "Dockerfile" },
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+    "ghcr.io/devcontainers/features/node:1": { "version": "22", "pnpmVersion": "latest" }
+  },
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "forwardPorts": [54321, 54322, 54323],
+  "customizations": {
+    "vscode": {
+      "extensions": ["ms-python.python", "charliermarsh.ruff", "redhat.vscode-yaml"],
+      "settings": { "python.defaultInterpreterPath": ".venv/bin/python" }
+    }
+  },
+  "remoteEnv": { "UV_PROJECT_ENVIRONMENT": ".venv" }
+}

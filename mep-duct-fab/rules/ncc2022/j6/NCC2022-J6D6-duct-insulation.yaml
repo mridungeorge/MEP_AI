@@ -1,0 +1,222 @@
+id: NCC2022-J6D6-duct-insulation
+source:
+  document: NCC 2022 Volume One
+  edition: '2022'
+  clause: J6D6(1)(b), Table J6D6
+  url: https://ncc.abcb.gov.au/editions/ncc-2022/adopted/volume-one/j-energy-efficiency/part-j6-air-conditioning-and-ventilation
+applies_when:
+  edition: NCC2022
+  state:
+  - ALL
+  system_type: air_conditioning
+  exempt_when:
+  - electricity_network_substation == True
+  needs_judgement_when:
+  - duct_type != 'rigid' and duct_type != 'flexible'
+  - duct_exemption != 'none'
+inputs:
+- name: duct_type
+  type: enum
+  provenance: engineer_confirmed
+  values:
+  - rigid
+  - flexible
+  - cushion_box
+- name: duct_location
+  type: enum
+  provenance: engineer_confirmed
+  values:
+  - conditioned_space
+  - direct_sunlight
+  - other
+- name: climate_zone
+  type: int
+  provenance: address_lookup_confirmed
+- name: duct_insulation_r_value
+  unit: m^2*K/W
+  type: number
+  provenance: engineer_confirmed
+- name: duct_exemption
+  type: enum
+  provenance: engineer_confirmed
+  values:
+  - none
+  - only_or_last_room
+- name: electricity_network_substation
+  type: bool
+  provenance: engineer_confirmed
+- name: system_type
+  type: enum
+  provenance: engineer_confirmed
+  values:
+  - air_conditioning
+  - air_conditioning_heating
+  - mechanical_ventilation
+  - exhaust
+threshold:
+  table: J6D6
+  values:
+    flexible:
+      value: 1.0
+      unit: m^2*K/W
+    rigid:
+      unit: m^2*K/W
+      values:
+        conditioned_space:
+          1: 1.2
+          2: 1.2
+          3: 1.2
+          4: 1.2
+          5: 1.2
+          6: 1.2
+          7: 1.2
+          8: 2.0
+        direct_sunlight:
+          1: 3.0
+          2: 3.0
+          3: 3.0
+          4: 3.0
+          5: 3.0
+          6: 3.0
+          7: 3.0
+          8: 3.0
+        other:
+          1: 2.0
+          2: 2.0
+          3: 2.0
+          4: 2.0
+          5: 2.0
+          6: 2.0
+          7: 2.0
+          8: 3.0
+check: (duct_type == 'flexible' and duct_insulation_r_value >= threshold('flexible')) or (duct_type == 'rigid' and duct_insulation_r_value >= threshold('rigid', duct_location, climate_zone))
+outcomes:
+  'true': PASS
+  'false': FAIL
+  missing_input: NEEDS_JUDGEMENT
+near_miss: 0.05
+fix_hypotheses:
+- 'Hypothesis: verify - increase the duct insulation material R-Value to the Table J6D6 value for this location and climate zone'
+- 'Hypothesis: verify - check whether a J6D6(3) exemption applies (e.g. ductwork serving only the final room)'
+depends_on:
+- systems.ducts.duct_type
+- systems.ducts.duct_location
+- systems.ducts.duct_insulation_r_value
+- systems.ducts.duct_exemption
+- project.climate_zone
+- project.electricity_network_substation
+- systems.system_type
+tests:
+- name: rigid_conditioned_cz5_pass
+  inputs:
+    duct_type: rigid
+    duct_location: conditioned_space
+    climate_zone: 5
+    duct_insulation_r_value: 1.2
+    duct_exemption: none
+    electricity_network_substation: false
+    system_type: air_conditioning
+  expect: PASS
+- name: rigid_other_cz5_fail
+  inputs:
+    duct_type: rigid
+    duct_location: other
+    climate_zone: 5
+    duct_insulation_r_value: 1.5
+    duct_exemption: none
+    electricity_network_substation: false
+    system_type: air_conditioning
+  expect: FAIL
+- name: boundary_rigid_conditioned_cz8_exact
+  inputs:
+    duct_type: rigid
+    duct_location: conditioned_space
+    climate_zone: 8
+    duct_insulation_r_value: 2.0
+    duct_exemption: none
+    electricity_network_substation: false
+    system_type: air_conditioning
+  expect: PASS
+- name: rigid_conditioned_cz8_just_below
+  inputs:
+    duct_type: rigid
+    duct_location: conditioned_space
+    climate_zone: 8
+    duct_insulation_r_value: 1.9
+    duct_exemption: none
+    electricity_network_substation: false
+    system_type: air_conditioning
+  expect: FAIL
+- name: rigid_sunlight_cz3_fail
+  inputs:
+    duct_type: rigid
+    duct_location: direct_sunlight
+    climate_zone: 3
+    duct_insulation_r_value: 2.0
+    duct_exemption: none
+    electricity_network_substation: false
+    system_type: air_conditioning
+  expect: FAIL
+- name: flexible_r1_pass
+  inputs:
+    duct_type: flexible
+    duct_location: other
+    climate_zone: 8
+    duct_insulation_r_value: 1.0
+    duct_exemption: none
+    electricity_network_substation: false
+    system_type: air_conditioning
+  expect: PASS
+- name: flexible_r0_6_fail
+  inputs:
+    duct_type: flexible
+    duct_location: other
+    climate_zone: 6
+    duct_insulation_r_value: 0.6
+    duct_exemption: none
+    electricity_network_substation: false
+    system_type: air_conditioning
+  expect: FAIL
+- name: last_room_exemption_not_encoded
+  inputs:
+    duct_type: rigid
+    duct_location: conditioned_space
+    climate_zone: 6
+    duct_insulation_r_value: 0
+    duct_exemption: only_or_last_room
+    electricity_network_substation: false
+    system_type: air_conditioning
+  expect: NEEDS_JUDGEMENT
+- name: cushion_box_not_encoded
+  inputs:
+    duct_type: cushion_box
+    duct_location: other
+    climate_zone: 6
+    duct_insulation_r_value: 0
+    duct_exemption: none
+    electricity_network_substation: false
+    system_type: air_conditioning
+  expect: NEEDS_JUDGEMENT
+- name: missing_r_value
+  inputs:
+    duct_type: rigid
+    duct_location: other
+    climate_zone: 6
+    duct_exemption: none
+    electricity_network_substation: false
+    system_type: air_conditioning
+  expect: NEEDS_JUDGEMENT
+- name: electricity_substation_not_applicable
+  inputs:
+    duct_type: rigid
+    duct_location: conditioned_space
+    climate_zone: 5
+    duct_insulation_r_value: 1.2
+    duct_exemption: none
+    electricity_network_substation: true
+    system_type: air_conditioning
+  expect: NOT_APPLICABLE
+notes: Table J6D6 and flexible R1.0 typed from ABCB text. R-Value is the added insulation material R-Value. Flexible ductwork takes R1.0 regardless of location per clause structure. Cushion boxes (match connecting ductwork) and J6D6(1)(a) AS/NZS 4859.1 conformance and J6D6(2) installation are not encoded here.
+reviewed_by: null
+reviewed_on: null
+status: draft

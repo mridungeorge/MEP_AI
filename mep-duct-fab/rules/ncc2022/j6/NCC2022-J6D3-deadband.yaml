@@ -1,0 +1,100 @@
+id: NCC2022-J6D3-deadband
+source:
+  document: NCC 2022 Volume One
+  edition: '2022'
+  clause: J6D3(1)(h)
+  url: https://ncc.abcb.gov.au/editions/ncc-2022/adopted/volume-one/j-energy-efficiency/part-j6-air-conditioning-and-ventilation
+applies_when:
+  edition: NCC2022
+  state:
+  - ALL
+  system_type: air_conditioning
+  exempt_when:
+  - electricity_network_substation == True
+  needs_judgement_when:
+  - specialised_application_needs_smaller_deadband == True
+inputs:
+- name: control_deadband
+  unit: K
+  type: number
+  provenance: engineer_confirmed
+- name: specialised_application_needs_smaller_deadband
+  type: bool
+  provenance: engineer_confirmed
+- name: electricity_network_substation
+  type: bool
+  provenance: engineer_confirmed
+- name: system_type
+  type: enum
+  provenance: engineer_confirmed
+  values:
+  - air_conditioning
+  - air_conditioning_heating
+  - mechanical_ventilation
+  - exhaust
+threshold:
+  table: J6D3(1)(h) clause value
+  values:
+    min_deadband:
+      value: 2
+      unit: K
+check: control_deadband >= threshold('min_deadband')
+outcomes:
+  'true': PASS
+  'false': FAIL
+  missing_input: NEEDS_JUDGEMENT
+near_miss: 0.05
+fix_hypotheses:
+- 'Hypothesis: verify - widen the heating/cooling control dead band to at least the J6D3(1)(h) value'
+- 'Hypothesis: verify - if a tighter band is needed for a specialised application, record the justification'
+depends_on:
+- systems.controls.control_deadband
+- spaces.specialised_application_needs_smaller_deadband
+- project.electricity_network_substation
+- systems.system_type
+tests:
+- name: deadband_3k_pass
+  inputs:
+    control_deadband: 3
+    specialised_application_needs_smaller_deadband: false
+    electricity_network_substation: false
+    system_type: air_conditioning
+  expect: PASS
+- name: boundary_exactly_2k
+  inputs:
+    control_deadband: 2
+    specialised_application_needs_smaller_deadband: false
+    electricity_network_substation: false
+    system_type: air_conditioning
+  expect: PASS
+- name: deadband_1k_fail
+  inputs:
+    control_deadband: 1
+    specialised_application_needs_smaller_deadband: false
+    electricity_network_substation: false
+    system_type: air_conditioning
+  expect: FAIL
+- name: specialised_needs_judgement
+  inputs:
+    control_deadband: 0.5
+    specialised_application_needs_smaller_deadband: true
+    electricity_network_substation: false
+    system_type: air_conditioning
+  expect: NEEDS_JUDGEMENT
+- name: missing_deadband
+  inputs:
+    specialised_application_needs_smaller_deadband: false
+    electricity_network_substation: false
+    system_type: air_conditioning
+  expect: NEEDS_JUDGEMENT
+- name: electricity_substation_not_applicable
+  inputs:
+    control_deadband: 3
+    specialised_application_needs_smaller_deadband: false
+    electricity_network_substation: true
+    system_type: air_conditioning
+  expect: NOT_APPLICABLE
+notes: 2 degC typed from ABCB clause text, encoded as a 2 K temperature difference; engine must treat the input as a delta (pint delta_degC = K), never an absolute degC. Letter (h) confirmed by Guide. Whether a specialised application requires a smaller range is an engineer judgement.
+reviewed_by: null
+reviewed_on: null
+status: draft

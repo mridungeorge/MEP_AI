@@ -1,0 +1,44 @@
+description: Synthetic VIC Class 5 office, NCC 2025, climate zone 6 (not pilot data)
+synthetic: true
+project: {state: VIC, ncc_edition: NCC2025, climate_zone: 6, building_class: "5", approval_date: "2026-09-01"}
+subjects:
+  - id: ahu-1
+    rules: [NCC2025-J6D3-econ-cycle, NCC2025-J6D3-deadband, NCC2025-J6D7-duct-sealing]
+    inputs:
+      system_type: {value: air_conditioning}
+      max_airside_component_airflow: {value: 1500, unit: L/s}
+      economy_cycle: {value: false}
+      provides_required_mech_ventilation: {value: true}
+      dehumidification_control_needed: {value: false}
+      is_electricity_substation: {value: false}
+      control_deadband: {value: 2, unit: K}
+      specialised_application_smaller_range_claimed: {value: false}
+      ac_system_airflow: {value: 3000, unit: L/s}
+      duct_sealed_to_as4254_for_static_pressure: {value: false}
+      duct_in_only_or_last_room_served: {value: false}
+  - id: ahu-2
+    rules: [NCC2025-J6D3-econ-cycle]
+    inputs:
+      system_type: {value: air_conditioning}
+      max_airside_component_airflow: {value: 1199, unit: L/s}
+      economy_cycle: {value: false}
+      provides_required_mech_ventilation: {value: true}
+      dehumidification_control_needed: {value: false}
+      is_electricity_substation: {value: false}
+  - id: ahu-3
+    rules: [NCC2025-J6D3-econ-cycle]
+    inputs:
+      system_type: {value: air_conditioning}
+      max_airside_component_airflow: {value: 5000, unit: L/s}
+      economy_cycle: {value: false}
+      provides_required_mech_ventilation: {value: true}
+      dehumidification_control_needed: {value: true}
+      is_electricity_substation: {value: false}
+  - id: ahu-4
+    rules: [NCC2025-J6D3-econ-cycle]
+    inputs:
+      system_type: {value: air_conditioning}
+      economy_cycle: {value: false}
+      provides_required_mech_ventilation: {value: true}
+      dehumidification_control_needed: {value: false}
+      is_electricity_substation: {value: false}

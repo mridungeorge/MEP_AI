@@ -1,0 +1,14 @@
+# Derived by hand BEFORE the engine was run. The edition gate allows NSW on NCC 2022 on 2026-10-06 (NCC 2025 starts
+# 2027-05-01), but the applicability carve-out refuses Class 2 (BASIX version applies), so the run needs an approver
+# override. Only the applicability check refused, so the ledger kind is applicability_override.
+jurisdiction: overridden
+ledger_events:
+  - kind: applicability_override
+    user_id: approver-golden
+    state: NSW
+    edition: NCC2022
+results:
+  - subject: ahu-1
+    rule: NCC2022-J6D3-deadband
+    outcome: PASS                # 2.5 K is above the 2 K minimum
+    near_miss: false             # 2.375 K and 2.625 K both pass

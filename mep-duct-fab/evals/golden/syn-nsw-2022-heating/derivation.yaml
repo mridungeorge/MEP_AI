@@ -1,0 +1,12 @@
+# Derived by hand BEFORE the engine was run. NSW on NCC 2022 is allowed until 2027-05-01 for Class 5. The NSW
+# variant rule applies (state NSW). Climate zone 5 without reticulated gas: Table J6D10 allows 55 W/m2 for
+# floor areas up to 500 m2, so the allowed capacity is 55 x 400 = 22000 W. The heater is exactly at 22000 W.
+jurisdiction: confirmed
+results:
+  - subject: heater-1
+    rule: NCC2022-NSW-J6D10-elec-heating-limit
+    outcome: PASS                # 22000 W is not more than 22000 W
+    near_miss: true              # 5% more capacity (23100 W) or 5% less area (380 m2, 57.9 W/m2) would fail
+flips:
+  - {subject: heater-1, rule: NCC2022-NSW-J6D10-elec-heating-limit, input: conditioned_floor_area, change: -0.05, becomes: FAIL}
+  - {subject: heater-1, rule: NCC2022-NSW-J6D10-elec-heating-limit, input: electric_heating_capacity, change: 0.05, becomes: FAIL}

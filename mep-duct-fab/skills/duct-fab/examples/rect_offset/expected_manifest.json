@@ -1,0 +1,93 @@
+{
+  "files": [
+    {
+      "bytes": 16834,
+      "name": "O-01.step",
+      "role": "step",
+      "sha256": "6817c6c6cbdc3ec68d1aaf280c80909fc20cadeb596c13188481bc03f1e918d4"
+    },
+    {
+      "bytes": 42580,
+      "name": "O-01.dxf",
+      "role": "dxf",
+      "sha256": "34e82326ad72ceddb623ef9fbe0a704e9207c3bd7118ca20107826c50d76b90f"
+    }
+  ],
+  "inputs": {
+    "connection": {
+      "allowance_mm": 28,
+      "type": "angle_flange"
+    },
+    "fitting": "rect_offset",
+    "geometry": {
+      "height_mm": 300,
+      "length_mm": 600,
+      "offset_x_mm": 150,
+      "offset_y_mm": 100,
+      "width_mm": 500
+    },
+    "mark": "O-01",
+    "seam": {
+      "allowance_mm": 22,
+      "type": "grooved"
+    },
+    "sheet_thickness_mm": 0.8,
+    "spec_version": "1",
+    "units": "mm"
+  },
+  "measures": {
+    "pattern": {
+      "net_area_mm2": 979355.76,
+      "net_edge_count": 13,
+      "outline_area_mm2": 1083986.72,
+      "outline_bbox_mm": [
+        1585.22,
+        854.57
+      ],
+      "seam_edge_length_mm": 626.5
+    },
+    "solid_bbox_mm": [
+      650.0,
+      400.0,
+      600.0
+    ],
+    "solid_volume_mm3": 90000000.0
+  },
+  "skill": "duct-fab",
+  "skill_version": "1.0.0",
+  "spec_sha256": "8c9a692ee5b650084bbc5ec38b56ff8a8827bf5d96211c2176ae8550a601b753",
+  "toolchain": {
+    "cadquery": "2.8.0",
+    "cadquery-ocp": "7.9.3.1.1",
+    "ezdxf": "1.4.4"
+  },
+  "validation": {
+    "checks": [
+      "input_files",
+      "spec_readable",
+      "step_solid",
+      "step_planar_faces",
+      "step_length",
+      "step_vertex_count",
+      "step_inlet_cap",
+      "step_outlet_cap",
+      "step_outlet_offset",
+      "step_bbox_xy",
+      "dxf_loads",
+      "dxf_layers",
+      "cut_closed_single",
+      "cut_no_zero_length",
+      "cut_no_self_intersection",
+      "net_connected",
+      "net_no_self_intersection",
+      "edge_lengths_match_3d",
+      "net_area_matches_lateral_area",
+      "net_inlet_perimeter",
+      "net_outlet_perimeter",
+      "seam_allowance",
+      "connection_allowance",
+      "title_block"
+    ],
+    "passed": true
+  }
+}

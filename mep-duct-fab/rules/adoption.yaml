@@ -1,0 +1,125 @@
+# NCC edition by jurisdiction. Data, not code: update when states announce changes.
+# Official sources only (CLAUDE.md rule 6): state/territory regulators and ABCB. Retrieved 2026-10-06.
+#
+# Per-edition status:
+#   regulator_verified  a state/territory government page states the fact
+#   abcb_listed         only the ABCB adoption tables state it (no regulator page found or readable)
+#   unverified          no official source states it: the engine refuses to run until an approver overrides
+#   not adopted / replaced   the edition does not apply (see note)
+# The entry-level `status` summarises the weakest edition.
+# ABCB tables: ncc2025 https://ncc.abcb.gov.au/ncc-2025/ncc-2025-state-and-territory-adoption-information
+#              ncc2022 https://www.abcb.gov.au/ncc-2022-state-and-territory-adoption-dates ("as at 22 Sep 2023": stale)
+# This file decides the NCC EDITION only (state + approval date). Which building classes an edition's rule pack
+# applies to is a separate check: rules/applicability.yaml. The rules never read either file.
+as_of: "2026-10-06"
+rule: "A project complies with one edition only; never mix NCC 2022 and NCC 2025."
+sources:
+  ncc2025: https://ncc.abcb.gov.au/ncc-2025/ncc-2025-state-and-territory-adoption-information
+  ncc2022: https://www.abcb.gov.au/ncc-2022-state-and-territory-adoption-dates
+jurisdictions:
+  VIC:
+    status: abcb_listed
+    ncc2025:
+      status: regulator_verified
+      from: "2026-05-01"
+      transition: none
+      source: https://www.building.vic.gov.au/before-you-start-building/building-standards-in-victoria
+      also: https://www.vba.vic.gov.au/building/regulatory-framework/ncc-2022/ncc-2025-amended-variations
+    ncc2022_commercial_energy:
+      status: abcb_listed
+      from: "2024-05-01"
+      source: https://www.abcb.gov.au/ncc-2022-state-and-territory-adoption-dates
+    note: "No general either-edition period is stated, but work whose design or construction had already commenced, and s10(2) Building Act exemptions, may continue under the earlier edition. Those cases need an approver override."
+  ACT:
+    status: regulator_verified
+    ncc2025:
+      status: regulator_verified
+      from: "2026-05-01"
+      transition: "12 months"
+      source: https://www.planning.act.gov.au/planning-projects/building-regulatory-system/national-construction-code-ncc
+      also: https://www.cmtedd.act.gov.au/open_government/inform/act_government_media_releases/chris-steel-mla-media-releases/2026/national-construction-code-adoption-to-support-homeowners-and-industry
+    ncc2022_commercial_energy:
+      status: regulator_verified
+      from: "2024-01-15"
+      source: https://www.cmtedd.act.gov.au/open_government/inform/act_government_media_releases/vassarotti/2023/2024-to-bring-energy-efficiency-and-liveable-housing-requirements-for-new-act-buildings
+    note: "NCC 2025 commences 2026-05-01 and is mandatory from 2027-05-01; approvals between may use either edition (no mixing). A release alone can be misread as 'adopted 2027-05-01'."
+  WA:
+    status: abcb_listed
+    ncc2025:
+      status: abcb_listed
+      from: "2026-05-01"
+      transition: "12 months"
+      source: https://ncc.abcb.gov.au/ncc-2025/ncc-2025-state-and-territory-adoption-information
+      note: "No WA government page stating the NCC 2025 start or transition was found."
+    ncc2022_commercial_energy:
+      status: abcb_listed
+      from: "2025-05-01"
+      source: https://ncc.abcb.gov.au/ncc-2025/ncc-2025-state-and-territory-adoption-information
+      also: https://www.wa.gov.au/government/announcements/building-focus-issue-12
+      note: "The WA page states the general NCC 2022 transition (NCC 2019 Amendment 1 not usable from 2025-05-01) but does not name Section J."
+  NSW:
+    status: regulator_verified
+    ncc2025:
+      status: regulator_verified
+      from: "2027-05-01"
+      transition: none
+      source: https://www.nsw.gov.au/ministerial-releases/nsw-to-adopt-new-national-construction-code-may-2027
+      also: https://www.fairtrading.nsw.gov.au/trades-and-businesses/construction-and-trade-essentials/national-construction-code
+      note: "The NSW release speaks of a 12-month transition but gives no either-edition end date; ABCB shows none."
+    ncc2022_commercial_energy:
+      status: regulator_verified
+      from: "2023-10-01"
+      source: https://www.planning.nsw.gov.au/sites/default/files/2023-09/guidance-material-national-construction-code-and-basix.pdf
+      note: "Class 2 and Class 4 parts follow the BASIX certificate version instead."
+  TAS:
+    status: abcb_listed
+    ncc2025:
+      status: regulator_verified
+      from: "2027-05-01"
+      transition: "2026-06-05 to 2027-05-01"
+      temporarily_adopted: "2026-05-01 to 2026-06-04"
+      source: https://cbos.tas.gov.au/topics/technical-regulation/building-standards/national-construction-code-ncc-2025/national-construction-code-ncc-2026
+    ncc2022_commercial_energy:
+      status: abcb_listed
+      from: "2023-10-01"
+      source: https://www.abcb.gov.au/ncc-2022-state-and-territory-adoption-dates
+      note: "ABCB says Class 2 and Class 4 parts in Tasmania use NCC 2019 Amendment 1 Section J."
+  SA:
+    status: regulator_verified
+    ncc2025:
+      status: regulator_verified
+      from: "2027-05-01"
+      scope: "Building Code (BCA); the Plumbing Code was adopted 2026-05-01"
+      transition: none
+      source: https://plan.sa.gov.au/resources/building/building_code/2025-updates/state-updates
+    ncc2022_commercial_energy:
+      status: regulator_verified
+      from: "2024-10-01"
+      source: https://dit.sa.gov.au/__data/assets/pdf_file/0008/1441772/MBS-007-Modifications-to-the-Building-Code-of-Australia-Version-5-for-NCC-2022.pdf
+      note: "Read from MBS 007 version 5, which is marked superseded by version 6 (2025-03-27): recheck against the current version."
+  QLD:
+    status: unverified
+    ncc2025:
+      status: regulator_verified
+      from: "2027-05-01"
+      transition: none
+      source: https://www.housing.qld.gov.au/__data/assets/pdf_file/0019/90370/building-and-plumbing-newsflash-638.pdf
+      also: https://www.qbcc.qld.gov.au/news/navigating-ncc
+    ncc2022_commercial_energy:
+      status: unverified
+      from: UNVERIFIED
+      note: "No Queensland page states the NCC 2022 commercial Section J start. The ABCB national note implies 2023-10-01 but that is an inference, not a source."
+    note: "NCC 2022 remains in force in QLD until 2027-04-30 per the regulator, but the commercial Section J date is unverified, so NCC 2022 runs need an approver override."
+  NT:
+    status: regulator_verified
+    ncc2025:
+      status: "not adopted"
+      source: https://nt.gov.au/property/building/code/national-construction-code
+      also: https://nt.gov.au/__data/assets/pdf_file/0005/1609331/S31.pdf
+      note: "Gazette S31: NCC 2025 does not apply until the next NCC edition is published (open-ended)."
+    ncc2022_commercial_energy:
+      status: replaced
+      from: "2023-10-01"
+      replaced_by: "NCC 2019 Volume One Section J (Classes 3, 5, 6, 7, 8, 9)"
+      source: https://nt.gov.au/_media/docs/housing,-property-and-land/building-and-development/building-notes/100-/building-note-113-energy-efficiency.pdf
+    note: "Neither the NCC 2022 nor the NCC 2025 J6 rule pack applies in the NT."

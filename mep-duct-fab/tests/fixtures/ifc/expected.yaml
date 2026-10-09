@@ -1,0 +1,19 @@
+# Hand-derived expectations for the public IFC fixtures. NOT produced by the reader.
+# Derived by reading the STEP text of each file (profile polylines, extrusion units), see `derivation`.
+bsi-arch-ifc4:
+  schema: IFC4
+  derivation: >
+    Length unit is MILLI METRE (IFCSIUNIT #15). Living room profile (#98-#105): rectangle 4950 x 3800 mm minus the
+    notch 450 x 700 mm (points (4500..4950, 2600..3300)) = 18,810,000 - 315,000 = 18,495,000 mm2 = 18.495 m2.
+    Entry hall profile (#147-#150): 3800 x 1600 mm = 6,080,000 mm2 = 6.08 m2. Both spaces are aggregated into
+    IFCBUILDINGSTOREY '00 groundfloor' (IFCRELAGGREGATES #86). `use` is the IfcSpace ObjectType ('living area',
+    'hallway'); the file has no Pset_SpaceCommon.
+  spaces:
+    - {guid: "0xY$LvXaDEswJDk_VU74C_", name: "living room", storey: "00 groundfloor", use: "living area", area_m2: 18.495}
+    - {guid: "18QhMtUIXBvQktPHXXxs7H", name: "entry hall", storey: "00 groundfloor", use: "hallway", area_m2: 6.08}
+bsi-arch-ifc2x3:
+  schema: IFC2X3
+  derivation: same model exported as IFC2X3 (same profiles, same unit); the IFC2X3 space has no LongName attribute.
+  spaces:
+    - {guid: "0xY$LvXaDEswJDk_VU74C_", name: "living room", storey: "00 groundfloor", use: "living area", area_m2: 18.495}
+    - {guid: "18QhMtUIXBvQktPHXXxs7H", name: "entry hall", storey: "00 groundfloor", use: "hallway", area_m2: 6.08}

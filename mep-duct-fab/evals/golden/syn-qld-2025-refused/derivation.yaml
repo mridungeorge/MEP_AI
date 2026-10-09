@@ -1,0 +1,6 @@
+# Derived by hand BEFORE the engine was run. QLD adopts NCC 2025 on 2027-05-01 (regulator-verified), so an
+# approval date of 2026-10-06 is earlier: refused with the date in the message. No report is produced.
+refusal:
+  code: jurisdiction
+  reasons:
+    - "QLD: NCC2025 applies from 2027-05-01; approval date 2026-10-06 is earlier"

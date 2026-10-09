@@ -1,0 +1,21 @@
+[
+  {
+    "kind": "jurisdiction_override",
+    "firm_id": "firm-golden",
+    "revision_id": "rev-golden-1",
+    "payload": {
+      "user_id": "approver-golden",
+      "role": "approver",
+      "reason": "Permit lodged under NCC 2025 at the client's instruction (golden test case)",
+      "state": "NT",
+      "edition": "NCC2025",
+      "approval_date": "2026-10-06",
+      "reasons": [
+        "NT: NCC2025 is not adopted in NT (Gazette S31: NCC 2025 does not apply until the next NCC edition is published (open-ended).)"
+      ],
+      "refused_by": [
+        "jurisdiction"
+      ]
+    }
+  }
+]

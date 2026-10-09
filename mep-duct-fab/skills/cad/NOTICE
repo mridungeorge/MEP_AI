@@ -1,0 +1,27 @@
+skills/cad: third-party notice
+==============================
+
+This directory adapts the approach of the CAD skill from:
+
+    earthtojake/text-to-cad
+    https://github.com/earthtojake/text-to-cad
+    Source commit: 523ae21341a498b7dfed8a06d004e5e34bc10c16 (VERSION 0.7.19, 2026-10-09)
+    Licence: MIT, Copyright (c) 2026 Thompson Labs LLC  (full text in ./LICENSE)
+
+What was taken, and what was not
+--------------------------------
+Taken (pattern and design lessons, re-implemented here; no upstream source file is copied verbatim):
+- STEP-first generation: the model script is the tool, STEP is the primary artifact, and every output
+  is content-hashed (sha256) so a rebuild can be checked.
+- Determinism discipline (upstream `cadgen/_internal/determinism.py`): OCCT orders shapes by heap
+  address, so anything that iterates a set of shapes must be re-ordered by content. Here that lesson
+  is applied by building every face from an explicit, ordered vertex list and never iterating sets.
+- Generators are plain Python with no network access, and a validator re-measures the files.
+
+Not taken:
+- The upstream kernel is build123d, not CadQuery. This fork uses CadQuery (as the MEP Co-pilot brief
+  specifies), so none of the build123d / `cadgen` runtime, store, GLB/STL/3MF, kinematics or viewer
+  code is included.
+
+Everything under skills/cad/ other than LICENSE is MEP Co-pilot code. If any upstream source is
+copied into this directory later, record the file and commit here.

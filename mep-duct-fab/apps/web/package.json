@@ -1,0 +1,24 @@
+{
+  "name": "@mep/web",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Next.js 14 app, scaffolded in a later sprint",
+  "dependencies": {
+    "next": "^14.2.35",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.4",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  }
+}

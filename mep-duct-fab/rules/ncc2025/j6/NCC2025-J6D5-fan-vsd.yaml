@@ -1,0 +1,337 @@
+id: NCC2025-J6D5-fan-vsd
+source:
+  document: NCC 2025 Volume One
+  edition: '2025'
+  clause: J6D5(5)(a), J6D5(6), J6D5(12), J6D5(1)(b)
+  url: https://ncc.abcb.gov.au/editions/ncc-2025/adopted/volume-one/j-energy-efficiency/part-j6-air-conditioning-and-ventilation
+applies_when:
+  edition: NCC2025
+  state:
+  - ALL
+  building_class:
+  - '2'
+  - '3'
+  - '4'
+  - '5'
+  - '6'
+  - 7a
+  - 7b
+  - '8'
+  - 9a
+  - 9b
+  - 9c
+  exempt_when:
+  - fan_input_power <= threshold('small_fan_exempt')
+  - fan_explosion_proof == True
+  - fan_is_supply_fan_in_unitary_ac == True
+  - fan_in_unducted_ac_system == True and unducted_system_supply_airflow < threshold('unducted_exempt_airflow')
+  - fan_dedicated_fire_smoke_control == True
+  - fan_is_kitchen_exhaust == True
+  - is_electricity_substation == True
+  - fan_part_of_ac_or_mv_system == False
+  needs_judgement_when:
+  - fan_system_level_path_claimed == True
+  - fan_is_process_related == True
+inputs:
+- name: fan_input_power
+  unit: W
+  type: number
+  provenance: engineer_confirmed
+- name: fan_variable_speed_capable
+  type: bool
+  provenance: engineer_confirmed
+- name: fan_part_of_ac_or_mv_system
+  type: bool
+  provenance: engineer_confirmed
+- name: fan_explosion_proof
+  type: bool
+  provenance: engineer_confirmed
+- name: fan_is_supply_fan_in_unitary_ac
+  type: bool
+  provenance: engineer_confirmed
+- name: fan_in_unducted_ac_system
+  type: bool
+  provenance: engineer_confirmed
+- name: unducted_system_supply_airflow
+  unit: L/s
+  type: number
+  provenance: engineer_confirmed
+- name: fan_dedicated_fire_smoke_control
+  type: bool
+  provenance: engineer_confirmed
+- name: fan_is_kitchen_exhaust
+  type: bool
+  provenance: engineer_confirmed
+- name: fan_is_process_related
+  type: bool
+  provenance: engineer_confirmed
+- name: fan_system_level_path_claimed
+  type: bool
+  provenance: engineer_confirmed
+- name: is_electricity_substation
+  type: bool
+  provenance: engineer_confirmed
+- name: building_class
+  type: string
+  provenance: engineer_confirmed
+  values:
+  - '2'
+  - '3'
+  - '4'
+  - '5'
+  - '6'
+  - 7a
+  - 7b
+  - '8'
+  - 9a
+  - 9b
+  - 9c
+threshold:
+  values:
+    vsd_trigger:
+      value: 750
+      unit: W
+    small_fan_exempt:
+      value: 125
+      unit: W
+    unducted_exempt_airflow:
+      value: 1000
+      unit: L/s
+check: fan_input_power <= threshold('vsd_trigger') or fan_variable_speed_capable == True
+outcomes:
+  'true': PASS
+  'false': FAIL
+  missing_input: NEEDS_JUDGEMENT
+near_miss: 0.05
+fix_hypotheses:
+- 'Hypothesis: verify. Specify an EC motor or VSD so the fan is capable of variable speed operation.'
+- 'Hypothesis: verify. If the whole fan system is designed below the J6D5(1)(b) W per L/s benchmark, document that comparison for engineer review.'
+depends_on:
+- fans.fan_input_power
+- fans.fan_variable_speed_capable
+- fans.fan_part_of_ac_or_mv_system
+- fans.fan_explosion_proof
+- fans.fan_is_supply_fan_in_unitary_ac
+- fans.fan_in_unducted_ac_system
+- systems.unducted_system_supply_airflow
+- fans.fan_dedicated_fire_smoke_control
+- fans.fan_is_kitchen_exhaust
+- fans.fan_is_process_related
+- systems.fan_system_level_path_claimed
+- project.is_electricity_substation
+- project.building_class
+tests:
+- name: large_fan_with_vsd
+  inputs:
+    fan_input_power: 2200
+    fan_variable_speed_capable: true
+    fan_part_of_ac_or_mv_system: true
+    fan_explosion_proof: false
+    fan_is_supply_fan_in_unitary_ac: false
+    fan_in_unducted_ac_system: false
+    fan_dedicated_fire_smoke_control: false
+    fan_is_kitchen_exhaust: false
+    fan_is_process_related: false
+    fan_system_level_path_claimed: false
+    is_electricity_substation: false
+    building_class: '5'
+  expect: PASS
+- name: large_fan_fixed_speed
+  inputs:
+    fan_input_power: 751
+    fan_variable_speed_capable: false
+    fan_part_of_ac_or_mv_system: true
+    fan_explosion_proof: false
+    fan_is_supply_fan_in_unitary_ac: false
+    fan_in_unducted_ac_system: false
+    fan_dedicated_fire_smoke_control: false
+    fan_is_kitchen_exhaust: false
+    fan_is_process_related: false
+    fan_system_level_path_claimed: false
+    is_electricity_substation: false
+    building_class: '5'
+  expect: FAIL
+- name: boundary_750W_fixed_speed
+  inputs:
+    fan_input_power: 750
+    fan_variable_speed_capable: false
+    fan_part_of_ac_or_mv_system: true
+    fan_explosion_proof: false
+    fan_is_supply_fan_in_unitary_ac: false
+    fan_in_unducted_ac_system: false
+    fan_dedicated_fire_smoke_control: false
+    fan_is_kitchen_exhaust: false
+    fan_is_process_related: false
+    fan_system_level_path_claimed: false
+    is_electricity_substation: false
+    building_class: '5'
+  expect: PASS
+- name: explosion_proof_exempt
+  inputs:
+    fan_input_power: 3000
+    fan_variable_speed_capable: false
+    fan_part_of_ac_or_mv_system: true
+    fan_explosion_proof: true
+    fan_is_supply_fan_in_unitary_ac: false
+    fan_in_unducted_ac_system: false
+    fan_dedicated_fire_smoke_control: false
+    fan_is_kitchen_exhaust: false
+    fan_is_process_related: false
+    fan_system_level_path_claimed: false
+    is_electricity_substation: false
+    building_class: '5'
+  expect: NOT_APPLICABLE
+- name: unitary_supply_fan_exempt
+  inputs:
+    fan_input_power: 3000
+    fan_variable_speed_capable: false
+    fan_part_of_ac_or_mv_system: true
+    fan_explosion_proof: false
+    fan_is_supply_fan_in_unitary_ac: true
+    fan_in_unducted_ac_system: false
+    fan_dedicated_fire_smoke_control: false
+    fan_is_kitchen_exhaust: false
+    fan_is_process_related: false
+    fan_system_level_path_claimed: false
+    is_electricity_substation: false
+    building_class: '5'
+  expect: NOT_APPLICABLE
+- name: unducted_below_1000_exempt
+  inputs:
+    fan_input_power: 900
+    fan_variable_speed_capable: false
+    fan_part_of_ac_or_mv_system: true
+    fan_explosion_proof: false
+    fan_is_supply_fan_in_unitary_ac: false
+    fan_in_unducted_ac_system: true
+    unducted_system_supply_airflow: 999
+    fan_dedicated_fire_smoke_control: false
+    fan_is_kitchen_exhaust: false
+    fan_is_process_related: false
+    fan_system_level_path_claimed: false
+    is_electricity_substation: false
+    building_class: '5'
+  expect: NOT_APPLICABLE
+- name: kitchen_exhaust_exempt
+  inputs:
+    fan_input_power: 3000
+    fan_variable_speed_capable: false
+    fan_part_of_ac_or_mv_system: true
+    fan_explosion_proof: false
+    fan_is_supply_fan_in_unitary_ac: false
+    fan_in_unducted_ac_system: false
+    fan_dedicated_fire_smoke_control: false
+    fan_is_kitchen_exhaust: true
+    fan_is_process_related: false
+    fan_system_level_path_claimed: false
+    is_electricity_substation: false
+    building_class: '5'
+  expect: NOT_APPLICABLE
+- name: system_level_path_needs_judgement
+  inputs:
+    fan_input_power: 3000
+    fan_variable_speed_capable: false
+    fan_part_of_ac_or_mv_system: true
+    fan_explosion_proof: false
+    fan_is_supply_fan_in_unitary_ac: false
+    fan_in_unducted_ac_system: false
+    fan_dedicated_fire_smoke_control: false
+    fan_is_kitchen_exhaust: false
+    fan_is_process_related: false
+    fan_system_level_path_claimed: true
+    is_electricity_substation: false
+    building_class: '5'
+  expect: NEEDS_JUDGEMENT
+- name: missing_fan_power
+  inputs:
+    fan_variable_speed_capable: false
+    fan_part_of_ac_or_mv_system: true
+    fan_explosion_proof: false
+    fan_is_supply_fan_in_unitary_ac: false
+    fan_in_unducted_ac_system: false
+    fan_dedicated_fire_smoke_control: false
+    fan_is_kitchen_exhaust: false
+    fan_is_process_related: false
+    fan_system_level_path_claimed: false
+    is_electricity_substation: false
+    building_class: '5'
+  expect: NEEDS_JUDGEMENT
+- name: exempt_fan_input_power_threshold_small_fan_exempt
+  inputs:
+    fan_input_power: 125
+    fan_variable_speed_capable: true
+    fan_part_of_ac_or_mv_system: true
+    fan_explosion_proof: false
+    fan_is_supply_fan_in_unitary_ac: false
+    fan_in_unducted_ac_system: false
+    fan_dedicated_fire_smoke_control: false
+    fan_is_kitchen_exhaust: false
+    fan_is_process_related: false
+    fan_system_level_path_claimed: false
+    is_electricity_substation: false
+    building_class: '5'
+  expect: NOT_APPLICABLE
+- name: exempt_fan_dedicated_fire_smoke_control_true
+  inputs:
+    fan_input_power: 2200
+    fan_variable_speed_capable: true
+    fan_part_of_ac_or_mv_system: true
+    fan_explosion_proof: false
+    fan_is_supply_fan_in_unitary_ac: false
+    fan_in_unducted_ac_system: false
+    fan_dedicated_fire_smoke_control: true
+    fan_is_kitchen_exhaust: false
+    fan_is_process_related: false
+    fan_system_level_path_claimed: false
+    is_electricity_substation: false
+    building_class: '5'
+  expect: NOT_APPLICABLE
+- name: exempt_is_electricity_substation_true
+  inputs:
+    fan_input_power: 2200
+    fan_variable_speed_capable: true
+    fan_part_of_ac_or_mv_system: true
+    fan_explosion_proof: false
+    fan_is_supply_fan_in_unitary_ac: false
+    fan_in_unducted_ac_system: false
+    fan_dedicated_fire_smoke_control: false
+    fan_is_kitchen_exhaust: false
+    fan_is_process_related: false
+    fan_system_level_path_claimed: false
+    is_electricity_substation: true
+    building_class: '5'
+  expect: NOT_APPLICABLE
+- name: exempt_fan_part_of_ac_or_mv_system_false
+  inputs:
+    fan_input_power: 2200
+    fan_variable_speed_capable: true
+    fan_part_of_ac_or_mv_system: false
+    fan_explosion_proof: false
+    fan_is_supply_fan_in_unitary_ac: false
+    fan_in_unducted_ac_system: false
+    fan_dedicated_fire_smoke_control: false
+    fan_is_kitchen_exhaust: false
+    fan_is_process_related: false
+    fan_system_level_path_claimed: false
+    is_electricity_substation: false
+    building_class: '5'
+  expect: NOT_APPLICABLE
+- name: needs_fan_is_process_related_true
+  inputs:
+    fan_input_power: 2200
+    fan_variable_speed_capable: true
+    fan_part_of_ac_or_mv_system: true
+    fan_explosion_proof: false
+    fan_is_supply_fan_in_unitary_ac: false
+    fan_in_unducted_ac_system: false
+    fan_dedicated_fire_smoke_control: false
+    fan_is_kitchen_exhaust: false
+    fan_is_process_related: true
+    fan_system_level_path_claimed: false
+    is_electricity_substation: false
+    building_class: '5'
+  expect: NEEDS_JUDGEMENT
+notes: Encoded from ABCB NCC 2025 J6D5(5)(a), (6)(a)-(c), (12)(a)-(d). Trigger is strictly greater than 750 W. Only (5)(a) is encoded; (5)(b) and (c) (reduced flow, variable volume/pressure) need separate rules. J6D5(1)(b) whole-system path gives NEEDS_JUDGEMENT, not FAIL. Unducted exemption airflow is the AC system supply air capacity, strictly below 1000 L/s.
+reviewed_by: null
+reviewed_on: null
+status: draft

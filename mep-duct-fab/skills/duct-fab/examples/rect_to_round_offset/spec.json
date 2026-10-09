@@ -1,0 +1,10 @@
+{
+  "spec_version": "1",
+  "fitting": "rect_to_round",
+  "mark": "T-02",
+  "units": "mm",
+  "sheet_thickness_mm": 1.0,
+  "seam": { "type": "snap_lock", "allowance_mm": 20 },
+  "connection": { "type": "slip_and_drive", "allowance_mm": 25 },
+  "geometry": { "width_mm": 500, "height_mm": 500, "diameter_mm": 315, "length_mm": 400, "offset_x_mm": 100, "offset_y_mm": 0, "circle_segments": 24 }
+}

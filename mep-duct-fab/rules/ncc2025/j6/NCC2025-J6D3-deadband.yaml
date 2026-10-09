@@ -1,0 +1,141 @@
+id: NCC2025-J6D3-deadband
+source:
+  document: NCC 2025 Volume One
+  edition: '2025'
+  clause: J6D3(1)(h)
+  url: https://ncc.abcb.gov.au/editions/ncc-2025/adopted/volume-one/j-energy-efficiency/part-j6-air-conditioning-and-ventilation
+applies_when:
+  edition: NCC2025
+  state:
+  - ALL
+  building_class:
+  - '2'
+  - '3'
+  - '4'
+  - '5'
+  - '6'
+  - 7a
+  - 7b
+  - '8'
+  - 9a
+  - 9b
+  - 9c
+  system_type: air_conditioning
+  exempt_when:
+  - is_electricity_substation == True
+  needs_judgement_when:
+  - specialised_application_smaller_range_claimed == True
+inputs:
+- name: control_deadband
+  unit: K
+  type: number
+  provenance: engineer_confirmed
+- name: specialised_application_smaller_range_claimed
+  type: bool
+  provenance: engineer_confirmed
+- name: system_type
+  type: enum
+  provenance: engineer_confirmed
+  values:
+  - air_conditioning
+  - air_conditioning_heating
+  - mechanical_ventilation
+  - exhaust
+- name: is_electricity_substation
+  type: bool
+  provenance: engineer_confirmed
+- name: building_class
+  type: string
+  provenance: engineer_confirmed
+  values:
+  - '2'
+  - '3'
+  - '4'
+  - '5'
+  - '6'
+  - 7a
+  - 7b
+  - '8'
+  - 9a
+  - 9b
+  - 9c
+threshold:
+  values:
+    min_deadband:
+      value: 2
+      unit: K
+check: control_deadband >= threshold('min_deadband')
+outcomes:
+  'true': PASS
+  'false': FAIL
+  missing_input: NEEDS_JUDGEMENT
+near_miss: 0.05
+fix_hypotheses:
+- 'Hypothesis: verify. Set the heating/cooling control dead band to at least 2 K in the controls specification.'
+- 'Hypothesis: verify. If the space is a specialised application needing a tighter range, document the basis for engineer review.'
+depends_on:
+- systems.control_deadband
+- systems.specialised_application_smaller_range_claimed
+- systems.system_type
+- project.is_electricity_substation
+- project.building_class
+tests:
+- name: deadband_3K_pass
+  inputs:
+    control_deadband: 3
+    specialised_application_smaller_range_claimed: false
+    system_type: air_conditioning
+    is_electricity_substation: false
+    building_class: '5'
+  expect: PASS
+- name: deadband_1K_fail
+  inputs:
+    control_deadband: 1
+    specialised_application_smaller_range_claimed: false
+    system_type: air_conditioning
+    is_electricity_substation: false
+    building_class: '5'
+  expect: FAIL
+- name: deadband_boundary_2K
+  inputs:
+    control_deadband: 2
+    specialised_application_smaller_range_claimed: false
+    system_type: air_conditioning
+    is_electricity_substation: false
+    building_class: '5'
+  expect: PASS
+- name: deadband_just_below_boundary
+  inputs:
+    control_deadband: 1.9
+    specialised_application_smaller_range_claimed: false
+    system_type: air_conditioning
+    is_electricity_substation: false
+    building_class: '5'
+  expect: FAIL
+- name: specialised_application_needs_judgement
+  inputs:
+    control_deadband: 1
+    specialised_application_smaller_range_claimed: true
+    system_type: air_conditioning
+    is_electricity_substation: false
+    building_class: '5'
+  expect: NEEDS_JUDGEMENT
+- name: substation_not_applicable
+  inputs:
+    control_deadband: 1
+    specialised_application_smaller_range_claimed: false
+    system_type: air_conditioning
+    is_electricity_substation: true
+    building_class: '5'
+  expect: NOT_APPLICABLE
+- name: missing_deadband
+  inputs:
+    specialised_application_smaller_range_claimed: false
+    system_type: air_conditioning
+    is_electricity_substation: false
+    building_class: '5'
+  expect: NEEDS_JUDGEMENT
+notes: Encoded from ABCB NCC 2025 J6D3(1)(h). Letter (h) verified by item order (14 items a-n in 2025 J6D3(1)). Dead band is a temperature difference, so K and degrees C are numerically equal; input must be a delta unit. Applicability to cooling-only or heating-only systems (no heating/cooling changeover) is unclear; engineer to confirm.
+reviewed_by: null
+reviewed_on: null
+status: draft

@@ -1,0 +1,426 @@
+id: NCC2025-J6D6-duct-insulation
+source:
+  document: NCC 2025 Volume One
+  edition: '2025'
+  clause: J6D6(1)(b), J6D6(3), J6D6(4), Table J6D6
+  url: https://ncc.abcb.gov.au/editions/ncc-2025/adopted/volume-one/j-energy-efficiency/part-j6-air-conditioning-and-ventilation
+applies_when:
+  edition: NCC2025
+  state:
+  - ALL
+  building_class:
+  - '2'
+  - '3'
+  - '4'
+  - '5'
+  - '6'
+  - 7a
+  - 7b
+  - '8'
+  - 9a
+  - 9b
+  - 9c
+  system_type: air_conditioning
+  exempt_when:
+  - duct_in_only_or_last_room_served == True
+  - duct_is_conditioned_space_interface_fitting == True
+  - duct_is_return_air_in_conditioned_space == True
+  - duct_is_outdoor_or_exhaust_air == True
+  - duct_is_in_situ_ahu_floor == True
+  - duct_is_flexible_fan_connection == True
+  - duct_is_active_component == True
+  - is_electricity_substation == True
+inputs:
+- name: duct_insulation_r_value
+  unit: m^2*K/W
+  type: number
+  provenance: engineer_confirmed
+- name: duct_type
+  type: enum
+  provenance: engineer_confirmed
+  values:
+  - rigid
+  - flexible
+  - cushion_box
+- name: duct_location
+  type: enum
+  provenance: engineer_confirmed
+  values:
+  - conditioned_space
+  - direct_sunlight
+  - other
+- name: connecting_duct_insulation_r_value
+  unit: m^2*K/W
+  type: number
+  provenance: engineer_confirmed
+- name: climate_zone
+  type: int
+  provenance: address_lookup_confirmed
+- name: duct_in_only_or_last_room_served
+  type: bool
+  provenance: engineer_confirmed
+- name: duct_is_conditioned_space_interface_fitting
+  type: bool
+  provenance: engineer_confirmed
+- name: duct_is_return_air_in_conditioned_space
+  type: bool
+  provenance: engineer_confirmed
+- name: duct_is_outdoor_or_exhaust_air
+  type: bool
+  provenance: engineer_confirmed
+- name: duct_is_in_situ_ahu_floor
+  type: bool
+  provenance: engineer_confirmed
+- name: duct_is_flexible_fan_connection
+  type: bool
+  provenance: engineer_confirmed
+- name: duct_is_active_component
+  type: bool
+  provenance: engineer_confirmed
+- name: system_type
+  type: enum
+  provenance: engineer_confirmed
+  values:
+  - air_conditioning
+  - air_conditioning_heating
+  - mechanical_ventilation
+  - exhaust
+- name: is_electricity_substation
+  type: bool
+  provenance: engineer_confirmed
+- name: building_class
+  type: string
+  provenance: engineer_confirmed
+  values:
+  - '2'
+  - '3'
+  - '4'
+  - '5'
+  - '6'
+  - 7a
+  - 7b
+  - '8'
+  - 9a
+  - 9b
+  - 9c
+threshold:
+  table: J6D6
+  values:
+    flexible:
+      value: 1.0
+      unit: m^2*K/W
+    rigid:
+      unit: m^2*K/W
+      values:
+        conditioned_space:
+          1: 1.2
+          2: 1.2
+          3: 1.2
+          4: 1.2
+          5: 1.2
+          6: 1.2
+          7: 1.2
+          8: 2.0
+        direct_sunlight:
+          1: 3.0
+          2: 3.0
+          3: 3.0
+          4: 3.0
+          5: 3.0
+          6: 3.0
+          7: 3.0
+          8: 3.0
+        other:
+          1: 2.0
+          2: 2.0
+          3: 2.0
+          4: 2.0
+          5: 2.0
+          6: 2.0
+          7: 2.0
+          8: 3.0
+check: (duct_type == 'flexible' and duct_insulation_r_value >= threshold('flexible')) or (duct_type == 'cushion_box' and duct_insulation_r_value >= connecting_duct_insulation_r_value) or (duct_type == 'rigid' and duct_insulation_r_value >= threshold('rigid', duct_location, climate_zone))
+outcomes:
+  'true': PASS
+  'false': FAIL
+  missing_input: NEEDS_JUDGEMENT
+near_miss: 0.05
+fix_hypotheses:
+- 'Hypothesis: verify. Increase the duct insulation to at least the Table J6D6 R-Value for this location and climate zone.'
+- 'Hypothesis: verify. Re-route ductwork out of direct sunlight or into the conditioned space to reduce the required R-Value.'
+depends_on:
+- ducts.duct_insulation_r_value
+- ducts.duct_type
+- ducts.duct_location
+- ducts.connecting_duct_insulation_r_value
+- project.climate_zone
+- ducts.duct_in_only_or_last_room_served
+- ducts.duct_is_conditioned_space_interface_fitting
+- ducts.duct_is_return_air_in_conditioned_space
+- ducts.duct_is_outdoor_or_exhaust_air
+- ducts.duct_is_in_situ_ahu_floor
+- ducts.duct_is_flexible_fan_connection
+- ducts.duct_is_active_component
+- systems.system_type
+- project.is_electricity_substation
+- project.building_class
+tests:
+- name: rigid_other_cz5_pass
+  inputs:
+    duct_insulation_r_value: 2.0
+    duct_type: rigid
+    duct_location: other
+    climate_zone: 5
+    duct_in_only_or_last_room_served: false
+    duct_is_conditioned_space_interface_fitting: false
+    duct_is_return_air_in_conditioned_space: false
+    duct_is_outdoor_or_exhaust_air: false
+    duct_is_in_situ_ahu_floor: false
+    duct_is_flexible_fan_connection: false
+    duct_is_active_component: false
+    system_type: air_conditioning
+    is_electricity_substation: false
+    building_class: '5'
+  expect: PASS
+- name: rigid_other_cz8_fail
+  inputs:
+    duct_insulation_r_value: 2.0
+    duct_type: rigid
+    duct_location: other
+    climate_zone: 8
+    duct_in_only_or_last_room_served: false
+    duct_is_conditioned_space_interface_fitting: false
+    duct_is_return_air_in_conditioned_space: false
+    duct_is_outdoor_or_exhaust_air: false
+    duct_is_in_situ_ahu_floor: false
+    duct_is_flexible_fan_connection: false
+    duct_is_active_component: false
+    system_type: air_conditioning
+    is_electricity_substation: false
+    building_class: '5'
+  expect: FAIL
+- name: rigid_conditioned_cz8_boundary
+  inputs:
+    duct_insulation_r_value: 2.0
+    duct_type: rigid
+    duct_location: conditioned_space
+    climate_zone: 8
+    duct_in_only_or_last_room_served: false
+    duct_is_conditioned_space_interface_fitting: false
+    duct_is_return_air_in_conditioned_space: false
+    duct_is_outdoor_or_exhaust_air: false
+    duct_is_in_situ_ahu_floor: false
+    duct_is_flexible_fan_connection: false
+    duct_is_active_component: false
+    system_type: air_conditioning
+    is_electricity_substation: false
+    building_class: '5'
+  expect: PASS
+- name: rigid_sunlight_cz2_fail
+  inputs:
+    duct_insulation_r_value: 2.5
+    duct_type: rigid
+    duct_location: direct_sunlight
+    climate_zone: 2
+    duct_in_only_or_last_room_served: false
+    duct_is_conditioned_space_interface_fitting: false
+    duct_is_return_air_in_conditioned_space: false
+    duct_is_outdoor_or_exhaust_air: false
+    duct_is_in_situ_ahu_floor: false
+    duct_is_flexible_fan_connection: false
+    duct_is_active_component: false
+    system_type: air_conditioning
+    is_electricity_substation: false
+    building_class: '5'
+  expect: FAIL
+- name: flexible_boundary_1_0
+  inputs:
+    duct_insulation_r_value: 1.0
+    duct_type: flexible
+    duct_location: other
+    climate_zone: 6
+    duct_in_only_or_last_room_served: false
+    duct_is_conditioned_space_interface_fitting: false
+    duct_is_return_air_in_conditioned_space: false
+    duct_is_outdoor_or_exhaust_air: false
+    duct_is_in_situ_ahu_floor: false
+    duct_is_flexible_fan_connection: false
+    duct_is_active_component: false
+    system_type: air_conditioning
+    is_electricity_substation: false
+    building_class: '5'
+  expect: PASS
+- name: cushion_box_below_connecting_duct
+  inputs:
+    duct_insulation_r_value: 1.2
+    duct_type: cushion_box
+    duct_location: other
+    connecting_duct_insulation_r_value: 2.0
+    climate_zone: 6
+    duct_in_only_or_last_room_served: false
+    duct_is_conditioned_space_interface_fitting: false
+    duct_is_return_air_in_conditioned_space: false
+    duct_is_outdoor_or_exhaust_air: false
+    duct_is_in_situ_ahu_floor: false
+    duct_is_flexible_fan_connection: false
+    duct_is_active_component: false
+    system_type: air_conditioning
+    is_electricity_substation: false
+    building_class: '5'
+  expect: FAIL
+- name: last_room_served_exempt
+  inputs:
+    duct_insulation_r_value: 0
+    duct_type: rigid
+    duct_location: other
+    climate_zone: 6
+    duct_in_only_or_last_room_served: true
+    duct_is_conditioned_space_interface_fitting: false
+    duct_is_return_air_in_conditioned_space: false
+    duct_is_outdoor_or_exhaust_air: false
+    duct_is_in_situ_ahu_floor: false
+    duct_is_flexible_fan_connection: false
+    duct_is_active_component: false
+    system_type: air_conditioning
+    is_electricity_substation: false
+    building_class: '5'
+  expect: NOT_APPLICABLE
+- name: outdoor_air_duct_exempt
+  inputs:
+    duct_insulation_r_value: 0
+    duct_type: rigid
+    duct_location: other
+    climate_zone: 6
+    duct_in_only_or_last_room_served: false
+    duct_is_conditioned_space_interface_fitting: false
+    duct_is_return_air_in_conditioned_space: false
+    duct_is_outdoor_or_exhaust_air: true
+    duct_is_in_situ_ahu_floor: false
+    duct_is_flexible_fan_connection: false
+    duct_is_active_component: false
+    system_type: air_conditioning
+    is_electricity_substation: false
+    building_class: '5'
+  expect: NOT_APPLICABLE
+- name: missing_location
+  inputs:
+    duct_insulation_r_value: 2.0
+    duct_type: rigid
+    climate_zone: 6
+    duct_in_only_or_last_room_served: false
+    duct_is_conditioned_space_interface_fitting: false
+    duct_is_return_air_in_conditioned_space: false
+    duct_is_outdoor_or_exhaust_air: false
+    duct_is_in_situ_ahu_floor: false
+    duct_is_flexible_fan_connection: false
+    duct_is_active_component: false
+    system_type: air_conditioning
+    is_electricity_substation: false
+    building_class: '5'
+  expect: NEEDS_JUDGEMENT
+- name: exempt_duct_is_conditioned_space_interface_fitting_true
+  inputs:
+    duct_insulation_r_value: 2.0
+    duct_type: rigid
+    duct_location: other
+    climate_zone: 5
+    duct_in_only_or_last_room_served: false
+    duct_is_conditioned_space_interface_fitting: true
+    duct_is_return_air_in_conditioned_space: false
+    duct_is_outdoor_or_exhaust_air: false
+    duct_is_in_situ_ahu_floor: false
+    duct_is_flexible_fan_connection: false
+    duct_is_active_component: false
+    system_type: air_conditioning
+    is_electricity_substation: false
+    building_class: '5'
+  expect: NOT_APPLICABLE
+- name: exempt_duct_is_return_air_in_conditioned_space_true
+  inputs:
+    duct_insulation_r_value: 2.0
+    duct_type: rigid
+    duct_location: other
+    climate_zone: 5
+    duct_in_only_or_last_room_served: false
+    duct_is_conditioned_space_interface_fitting: false
+    duct_is_return_air_in_conditioned_space: true
+    duct_is_outdoor_or_exhaust_air: false
+    duct_is_in_situ_ahu_floor: false
+    duct_is_flexible_fan_connection: false
+    duct_is_active_component: false
+    system_type: air_conditioning
+    is_electricity_substation: false
+    building_class: '5'
+  expect: NOT_APPLICABLE
+- name: exempt_duct_is_in_situ_ahu_floor_true
+  inputs:
+    duct_insulation_r_value: 2.0
+    duct_type: rigid
+    duct_location: other
+    climate_zone: 5
+    duct_in_only_or_last_room_served: false
+    duct_is_conditioned_space_interface_fitting: false
+    duct_is_return_air_in_conditioned_space: false
+    duct_is_outdoor_or_exhaust_air: false
+    duct_is_in_situ_ahu_floor: true
+    duct_is_flexible_fan_connection: false
+    duct_is_active_component: false
+    system_type: air_conditioning
+    is_electricity_substation: false
+    building_class: '5'
+  expect: NOT_APPLICABLE
+- name: exempt_duct_is_flexible_fan_connection_true
+  inputs:
+    duct_insulation_r_value: 2.0
+    duct_type: rigid
+    duct_location: other
+    climate_zone: 5
+    duct_in_only_or_last_room_served: false
+    duct_is_conditioned_space_interface_fitting: false
+    duct_is_return_air_in_conditioned_space: false
+    duct_is_outdoor_or_exhaust_air: false
+    duct_is_in_situ_ahu_floor: false
+    duct_is_flexible_fan_connection: true
+    duct_is_active_component: false
+    system_type: air_conditioning
+    is_electricity_substation: false
+    building_class: '5'
+  expect: NOT_APPLICABLE
+- name: exempt_duct_is_active_component_true
+  inputs:
+    duct_insulation_r_value: 2.0
+    duct_type: rigid
+    duct_location: other
+    climate_zone: 5
+    duct_in_only_or_last_room_served: false
+    duct_is_conditioned_space_interface_fitting: false
+    duct_is_return_air_in_conditioned_space: false
+    duct_is_outdoor_or_exhaust_air: false
+    duct_is_in_situ_ahu_floor: false
+    duct_is_flexible_fan_connection: false
+    duct_is_active_component: true
+    system_type: air_conditioning
+    is_electricity_substation: false
+    building_class: '5'
+  expect: NOT_APPLICABLE
+- name: exempt_is_electricity_substation_true
+  inputs:
+    duct_insulation_r_value: 2.0
+    duct_type: rigid
+    duct_location: other
+    climate_zone: 5
+    duct_in_only_or_last_room_served: false
+    duct_is_conditioned_space_interface_fitting: false
+    duct_is_return_air_in_conditioned_space: false
+    duct_is_outdoor_or_exhaust_air: false
+    duct_is_in_situ_ahu_floor: false
+    duct_is_flexible_fan_connection: false
+    duct_is_active_component: false
+    system_type: air_conditioning
+    is_electricity_substation: true
+    building_class: '5'
+  expect: NOT_APPLICABLE
+notes: 'Encoded from ABCB NCC 2025 J6D6. 2025 (3) has no exemption for MEPS-covered equipment. Assumed: flexible duct uses 1.0 regardless of location; cushion box compares with the installed R of the connecting duct; rigid uses Table J6D6 by location and CZ. Engineer to confirm both readings. Evaluate per duct segment. (2) vapour barrier and weather protection not encoded.'
+reviewed_by: null
+reviewed_on: null
+status: draft

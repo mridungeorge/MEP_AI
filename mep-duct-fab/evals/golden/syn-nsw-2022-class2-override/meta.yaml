@@ -1,0 +1,9 @@
+# Golden project metadata. A project is REAL only when synthetic is false AND it names a pilot firm and a data
+# agreement. Everything below is synthetic: made up to exercise the engine, outcomes derived by hand.
+name: syn-nsw-2022-class2-override
+synthetic: true
+origin: synthetic hand-derived (no pilot-firm data)
+firm: null
+data_agreement: null
+engineer_signed_off_by: null
+description: "Synthetic NSW Class 2 on NCC 2022 with an approver override of the applicability refusal"

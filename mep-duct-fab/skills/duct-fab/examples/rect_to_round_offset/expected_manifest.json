@@ -1,0 +1,95 @@
+{
+  "files": [
+    {
+      "bytes": 81390,
+      "name": "T-02.step",
+      "role": "step",
+      "sha256": "45596f2f3fa83978c099ed2a46dadcf7214609b19f207a68cd8b10439574d482"
+    },
+    {
+      "bytes": 50707,
+      "name": "T-02.dxf",
+      "role": "dxf",
+      "sha256": "9dcec301995801628bd5c410116e6c52cc2cd292ce0698e1062ba6bd29fd2ee6"
+    }
+  ],
+  "inputs": {
+    "connection": {
+      "allowance_mm": 25,
+      "type": "slip_and_drive"
+    },
+    "fitting": "rect_to_round",
+    "geometry": {
+      "circle_segments": 24,
+      "diameter_mm": 315,
+      "height_mm": 500,
+      "length_mm": 400,
+      "offset_x_mm": 100,
+      "offset_y_mm": 0,
+      "width_mm": 500
+    },
+    "mark": "T-02",
+    "seam": {
+      "allowance_mm": 20,
+      "type": "snap_lock"
+    },
+    "sheet_thickness_mm": 1.0,
+    "spec_version": "1",
+    "units": "mm"
+  },
+  "measures": {
+    "pattern": {
+      "net_area_mm2": 632249.97,
+      "net_edge_count": 57,
+      "outline_area_mm2": 716504.18,
+      "outline_bbox_mm": [
+        1568.4,
+        823.68
+      ],
+      "seam_edge_length_mm": 425.1
+    },
+    "solid_bbox_mm": [
+      507.5,
+      500.0,
+      400.0
+    ],
+    "solid_volume_mm3": 64605861.0
+  },
+  "skill": "duct-fab",
+  "skill_version": "1.0.0",
+  "spec_sha256": "fe39f4e1e34f81737b51849eb7f21e661393c25614b6cf356f082775aec0b788",
+  "toolchain": {
+    "cadquery": "2.8.0",
+    "cadquery-ocp": "7.9.3.1.1",
+    "ezdxf": "1.4.4"
+  },
+  "validation": {
+    "checks": [
+      "input_files",
+      "spec_readable",
+      "step_solid",
+      "step_planar_faces",
+      "step_length",
+      "step_vertex_count",
+      "step_inlet_cap",
+      "step_outlet_cap",
+      "step_outlet_offset",
+      "step_bbox_xy",
+      "dxf_loads",
+      "dxf_layers",
+      "cut_closed_single",
+      "cut_no_zero_length",
+      "cut_no_self_intersection",
+      "net_connected",
+      "net_no_self_intersection",
+      "edge_lengths_match_3d",
+      "net_area_matches_lateral_area",
+      "net_inlet_perimeter",
+      "net_outlet_perimeter",
+      "seam_allowance",
+      "connection_allowance",
+      "title_block"
+    ],
+    "passed": true
+  }
+}

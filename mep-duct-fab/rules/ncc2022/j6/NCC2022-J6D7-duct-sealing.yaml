@@ -1,0 +1,108 @@
+id: NCC2022-J6D7-duct-sealing
+source:
+  document: NCC 2022 Volume One
+  edition: '2022'
+  clause: J6D7
+  url: https://ncc.abcb.gov.au/editions/ncc-2022/adopted/volume-one/j-energy-efficiency/part-j6-air-conditioning-and-ventilation
+applies_when:
+  edition: NCC2022
+  state:
+  - ALL
+  system_type: air_conditioning
+  exempt_when:
+  - electricity_network_substation == True
+  - duct_in_only_or_last_room == True
+inputs:
+- name: ac_system_airflow
+  unit: L/s
+  type: number
+  provenance: engineer_confirmed
+- name: duct_sealed_to_as4254
+  type: bool
+  provenance: engineer_confirmed
+- name: duct_in_only_or_last_room
+  type: bool
+  provenance: engineer_confirmed
+- name: electricity_network_substation
+  type: bool
+  provenance: engineer_confirmed
+- name: system_type
+  type: enum
+  provenance: engineer_confirmed
+  values:
+  - air_conditioning
+  - air_conditioning_heating
+  - mechanical_ventilation
+  - exhaust
+threshold:
+  table: J6D7 clause value
+  values:
+    ac_system:
+      value: 3000
+      unit: L/s
+check: ac_system_airflow < threshold('ac_system') or duct_sealed_to_as4254 == True
+outcomes:
+  'true': PASS
+  'false': FAIL
+  missing_input: NEEDS_JUDGEMENT
+near_miss: 0.05
+fix_hypotheses:
+- 'Hypothesis: verify - specify duct sealing and leakage testing to AS 4254.1 and AS 4254.2 for the system static pressure class'
+depends_on:
+- systems.ac_system_airflow
+- systems.ducts.duct_sealed_to_as4254
+- systems.ducts.duct_in_only_or_last_room
+- project.electricity_network_substation
+- systems.system_type
+tests:
+- name: below_threshold_unsealed
+  inputs:
+    ac_system_airflow: 2999
+    duct_sealed_to_as4254: false
+    duct_in_only_or_last_room: false
+    electricity_network_substation: false
+    system_type: air_conditioning
+  expect: PASS
+- name: boundary_exactly_3000_unsealed
+  inputs:
+    ac_system_airflow: 3000
+    duct_sealed_to_as4254: false
+    duct_in_only_or_last_room: false
+    electricity_network_substation: false
+    system_type: air_conditioning
+  expect: FAIL
+- name: large_sealed
+  inputs:
+    ac_system_airflow: 8000
+    duct_sealed_to_as4254: true
+    duct_in_only_or_last_room: false
+    electricity_network_substation: false
+    system_type: air_conditioning
+  expect: PASS
+- name: last_room_excluded
+  inputs:
+    ac_system_airflow: 8000
+    duct_sealed_to_as4254: false
+    duct_in_only_or_last_room: true
+    electricity_network_substation: false
+    system_type: air_conditioning
+  expect: NOT_APPLICABLE
+- name: missing_sealing_confirmation
+  inputs:
+    ac_system_airflow: 8000
+    duct_in_only_or_last_room: false
+    electricity_network_substation: false
+    system_type: air_conditioning
+  expect: NEEDS_JUDGEMENT
+- name: exempt_electricity_network_substation_true
+  inputs:
+    ac_system_airflow: 2999
+    duct_sealed_to_as4254: false
+    duct_in_only_or_last_room: false
+    electricity_network_substation: true
+    system_type: air_conditioning
+  expect: NOT_APPLICABLE
+notes: 3000 L/s typed from ABCB clause text; trigger is 3000 L/s or greater (system capacity). Compliance with AS 4254.1/.2 sealing cannot be checked by the engine; it is an engineer-confirmed bool. Unconfirmed sealing returns NEEDS_JUDGEMENT. Applies to air-conditioning ductwork only.
+reviewed_by: null
+reviewed_on: null
+status: draft

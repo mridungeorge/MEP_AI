@@ -1,0 +1,24 @@
+description: Synthetic ACT Class 6 project on NCC 2022 during the NCC 2025 transition (not pilot data)
+synthetic: true
+project: {state: ACT, ncc_edition: NCC2022, climate_zone: 7, building_class: "6", approval_date: "2026-10-06"}
+subjects:
+  - id: ahu-1
+    rules: [NCC2022-J6D3-econ-cycle]
+    inputs:
+      system_type: {value: air_conditioning}
+      airside_component_airflow: {value: 2600, unit: L/s}
+      economy_cycle: {value: true}
+      provides_required_mech_ventilation: {value: true}
+      dehumidification_control_needed: {value: false}
+      electricity_network_substation: {value: false}
+  - id: fan-1
+    rules: [NCC2022-J6D4-mv-time-switch]
+    inputs:
+      system_type: {value: mechanical_ventilation}
+      mv_airflow: {value: 1000, unit: L/s}
+      time_switch_provided: {value: false}
+      time_switch_variable_times_and_days: {value: false}
+      serves_single_sou_class_2_3_9c: {value: false}
+      serves_class_4_part: {value: false}
+      building_needs_24h_ventilation: {value: false}
+      electricity_network_substation: {value: false}

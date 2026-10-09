@@ -1,0 +1,4 @@
+# Runtime for skills/duct-fab (not yet in the root pyproject/uv.lock: see docs/skills/duct-fab.md, "Integration needed").
+cadquery>=2.4
+ezdxf>=1.3
+jsonschema>=4.21

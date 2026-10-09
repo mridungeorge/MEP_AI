@@ -1,0 +1,467 @@
+id: NCC2025-J6D9-pipe-insulation
+source:
+  document: NCC 2025 Volume One
+  edition: '2025'
+  clause: J6D9(1)(b), J6D9(4), J6D9(5), Table J6D9a
+  url: https://ncc.abcb.gov.au/editions/ncc-2025/adopted/volume-one/j-energy-efficiency/part-j6-air-conditioning-and-ventilation
+applies_when:
+  edition: NCC2025
+  state:
+  - ALL
+  building_class:
+  - '2'
+  - '3'
+  - '4'
+  - '5'
+  - '6'
+  - 7a
+  - 7b
+  - '8'
+  - 9a
+  - 9b
+  - 9c
+  system_type: air_conditioning
+  exempt_when:
+  - pipe_within_meps_appliance == True
+  - is_condenser_water == True
+  - pipe_in_last_room_downstream_of_control == True
+  - pipe_encased_in_slab_or_panel_system == True
+  - pipe_integral_to_compliant_plant == True
+  - pipe_inside_ahu_or_fcu == True
+  - is_electricity_substation == True
+  - fluid_held_at_conditioned_temperature == False
+  needs_judgement_when:
+  - fluid_temperature > threshold('t_chilled_max') and fluid_temperature <= threshold('t_heated_min')
+  - pipe_penetrates_structural_member == True
+inputs:
+- name: pipe_insulation_r_value
+  unit: m^2*K/W
+  type: number
+  provenance: engineer_confirmed
+- name: fluid_temperature
+  unit: degC
+  type: number
+  provenance: engineer_confirmed
+- name: nominal_pipe_diameter
+  unit: mm
+  type: number
+  provenance: engineer_confirmed
+- name: fluid_held_at_conditioned_temperature
+  type: bool
+  provenance: engineer_confirmed
+- name: pipe_within_meps_appliance
+  type: bool
+  provenance: engineer_confirmed
+- name: is_condenser_water
+  type: bool
+  provenance: engineer_confirmed
+- name: pipe_in_last_room_downstream_of_control
+  type: bool
+  provenance: engineer_confirmed
+- name: pipe_encased_in_slab_or_panel_system
+  type: bool
+  provenance: engineer_confirmed
+- name: pipe_integral_to_compliant_plant
+  type: bool
+  provenance: engineer_confirmed
+- name: pipe_inside_ahu_or_fcu
+  type: bool
+  provenance: engineer_confirmed
+- name: pipe_penetrates_structural_member
+  type: bool
+  provenance: engineer_confirmed
+- name: system_type
+  type: enum
+  provenance: engineer_confirmed
+  values:
+  - air_conditioning
+  - air_conditioning_heating
+  - mechanical_ventilation
+  - exhaust
+- name: is_electricity_substation
+  type: bool
+  provenance: engineer_confirmed
+- name: building_class
+  type: string
+  provenance: engineer_confirmed
+  values:
+  - '2'
+  - '3'
+  - '4'
+  - '5'
+  - '6'
+  - 7a
+  - 7b
+  - '8'
+  - 9a
+  - 9b
+  - 9c
+threshold:
+  table: J6D9a
+  values:
+    low_temperature_chilled:
+      unit: m^2*K/W
+      values:
+        le_40: 1.3
+        gt_40_le_80: 1.7
+        gt_80_le_150: 2.0
+        gt_150: 2.7
+    chilled:
+      unit: m^2*K/W
+      values:
+        le_40: 1.0
+        gt_40_le_80: 1.5
+        gt_80_le_150: 2.0
+        gt_150: 2.0
+    heated:
+      unit: m^2*K/W
+      values:
+        le_40: 1.7
+        gt_40_le_80: 1.7
+        gt_80_le_150: 1.7
+        gt_150: 1.7
+    high_temperature_heated:
+      unit: m^2*K/W
+      values:
+        le_40: 2.7
+        gt_40_le_80: 2.7
+        gt_80_le_150: 2.7
+        gt_150: 2.7
+    t_edge_low:
+      value: 2
+      unit: degC
+    t_chilled_max:
+      value: 20
+      unit: degC
+    t_heated_min:
+      value: 30
+      unit: degC
+    t_high:
+      value: 85
+      unit: degC
+    dn_1:
+      value: 40
+      unit: mm
+    dn_2:
+      value: 80
+      unit: mm
+    dn_3:
+      value: 150
+      unit: mm
+check: (fluid_temperature <= threshold('t_edge_low') and nominal_pipe_diameter <= threshold('dn_1') and pipe_insulation_r_value >= threshold('low_temperature_chilled', 'le_40')) or (fluid_temperature <= threshold('t_edge_low') and nominal_pipe_diameter > threshold('dn_1') and nominal_pipe_diameter <= threshold('dn_2') and pipe_insulation_r_value >= threshold('low_temperature_chilled', 'gt_40_le_80')) or (fluid_temperature <= threshold('t_edge_low') and nominal_pipe_diameter > threshold('dn_2') and nominal_pipe_diameter <= threshold('dn_3') and pipe_insulation_r_value >= threshold('low_temperature_chilled', 'gt_80_le_150')) or (fluid_temperature <= threshold('t_edge_low') and nominal_pipe_diameter > threshold('dn_3') and pipe_insulation_r_value >= threshold('low_temperature_chilled', 'gt_150')) or (fluid_temperature > threshold('t_edge_low') and fluid_temperature <= threshold('t_chilled_max') and nominal_pipe_diameter <= threshold('dn_1') and pipe_insulation_r_value >= threshold('chilled', 'le_40')) or (fluid_temperature > threshold('t_edge_low') and fluid_temperature <= threshold('t_chilled_max') and nominal_pipe_diameter > threshold('dn_1') and nominal_pipe_diameter <= threshold('dn_2') and pipe_insulation_r_value >= threshold('chilled', 'gt_40_le_80')) or (fluid_temperature > threshold('t_edge_low') and fluid_temperature <= threshold('t_chilled_max') and nominal_pipe_diameter > threshold('dn_2') and nominal_pipe_diameter <= threshold('dn_3') and pipe_insulation_r_value >= threshold('chilled', 'gt_80_le_150')) or (fluid_temperature > threshold('t_edge_low') and fluid_temperature <= threshold('t_chilled_max') and nominal_pipe_diameter > threshold('dn_3') and pipe_insulation_r_value >= threshold('chilled', 'gt_150')) or (fluid_temperature > threshold('t_heated_min') and fluid_temperature <= threshold('t_high') and nominal_pipe_diameter <= threshold('dn_1') and pipe_insulation_r_value >= threshold('heated', 'le_40')) or (fluid_temperature > threshold('t_heated_min') and fluid_temperature <= threshold('t_high') and nominal_pipe_diameter > threshold('dn_1') and nominal_pipe_diameter <= threshold('dn_2') and pipe_insulation_r_value >= threshold('heated', 'gt_40_le_80')) or (fluid_temperature > threshold('t_heated_min') and fluid_temperature <= threshold('t_high') and nominal_pipe_diameter > threshold('dn_2') and nominal_pipe_diameter <= threshold('dn_3') and pipe_insulation_r_value >= threshold('heated', 'gt_80_le_150')) or (fluid_temperature > threshold('t_heated_min') and fluid_temperature <= threshold('t_high') and nominal_pipe_diameter > threshold('dn_3') and pipe_insulation_r_value >= threshold('heated', 'gt_150')) or (fluid_temperature > threshold('t_high') and nominal_pipe_diameter <= threshold('dn_1') and pipe_insulation_r_value >= threshold('high_temperature_heated', 'le_40')) or (fluid_temperature > threshold('t_high') and nominal_pipe_diameter > threshold('dn_1') and nominal_pipe_diameter <= threshold('dn_2') and pipe_insulation_r_value >= threshold('high_temperature_heated', 'gt_40_le_80')) or (fluid_temperature > threshold('t_high') and nominal_pipe_diameter > threshold('dn_2') and nominal_pipe_diameter <= threshold('dn_3') and pipe_insulation_r_value >= threshold('high_temperature_heated', 'gt_80_le_150')) or (fluid_temperature > threshold('t_high') and nominal_pipe_diameter > threshold('dn_3') and pipe_insulation_r_value >= threshold('high_temperature_heated', 'gt_150'))
+outcomes:
+  'true': PASS
+  'false': FAIL
+  missing_input: NEEDS_JUDGEMENT
+near_miss: 0.05
+fix_hypotheses:
+- 'Hypothesis: verify. Increase pipe insulation thickness to reach the Table J6D9a R-Value for this fluid temperature and pipe size.'
+- 'Hypothesis: verify. For chilled or refrigerant pipework, confirm a vapour barrier is specified (J6D9(3), separate check).'
+depends_on:
+- pipes.pipe_insulation_r_value
+- pipes.fluid_temperature
+- pipes.nominal_pipe_diameter
+- pipes.fluid_held_at_conditioned_temperature
+- pipes.pipe_within_meps_appliance
+- pipes.is_condenser_water
+- pipes.pipe_in_last_room_downstream_of_control
+- pipes.pipe_encased_in_slab_or_panel_system
+- pipes.pipe_integral_to_compliant_plant
+- pipes.pipe_inside_ahu_or_fcu
+- pipes.pipe_penetrates_structural_member
+- systems.system_type
+- project.is_electricity_substation
+- project.building_class
+tests:
+- name: chilled_dn50_boundary_pass
+  inputs:
+    pipe_insulation_r_value: 1.5
+    fluid_temperature: 7
+    nominal_pipe_diameter: 50
+    fluid_held_at_conditioned_temperature: true
+    pipe_within_meps_appliance: false
+    is_condenser_water: false
+    pipe_in_last_room_downstream_of_control: false
+    pipe_encased_in_slab_or_panel_system: false
+    pipe_integral_to_compliant_plant: false
+    pipe_inside_ahu_or_fcu: false
+    pipe_penetrates_structural_member: false
+    system_type: air_conditioning
+    is_electricity_substation: false
+    building_class: '5'
+  expect: PASS
+- name: chilled_dn50_fail
+  inputs:
+    pipe_insulation_r_value: 1.4
+    fluid_temperature: 7
+    nominal_pipe_diameter: 50
+    fluid_held_at_conditioned_temperature: true
+    pipe_within_meps_appliance: false
+    is_condenser_water: false
+    pipe_in_last_room_downstream_of_control: false
+    pipe_encased_in_slab_or_panel_system: false
+    pipe_integral_to_compliant_plant: false
+    pipe_inside_ahu_or_fcu: false
+    pipe_penetrates_structural_member: false
+    system_type: air_conditioning
+    is_electricity_substation: false
+    building_class: '5'
+  expect: FAIL
+- name: chilled_dn40_diameter_boundary
+  inputs:
+    pipe_insulation_r_value: 1.0
+    fluid_temperature: 20
+    nominal_pipe_diameter: 40
+    fluid_held_at_conditioned_temperature: true
+    pipe_within_meps_appliance: false
+    is_condenser_water: false
+    pipe_in_last_room_downstream_of_control: false
+    pipe_encased_in_slab_or_panel_system: false
+    pipe_integral_to_compliant_plant: false
+    pipe_inside_ahu_or_fcu: false
+    pipe_penetrates_structural_member: false
+    system_type: air_conditioning
+    is_electricity_substation: false
+    building_class: '5'
+  expect: PASS
+- name: low_temp_chilled_dn200_pass
+  inputs:
+    pipe_insulation_r_value: 2.7
+    fluid_temperature: -5
+    nominal_pipe_diameter: 200
+    fluid_held_at_conditioned_temperature: true
+    pipe_within_meps_appliance: false
+    is_condenser_water: false
+    pipe_in_last_room_downstream_of_control: false
+    pipe_encased_in_slab_or_panel_system: false
+    pipe_integral_to_compliant_plant: false
+    pipe_inside_ahu_or_fcu: false
+    pipe_penetrates_structural_member: false
+    system_type: air_conditioning
+    is_electricity_substation: false
+    building_class: '5'
+  expect: PASS
+- name: heated_dn100_fail
+  inputs:
+    pipe_insulation_r_value: 1.5
+    fluid_temperature: 60
+    nominal_pipe_diameter: 100
+    fluid_held_at_conditioned_temperature: true
+    pipe_within_meps_appliance: false
+    is_condenser_water: false
+    pipe_in_last_room_downstream_of_control: false
+    pipe_encased_in_slab_or_panel_system: false
+    pipe_integral_to_compliant_plant: false
+    pipe_inside_ahu_or_fcu: false
+    pipe_penetrates_structural_member: false
+    system_type: air_conditioning
+    is_electricity_substation: false
+    building_class: '5'
+  expect: FAIL
+- name: high_temp_heated_fail
+  inputs:
+    pipe_insulation_r_value: 2.0
+    fluid_temperature: 90
+    nominal_pipe_diameter: 25
+    fluid_held_at_conditioned_temperature: true
+    pipe_within_meps_appliance: false
+    is_condenser_water: false
+    pipe_in_last_room_downstream_of_control: false
+    pipe_encased_in_slab_or_panel_system: false
+    pipe_integral_to_compliant_plant: false
+    pipe_inside_ahu_or_fcu: false
+    pipe_penetrates_structural_member: false
+    system_type: air_conditioning
+    is_electricity_substation: false
+    building_class: '5'
+  expect: FAIL
+- name: gap_band_25C_needs_judgement
+  inputs:
+    pipe_insulation_r_value: 0
+    fluid_temperature: 25
+    nominal_pipe_diameter: 50
+    fluid_held_at_conditioned_temperature: true
+    pipe_within_meps_appliance: false
+    is_condenser_water: false
+    pipe_in_last_room_downstream_of_control: false
+    pipe_encased_in_slab_or_panel_system: false
+    pipe_integral_to_compliant_plant: false
+    pipe_inside_ahu_or_fcu: false
+    pipe_penetrates_structural_member: false
+    system_type: air_conditioning
+    is_electricity_substation: false
+    building_class: '5'
+  expect: NEEDS_JUDGEMENT
+- name: condenser_water_not_applicable
+  inputs:
+    pipe_insulation_r_value: 0
+    fluid_temperature: 29
+    nominal_pipe_diameter: 150
+    fluid_held_at_conditioned_temperature: true
+    pipe_within_meps_appliance: false
+    is_condenser_water: true
+    pipe_in_last_room_downstream_of_control: false
+    pipe_encased_in_slab_or_panel_system: false
+    pipe_integral_to_compliant_plant: false
+    pipe_inside_ahu_or_fcu: false
+    pipe_penetrates_structural_member: false
+    system_type: air_conditioning
+    is_electricity_substation: false
+    building_class: '5'
+  expect: NOT_APPLICABLE
+- name: inside_fcu_not_applicable
+  inputs:
+    pipe_insulation_r_value: 0
+    fluid_temperature: 7
+    nominal_pipe_diameter: 20
+    fluid_held_at_conditioned_temperature: true
+    pipe_within_meps_appliance: false
+    is_condenser_water: false
+    pipe_in_last_room_downstream_of_control: false
+    pipe_encased_in_slab_or_panel_system: false
+    pipe_integral_to_compliant_plant: false
+    pipe_inside_ahu_or_fcu: true
+    pipe_penetrates_structural_member: false
+    system_type: air_conditioning
+    is_electricity_substation: false
+    building_class: '5'
+  expect: NOT_APPLICABLE
+- name: missing_diameter
+  inputs:
+    pipe_insulation_r_value: 1.5
+    fluid_temperature: 7
+    fluid_held_at_conditioned_temperature: true
+    pipe_within_meps_appliance: false
+    is_condenser_water: false
+    pipe_in_last_room_downstream_of_control: false
+    pipe_encased_in_slab_or_panel_system: false
+    pipe_integral_to_compliant_plant: false
+    pipe_inside_ahu_or_fcu: false
+    pipe_penetrates_structural_member: false
+    system_type: air_conditioning
+    is_electricity_substation: false
+    building_class: '5'
+  expect: NEEDS_JUDGEMENT
+- name: exempt_pipe_within_meps_appliance_true
+  inputs:
+    pipe_insulation_r_value: 1.5
+    fluid_temperature: 7
+    nominal_pipe_diameter: 50
+    fluid_held_at_conditioned_temperature: true
+    pipe_within_meps_appliance: true
+    is_condenser_water: false
+    pipe_in_last_room_downstream_of_control: false
+    pipe_encased_in_slab_or_panel_system: false
+    pipe_integral_to_compliant_plant: false
+    pipe_inside_ahu_or_fcu: false
+    pipe_penetrates_structural_member: false
+    system_type: air_conditioning
+    is_electricity_substation: false
+    building_class: '5'
+  expect: NOT_APPLICABLE
+- name: exempt_pipe_in_last_room_downstream_of_control_true
+  inputs:
+    pipe_insulation_r_value: 1.5
+    fluid_temperature: 7
+    nominal_pipe_diameter: 50
+    fluid_held_at_conditioned_temperature: true
+    pipe_within_meps_appliance: false
+    is_condenser_water: false
+    pipe_in_last_room_downstream_of_control: true
+    pipe_encased_in_slab_or_panel_system: false
+    pipe_integral_to_compliant_plant: false
+    pipe_inside_ahu_or_fcu: false
+    pipe_penetrates_structural_member: false
+    system_type: air_conditioning
+    is_electricity_substation: false
+    building_class: '5'
+  expect: NOT_APPLICABLE
+- name: exempt_pipe_encased_in_slab_or_panel_system_true
+  inputs:
+    pipe_insulation_r_value: 1.5
+    fluid_temperature: 7
+    nominal_pipe_diameter: 50
+    fluid_held_at_conditioned_temperature: true
+    pipe_within_meps_appliance: false
+    is_condenser_water: false
+    pipe_in_last_room_downstream_of_control: false
+    pipe_encased_in_slab_or_panel_system: true
+    pipe_integral_to_compliant_plant: false
+    pipe_inside_ahu_or_fcu: false
+    pipe_penetrates_structural_member: false
+    system_type: air_conditioning
+    is_electricity_substation: false
+    building_class: '5'
+  expect: NOT_APPLICABLE
+- name: exempt_pipe_integral_to_compliant_plant_true
+  inputs:
+    pipe_insulation_r_value: 1.5
+    fluid_temperature: 7
+    nominal_pipe_diameter: 50
+    fluid_held_at_conditioned_temperature: true
+    pipe_within_meps_appliance: false
+    is_condenser_water: false
+    pipe_in_last_room_downstream_of_control: false
+    pipe_encased_in_slab_or_panel_system: false
+    pipe_integral_to_compliant_plant: true
+    pipe_inside_ahu_or_fcu: false
+    pipe_penetrates_structural_member: false
+    system_type: air_conditioning
+    is_electricity_substation: false
+    building_class: '5'
+  expect: NOT_APPLICABLE
+- name: exempt_is_electricity_substation_true
+  inputs:
+    pipe_insulation_r_value: 1.5
+    fluid_temperature: 7
+    nominal_pipe_diameter: 50
+    fluid_held_at_conditioned_temperature: true
+    pipe_within_meps_appliance: false
+    is_condenser_water: false
+    pipe_in_last_room_downstream_of_control: false
+    pipe_encased_in_slab_or_panel_system: false
+    pipe_integral_to_compliant_plant: false
+    pipe_inside_ahu_or_fcu: false
+    pipe_penetrates_structural_member: false
+    system_type: air_conditioning
+    is_electricity_substation: true
+    building_class: '5'
+  expect: NOT_APPLICABLE
+- name: exempt_fluid_held_at_conditioned_temperature_false
+  inputs:
+    pipe_insulation_r_value: 1.5
+    fluid_temperature: 7
+    nominal_pipe_diameter: 50
+    fluid_held_at_conditioned_temperature: false
+    pipe_within_meps_appliance: false
+    is_condenser_water: false
+    pipe_in_last_room_downstream_of_control: false
+    pipe_encased_in_slab_or_panel_system: false
+    pipe_integral_to_compliant_plant: false
+    pipe_inside_ahu_or_fcu: false
+    pipe_penetrates_structural_member: false
+    system_type: air_conditioning
+    is_electricity_substation: false
+    building_class: '5'
+  expect: NOT_APPLICABLE
+- name: needs_pipe_penetrates_structural_member_true
+  inputs:
+    pipe_insulation_r_value: 1.5
+    fluid_temperature: 7
+    nominal_pipe_diameter: 50
+    fluid_held_at_conditioned_temperature: true
+    pipe_within_meps_appliance: false
+    is_condenser_water: false
+    pipe_in_last_room_downstream_of_control: false
+    pipe_encased_in_slab_or_panel_system: false
+    pipe_integral_to_compliant_plant: false
+    pipe_inside_ahu_or_fcu: false
+    pipe_penetrates_structural_member: true
+    system_type: air_conditioning
+    is_electricity_substation: false
+    building_class: '5'
+  expect: NEEDS_JUDGEMENT
+notes: 'Encoded from ABCB NCC 2025 J6D9(1)(b) and Table J6D9a (piping only; vessels/tanks under Table J6D9b and refill/relief piping (1)(d) not encoded). Table has no band for fluid above 20 and up to 30 degC: NEEDS_JUDGEMENT. Diameter is nominal size in mm. Structural-member halving from the table note returns NEEDS_JUDGEMENT. MEPS-appliance exclusion remains in 2025 J6D9(1).'
+reviewed_by: null
+reviewed_on: null
+status: draft

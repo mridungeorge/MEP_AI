@@ -1,0 +1,1314 @@
+# Independent second-pass threshold extraction (dual encoding).
+# Source: official ABCB NCC online pages only, fetched with curl on 2026-10-06.
+# Extracted without reference to rules/, docs/ or git history.
+# Values, units and clause references only. No standards wording reproduced.
+#
+# Edition verification: both pages carry <link rel="canonical"> pointing to the
+# requested edition URL (ncc-2022 / ncc-2025). The breadcrumb element is empty in
+# the static HTML, but the rendered breadcrumb text on the 2025 page reads
+# "National Construction Code 2025 > NCC 2025 Volume One".
+#
+# letter_inferred: the HTML renders sub-clause lists as <ol> without printed
+# letters/numerals. Letters below are inferred from item order. Where the
+# 2022 guide commentary on the same page names the letter, that corroboration
+# is noted. Subclause numbers (1), (2)... are printed in the HTML (<num>), so
+# those are not inferred.
+#
+# Units: the unit is given exactly as printed. "kWr" is printed as plain text
+# "kWr"; "kWheating" is printed as kW with subscript "heating". R-Values are
+# printed with no unit on the page.
+
+NCC2022-J6D3-econ-cycle:
+  source_url: https://ncc.abcb.gov.au/editions/ncc-2022/adopted/volume-one/j-energy-efficiency/part-j6-air-conditioning-and-ventilation
+  edition_verified: true
+  thresholds:
+  - name: economy_cycle_trigger_airflow_cz2
+    value: 9000
+    unit: L/s
+    clause_or_table: Table J6D3
+    letter_inferred: false
+  - name: economy_cycle_trigger_airflow_cz3
+    value: 7500
+    unit: L/s
+    clause_or_table: Table J6D3
+    letter_inferred: false
+  - name: economy_cycle_trigger_airflow_cz4
+    value: 3500
+    unit: L/s
+    clause_or_table: Table J6D3
+    letter_inferred: false
+  - name: economy_cycle_trigger_airflow_cz5
+    value: 3000
+    unit: L/s
+    clause_or_table: Table J6D3
+    letter_inferred: false
+  - name: economy_cycle_trigger_airflow_cz6
+    value: 2000
+    unit: L/s
+    clause_or_table: Table J6D3
+    letter_inferred: false
+  - name: economy_cycle_trigger_airflow_cz7
+    value: 2500
+    unit: L/s
+    clause_or_table: Table J6D3
+    letter_inferred: false
+  - name: economy_cycle_trigger_airflow_cz8
+    value: 4000
+    unit: L/s
+    clause_or_table: Table J6D3
+    letter_inferred: false
+  - name: trigger_comparison
+    value: '>= (greater than or equal to table value)'
+    unit: n/a
+    clause_or_table: J6D3(1)(c)
+    letter_inferred: true
+  - name: exempt_climate_zone
+    value: 1
+    unit: climate zone
+    clause_or_table: J6D3(1)(c)
+    letter_inferred: true
+  notes: 'The airflow compared is that of a single airside component of the system. The guide says this
+    means each air-conditioner serving a space, not the sum of units. The requirement applies only to
+    a system that provides the required mechanical ventilation. Exemptions are climate zone 1 (no row
+    in the table) and cases where dehumidification control is needed (no numeric criterion). The letter
+    (c) is corroborated by the guide commentary on the same page. CZ6 = 2000 L/s and CZ8 = 4000 L/s here;
+    both differ from NCC 2025.
+
+    '
+NCC2022-J6D3-ac-time-switch:
+  source_url: https://ncc.abcb.gov.au/editions/ncc-2022/adopted/volume-one/j-energy-efficiency/part-j6-air-conditioning-and-ventilation
+  edition_verified: true
+  thresholds:
+  - name: ac_system_capacity_trigger
+    value: 2
+    unit: kWr
+    clause_or_table: J6D3(3)(a)(i)
+    letter_inferred: true
+  - name: ac_system_capacity_trigger_comparison
+    value: '> (more than)'
+    unit: n/a
+    clause_or_table: J6D3(3)(a)(i)
+    letter_inferred: true
+  - name: heater_capacity_trigger
+    value: 1
+    unit: kW (subscript heating)
+    clause_or_table: J6D3(3)(a)(ii)
+    letter_inferred: true
+  - name: heater_capacity_trigger_comparison
+    value: '> (more than)'
+    unit: n/a
+    clause_or_table: J6D3(3)(a)(ii)
+    letter_inferred: true
+  - name: exempt_continuous_use_hours
+    value: 24
+    unit: hour
+    clause_or_table: J6D3(3)(c)(ii)
+    letter_inferred: true
+  notes: 'The time switch capability in (3)(b) is qualitative: on/off at variable pre-programmed times
+    and days. NCC 2022 has no public-holiday or override numeric requirement. Exemptions (3)(c)(i) are
+    non-numeric: (A) a system serving only one SOU in a Class 2, 3 or 9c building; (B) a Class 4 part
+    of a building. The guide corroborates (3)(a) and (3)(c). The guide paraphrases the trigger as "capacity
+    greater than 2 kW" without the r suffix, but the clause prints kWr.
+
+    '
+NCC2022-J6D4-mv-time-switch:
+  source_url: https://ncc.abcb.gov.au/editions/ncc-2022/adopted/volume-one/j-energy-efficiency/part-j6-air-conditioning-and-ventilation
+  edition_verified: true
+  thresholds:
+  - name: mv_airflow_trigger
+    value: 1000
+    unit: L/s
+    clause_or_table: J6D4(4)(a)
+    letter_inferred: true
+  - name: mv_airflow_trigger_comparison
+    value: '> (more than)'
+    unit: n/a
+    clause_or_table: J6D4(4)(a)
+    letter_inferred: true
+  - name: exempt_occupancy_hours
+    value: 24
+    unit: hour
+    clause_or_table: J6D4(4)(c)(ii)
+    letter_inferred: true
+  notes: 'The capability in (4)(b) is qualitative. Exemptions (4)(c)(i) are non-numeric: (A) a system
+    serving only one SOU in a Class 2, 3 or 9c building; (B) a Class 4 part. (4)(c)(ii) covers a building
+    where mechanical ventilation is needed for 24-hour occupancy. The guide corroborates (4)(b), (4)(c)(i)
+    and (4)(c)(ii). There is no carpark-exhaust exemption in the 2022 time-switch clause.
+
+    '
+NCC2022-J6D4-exhaust-motor-stop:
+  source_url: https://ncc.abcb.gov.au/editions/ncc-2022/adopted/volume-one/j-energy-efficiency/part-j6-air-conditioning-and-ventilation
+  edition_verified: true
+  thresholds:
+  - name: exhaust_airflow_trigger
+    value: 1000
+    unit: L/s
+    clause_or_table: J6D4(2)
+    letter_inferred: false
+  - name: exhaust_airflow_trigger_comparison
+    value: '> (more than)'
+    unit: n/a
+    clause_or_table: J6D4(2)
+    letter_inferred: false
+  notes: 'Exempt: an exhaust system in an SOU in a Class 2, 3 or 9c building (non-numeric). The guide
+    also mentions an exemption where the exhaust must balance the outdoor air intake required for ventilation.
+    That exemption is not in the 2022 clause text on the page; it appears only in the guide. Flag this
+    for the engineer.
+
+    '
+NCC2022-J6D3-ac-fan-vsd:
+  source_url: https://ncc.abcb.gov.au/editions/ncc-2022/adopted/volume-one/j-energy-efficiency/part-j6-air-conditioning-and-ventilation
+  edition_verified: true
+  thresholds:
+  - name: ac_airflow_trigger
+    value: 1000
+    unit: L/s
+    clause_or_table: J6D3(1)(e)
+    letter_inferred: true
+  - name: ac_airflow_trigger_comparison
+    value: '> (more than)'
+    unit: n/a
+    clause_or_table: J6D3(1)(e)
+    letter_inferred: true
+  notes: 'Applies only to systems whose supply air quantity can vary (non-numeric condition). The guide
+    corroborates (1)(e) and states that a unitary AC system is exempt. That unitary exemption does not
+    appear in the 2022 clause text, only in the guide. Flag this for the engineer.
+
+    '
+NCC2022-J6D4-mv-fan-vsd:
+  source_url: https://ncc.abcb.gov.au/editions/ncc-2022/adopted/volume-one/j-energy-efficiency/part-j6-air-conditioning-and-ventilation
+  edition_verified: true
+  thresholds:
+  - name: mv_airflow_trigger
+    value: 1000
+    unit: L/s
+    clause_or_table: J6D4(1)(c)
+    letter_inferred: true
+  - name: mv_airflow_trigger_comparison
+    value: '> (more than)'
+    unit: n/a
+    clause_or_table: J6D4(1)(c)
+    letter_inferred: true
+  notes: 'Exception when Part F6 requires constant downstream flow (non-numeric). The J6D4(1) chapeau
+    exempts a system serving only one SOU in a Class 2 building or only a Class 4 part. The guide corroborates
+    (1)(c).
+
+    '
+NCC2022-J6D6-duct-insulation:
+  source_url: https://ncc.abcb.gov.au/editions/ncc-2022/adopted/volume-one/j-energy-efficiency/part-j6-air-conditioning-and-ventilation
+  edition_verified: true
+  thresholds:
+  - name: r_min_flexible_ductwork
+    value: 1.0
+    unit: R-Value (no unit printed)
+    clause_or_table: J6D6(1)(b)(i)
+    letter_inferred: true
+  - name: r_min_cushion_box
+    value: equal to connecting ductwork
+    unit: R-Value
+    clause_or_table: J6D6(1)(b)(ii)
+    letter_inferred: true
+  - name: r_min_within_conditioned_space_cz1_to_7
+    value: 1.2
+    unit: R-Value (no unit printed)
+    clause_or_table: Table J6D6
+    letter_inferred: false
+  - name: r_min_within_conditioned_space_cz8
+    value: 2.0
+    unit: R-Value (no unit printed)
+    clause_or_table: Table J6D6
+    letter_inferred: false
+  - name: r_min_exposed_direct_sunlight_cz1_to_7
+    value: 3.0
+    unit: R-Value (no unit printed)
+    clause_or_table: Table J6D6
+    letter_inferred: false
+  - name: r_min_exposed_direct_sunlight_cz8
+    value: 3.0
+    unit: R-Value (no unit printed)
+    clause_or_table: Table J6D6
+    letter_inferred: false
+  - name: r_min_all_other_locations_cz1_to_7
+    value: 2.0
+    unit: R-Value (no unit printed)
+    clause_or_table: Table J6D6
+    letter_inferred: false
+  - name: r_min_all_other_locations_cz8
+    value: 3.0
+    unit: R-Value (no unit printed)
+    clause_or_table: Table J6D6
+    letter_inferred: false
+  - name: r_comparison
+    value: '>= (greater than or equal to)'
+    unit: n/a
+    clause_or_table: J6D6(1)(b)
+    letter_inferred: true
+  - name: vapour_barrier_membrane_min_overlap
+    value: 50
+    unit: mm
+    clause_or_table: J6D6(2)(c)(ii)(A)
+    letter_inferred: true
+  notes: 'The table has two climate-zone columns: zones 1 to 7, and zone 8. Exemptions (3)(a)-(g) are
+    non-numeric: (a) in the single or final room served; (b) interface fittings; (c) return air duct
+    in or through a conditioned space; (d) outdoor air and exhaust air ductwork; (e) the floor of an in-situ
+    AHU; (f) packaged, split and VRF equipment complying with MEPS; (g) flexible fan connections. (4)
+    defines fittings: cushion boxes are included, active AHU components are excluded. The guide corroborates
+    (1)(a), (1)(b) and (3)(a)-(f) lettering. Item (3)(g) is inferred. The table values are minimum material
+    R-Value of the added insulation, per the guide.
+
+    '
+NCC2022-J6D7-duct-sealing:
+  source_url: https://ncc.abcb.gov.au/editions/ncc-2022/adopted/volume-one/j-energy-efficiency/part-j6-air-conditioning-and-ventilation
+  edition_verified: true
+  thresholds:
+  - name: ac_system_capacity_trigger
+    value: 3000
+    unit: L/s
+    clause_or_table: J6D7
+    letter_inferred: false
+  - name: ac_system_capacity_trigger_comparison
+    value: '>= (3000 L/s or greater)'
+    unit: n/a
+    clause_or_table: J6D7
+    letter_inferred: false
+  notes: 'Single-paragraph clause with no subclauses. Ductwork in the single or final room served is
+    excluded (non-numeric). Sealing must follow AS 4254.1 and AS 4254.2 for the system static pressure.
+    No numeric leakage limit is on the NCC page; any limit comes from AS 4254, which needs licensed text.
+    The guide refers to a leakage test clause in AS 4254.2.
+
+    '
+NCC2022-J6D3-deadband:
+  source_url: https://ncc.abcb.gov.au/editions/ncc-2022/adopted/volume-one/j-energy-efficiency/part-j6-air-conditioning-and-ventilation
+  edition_verified: true
+  thresholds:
+  - name: min_control_deadband
+    value: 2
+    unit: °C
+    clause_or_table: J6D3(1)(h)
+    letter_inferred: true
+  - name: deadband_comparison
+    value: '>= (not less than)'
+    unit: n/a
+    clause_or_table: J6D3(1)(h)
+    letter_inferred: true
+  notes: 'Exception: a smaller range is required for specialised applications (non-numeric). The guide
+    corroborates (1)(h).
+
+    '
+NCC2022-J6D10-elec-heating-limit:
+  source_url: https://ncc.abcb.gov.au/editions/ncc-2022/adopted/volume-one/j-energy-efficiency/part-j6-air-conditioning-and-ventilation
+  edition_verified: true
+  thresholds:
+  - name: max_elec_heating_cz1
+    value: 10
+    unit: W/m2
+    clause_or_table: J6D10(1)(e)(i)(A)
+    letter_inferred: true
+  - name: max_elec_heating_cz2
+    value: 40
+    unit: W/m2
+    clause_or_table: J6D10(1)(e)(i)(B)
+    letter_inferred: true
+  - name: table_applies_condition
+    value: reticulated gas not available at allotment boundary
+    unit: n/a
+    clause_or_table: J6D10(1)(e)(i)(C)
+    letter_inferred: true
+  - name: floor_area_band_edge
+    value: 500
+    unit: m2
+    clause_or_table: Table J6D10
+    letter_inferred: false
+  - name: max_elec_heating_cz3_area_le_500
+    value: 50
+    unit: W/m2
+    clause_or_table: Table J6D10
+    letter_inferred: false
+  - name: max_elec_heating_cz4_area_le_500
+    value: 60
+    unit: W/m2
+    clause_or_table: Table J6D10
+    letter_inferred: false
+  - name: max_elec_heating_cz5_area_le_500
+    value: 55
+    unit: W/m2
+    clause_or_table: Table J6D10
+    letter_inferred: false
+  - name: max_elec_heating_cz6_area_le_500
+    value: 65
+    unit: W/m2
+    clause_or_table: Table J6D10
+    letter_inferred: false
+  - name: max_elec_heating_cz7_area_le_500
+    value: 70
+    unit: W/m2
+    clause_or_table: Table J6D10
+    letter_inferred: false
+  - name: max_elec_heating_cz3_area_gt_500
+    value: 40
+    unit: W/m2
+    clause_or_table: Table J6D10
+    letter_inferred: false
+  - name: max_elec_heating_cz4_area_gt_500
+    value: 50
+    unit: W/m2
+    clause_or_table: Table J6D10
+    letter_inferred: false
+  - name: max_elec_heating_cz5_area_gt_500
+    value: 45
+    unit: W/m2
+    clause_or_table: Table J6D10
+    letter_inferred: false
+  - name: max_elec_heating_cz6_area_gt_500
+    value: 55
+    unit: W/m2
+    clause_or_table: Table J6D10
+    letter_inferred: false
+  - name: max_elec_heating_cz7_area_gt_500
+    value: 60
+    unit: W/m2
+    clause_or_table: Table J6D10
+    letter_inferred: false
+  - name: max_elec_heating_cz8
+    value: UNREADABLE
+    unit: W/m2
+    clause_or_table: Table J6D10
+    letter_inferred: false
+  - name: heating_capacity_comparison
+    value: <= (not more than)
+    unit: n/a
+    clause_or_table: J6D10(1)(e)(i)
+    letter_inferred: true
+  - name: alt_max_annual_heating_energy
+    value: 15
+    unit: kWh/m2
+    clause_or_table: J6D10(1)(e)(ii)
+    letter_inferred: true
+  - name: alt_annual_energy_climate_zones
+    value: 1, 2, 3, 4, 5
+    unit: climate zone
+    clause_or_table: J6D10(1)(e)(ii)
+    letter_inferred: true
+  - name: alt_in_duct_heater_reheat_limit_ref
+    value: 'J6D3(1)(b)(iii): 7.5'
+    unit: K
+    clause_or_table: J6D10(1)(e)(iii) -> J6D3(1)(b)(iii)
+    letter_inferred: true
+  - name: bathroom_heater_max_capacity
+    value: 1.2
+    unit: kW
+    clause_or_table: J6D10(2)
+    letter_inferred: false
+  notes: 'The heating capacity is per m2 of floor area of the conditioned space. Table J6D10 has columns
+    for CZ 3 to 7 only, with no CZ8 column; this was confirmed in the raw HTML. Clause (1)(e)(i)(C) does
+    not name climate zones. CZ8 is marked UNREADABLE because it is absent from the table, so the CZ8 limit
+    without gas is unresolved. Band edges are "<= 500 m2" and "> 500 m2". (1)(f) allows any combination
+    of (a)-(e). (2) is the bathroom allowance for Class 2, 3, 9a or 9c buildings at 1.2 kW with a timer.
+    The guide corroborates (1)(e)(i), (1)(e)(i)(C), (1)(e)(ii) and (1)(e)(iii). The J6D3(1)(b)(iii) reheat
+    limit is a 7.5 K rise at fixed supply rate, scaled inversely with supply rate when variable.
+
+    '
+NCC2022-NSW-J6D10-elec-heating-limit:
+  source_url: https://ncc.abcb.gov.au/editions/ncc-2022/adopted/volume-one/j-energy-efficiency/part-j6-air-conditioning-and-ventilation
+  edition_verified: true
+  thresholds:
+  - name: max_elec_heating_cz1
+    value: 10
+    unit: W/m2
+    clause_or_table: J6D10(1)(e)(i)(A)
+    letter_inferred: true
+  - name: max_elec_heating_cz2
+    value: 40
+    unit: W/m2
+    clause_or_table: J6D10(1)(e)(i)(B)
+    letter_inferred: true
+  - name: table_applies_condition
+    value: reticulated gas not available at allotment boundary
+    unit: n/a
+    clause_or_table: J6D10(1)(e)(i)(C)
+    letter_inferred: true
+  - name: floor_area_band_edge
+    value: 500
+    unit: m2
+    clause_or_table: Table J6D10
+    letter_inferred: false
+  - name: max_elec_heating_cz3_area_le_500
+    value: 50
+    unit: W/m2
+    clause_or_table: Table J6D10
+    letter_inferred: false
+  - name: max_elec_heating_cz4_area_le_500
+    value: 60
+    unit: W/m2
+    clause_or_table: Table J6D10
+    letter_inferred: false
+  - name: max_elec_heating_cz5_area_le_500
+    value: 55
+    unit: W/m2
+    clause_or_table: Table J6D10
+    letter_inferred: false
+  - name: max_elec_heating_cz6_area_le_500
+    value: 65
+    unit: W/m2
+    clause_or_table: Table J6D10
+    letter_inferred: false
+  - name: max_elec_heating_cz7_area_le_500
+    value: 70
+    unit: W/m2
+    clause_or_table: Table J6D10
+    letter_inferred: false
+  - name: max_elec_heating_cz3_area_gt_500
+    value: 40
+    unit: W/m2
+    clause_or_table: Table J6D10
+    letter_inferred: false
+  - name: max_elec_heating_cz4_area_gt_500
+    value: 50
+    unit: W/m2
+    clause_or_table: Table J6D10
+    letter_inferred: false
+  - name: max_elec_heating_cz5_area_gt_500
+    value: 45
+    unit: W/m2
+    clause_or_table: Table J6D10
+    letter_inferred: false
+  - name: max_elec_heating_cz6_area_gt_500
+    value: 55
+    unit: W/m2
+    clause_or_table: Table J6D10
+    letter_inferred: false
+  - name: max_elec_heating_cz7_area_gt_500
+    value: 60
+    unit: W/m2
+    clause_or_table: Table J6D10
+    letter_inferred: false
+  - name: max_elec_heating_cz8
+    value: UNREADABLE
+    unit: W/m2
+    clause_or_table: Table J6D10
+    letter_inferred: false
+  - name: heating_capacity_comparison
+    value: <= (not more than)
+    unit: n/a
+    clause_or_table: J6D10(1)(e)(i)
+    letter_inferred: true
+  - name: alt_max_annual_heating_energy
+    value: 15
+    unit: kWh/m2
+    clause_or_table: J6D10(1)(e)(ii)
+    letter_inferred: true
+  - name: alt_annual_energy_climate_zones
+    value: 1, 2, 3, 4, 5
+    unit: climate zone
+    clause_or_table: J6D10(1)(e)(ii)
+    letter_inferred: true
+  - name: bathroom_heater_max_capacity
+    value: 1.2
+    unit: kW
+    clause_or_table: NSW J6D10(2)
+    letter_inferred: false
+  notes: 'The NSW variation on the 2022 page (data-state=NSW, type REPLACE) replaces only subclause J6D10(2).
+    It removes Class 2 from the bathroom heater allowance, leaving Class 3, 9a and 9c, with the same 1.2
+    kW and timer. J6D10(1) and Table J6D10 are unchanged for NSW, so the numbers are identical to the
+    non-NSW rule. NSW J6D1(1) makes "NSW J6D2 to J6D13" the DtS route. The same-page note says NSW Class
+    3 and Class 5-9 buildings could use NCC 2019 Amdt 1 Section J from 1 May 2023 to 30 September 2023,
+    with NCC 2022 Section J applying from 1 October 2023. CZ8 has no table column (UNREADABLE), as in
+    the non-NSW rule.
+
+    '
+NCC2022-J6D9-pipe-insulation:
+  source_url: https://ncc.abcb.gov.au/editions/ncc-2022/adopted/volume-one/j-energy-efficiency/part-j6-air-conditioning-and-ventilation
+  edition_verified: true
+  thresholds:
+  - name: temp_band_low_temp_chilled_upper
+    value: 2
+    unit: °C (<= 2°C)
+    clause_or_table: Table J6D9a
+    letter_inferred: false
+  - name: temp_band_chilled
+    value: '> 2 and <= 20'
+    unit: °C
+    clause_or_table: Table J6D9a
+    letter_inferred: false
+  - name: temp_band_heated
+    value: '> 30 and <= 85'
+    unit: °C
+    clause_or_table: Table J6D9a
+    letter_inferred: false
+  - name: temp_band_high_temp_heated_lower
+    value: 85
+    unit: °C (> 85°C)
+    clause_or_table: Table J6D9a
+    letter_inferred: false
+  - name: dia_band_1
+    value: <= 40
+    unit: mm (nominal pipe diameter)
+    clause_or_table: Table J6D9a
+    letter_inferred: false
+  - name: dia_band_2
+    value: '> 40 and <= 80'
+    unit: mm (nominal pipe diameter)
+    clause_or_table: Table J6D9a
+    letter_inferred: false
+  - name: dia_band_3
+    value: '> 80 and <= 150'
+    unit: mm (nominal pipe diameter)
+    clause_or_table: Table J6D9a
+    letter_inferred: false
+  - name: dia_band_4
+    value: '> 150'
+    unit: mm (nominal pipe diameter)
+    clause_or_table: Table J6D9a
+    letter_inferred: false
+  - name: r_low_temp_chilled_dn_le_40
+    value: 1.3
+    unit: R-Value (no unit printed)
+    clause_or_table: Table J6D9a
+    letter_inferred: false
+  - name: r_low_temp_chilled_dn_40_80
+    value: 1.7
+    unit: R-Value (no unit printed)
+    clause_or_table: Table J6D9a
+    letter_inferred: false
+  - name: r_low_temp_chilled_dn_80_150
+    value: 2.0
+    unit: R-Value (no unit printed)
+    clause_or_table: Table J6D9a
+    letter_inferred: false
+  - name: r_low_temp_chilled_dn_gt_150
+    value: 2.7
+    unit: R-Value (no unit printed)
+    clause_or_table: Table J6D9a
+    letter_inferred: false
+  - name: r_chilled_dn_le_40
+    value: 1.0
+    unit: R-Value (no unit printed)
+    clause_or_table: Table J6D9a
+    letter_inferred: false
+  - name: r_chilled_dn_40_80
+    value: 1.5
+    unit: R-Value (no unit printed)
+    clause_or_table: Table J6D9a
+    letter_inferred: false
+  - name: r_chilled_dn_80_150
+    value: 2.0
+    unit: R-Value (no unit printed)
+    clause_or_table: Table J6D9a
+    letter_inferred: false
+  - name: r_chilled_dn_gt_150
+    value: 2.0
+    unit: R-Value (no unit printed)
+    clause_or_table: Table J6D9a
+    letter_inferred: false
+  - name: r_heated_dn_le_40
+    value: 1.7
+    unit: R-Value (no unit printed)
+    clause_or_table: Table J6D9a
+    letter_inferred: false
+  - name: r_heated_dn_40_80
+    value: 1.7
+    unit: R-Value (no unit printed)
+    clause_or_table: Table J6D9a
+    letter_inferred: false
+  - name: r_heated_dn_80_150
+    value: 1.7
+    unit: R-Value (no unit printed)
+    clause_or_table: Table J6D9a
+    letter_inferred: false
+  - name: r_heated_dn_gt_150
+    value: 1.7
+    unit: R-Value (no unit printed)
+    clause_or_table: Table J6D9a
+    letter_inferred: false
+  - name: r_high_temp_heated_dn_le_40
+    value: 2.7
+    unit: R-Value (no unit printed)
+    clause_or_table: Table J6D9a
+    letter_inferred: false
+  - name: r_high_temp_heated_dn_40_80
+    value: 2.7
+    unit: R-Value (no unit printed)
+    clause_or_table: Table J6D9a
+    letter_inferred: false
+  - name: r_high_temp_heated_dn_80_150
+    value: 2.7
+    unit: R-Value (no unit printed)
+    clause_or_table: Table J6D9a
+    letter_inferred: false
+  - name: r_high_temp_heated_dn_gt_150
+    value: 2.7
+    unit: R-Value (no unit printed)
+    clause_or_table: Table J6D9a
+    letter_inferred: false
+  - name: structural_penetration_r_factor
+    value: 0.5
+    unit: multiplier (R-Value may be halved)
+    clause_or_table: Table J6D9a note
+    letter_inferred: false
+  - name: refill_relief_piping_matching_length
+    value: 500
+    unit: mm
+    clause_or_table: J6D9(1)(d)
+    letter_inferred: true
+  notes: 'The lettering (1)(b) for Table J6D9a and (1)(d) for refill and relief piping within 500 mm is
+    corroborated by the guide. Table J6D9a has no band covering fluid > 20°C and <= 30°C, so that range
+    is not covered; flag it. Exemptions (4)(a)-(d) are non-numeric: (a) within the only or last room downstream
+    of the control device; (b) encased in a slab or panel heating/cooling system; (c) integral to a chiller,
+    boiler or unitary AC complying with J6D10-J6D12; (d) inside an AHU, FCU or the like. Appliances covered
+    by MEPS are excluded in (1). In 2022, (5)(a) lists refrigerant as a heating fluid as well as a cooling
+    fluid; NCC 2025 (5)(a) omits refrigerant from heating fluids. The guide''s "Table J6D9: Insulation
+    R-Values" (insulation thickness examples) is guidance only and was not extracted as a threshold. Table
+    J6D9b (vessels) is outside this rule''s scope.
+
+    '
+NCC2025-J6D3-econ-cycle:
+  source_url: https://ncc.abcb.gov.au/editions/ncc-2025/adopted/volume-one/j-energy-efficiency/part-j6-air-conditioning-and-ventilation
+  edition_verified: true
+  thresholds:
+  - name: economy_cycle_trigger_airflow_cz2
+    value: 9000
+    unit: L/s
+    clause_or_table: Table J6D3
+    letter_inferred: false
+  - name: economy_cycle_trigger_airflow_cz3
+    value: 7500
+    unit: L/s
+    clause_or_table: Table J6D3
+    letter_inferred: false
+  - name: economy_cycle_trigger_airflow_cz4
+    value: 3500
+    unit: L/s
+    clause_or_table: Table J6D3
+    letter_inferred: false
+  - name: economy_cycle_trigger_airflow_cz5
+    value: 3000
+    unit: L/s
+    clause_or_table: Table J6D3
+    letter_inferred: false
+  - name: economy_cycle_trigger_airflow_cz6
+    value: 1200
+    unit: L/s
+    clause_or_table: Table J6D3
+    letter_inferred: false
+  - name: economy_cycle_trigger_airflow_cz7
+    value: 2500
+    unit: L/s
+    clause_or_table: Table J6D3
+    letter_inferred: false
+  - name: economy_cycle_trigger_airflow_cz8
+    value: 2000
+    unit: L/s
+    clause_or_table: Table J6D3
+    letter_inferred: false
+  - name: trigger_comparison
+    value: '>= (greater than or equal to table value)'
+    unit: n/a
+    clause_or_table: J6D3(1)(d)
+    letter_inferred: true
+  - name: exempt_climate_zone
+    value: 1
+    unit: climate zone
+    clause_or_table: J6D3(1)(d)
+    letter_inferred: true
+  notes: 'In 2025, J6D3(1) has a new item (b) on single coils serving zones with opposing heating and
+    cooling demand. The economy cycle therefore moves to (d). The explanatory information references J6D3(1)(c)(iii)
+    for modulating airflow, which corroborates that the multi-zone item is (c). The dehumidification exemption
+    is non-numeric. The 2025 values differ from 2022 at CZ6 (1200 vs 2000) and CZ8 (2000 vs 4000). No
+    NSW variation exists for (1) or Table J6D3; the NSW J6D3 variation touches only (5).
+
+    '
+NCC2025-J6D3-time-switch-ac:
+  source_url: https://ncc.abcb.gov.au/editions/ncc-2025/adopted/volume-one/j-energy-efficiency/part-j6-air-conditioning-and-ventilation
+  edition_verified: true
+  thresholds:
+  - name: ac_system_capacity_trigger
+    value: 2
+    unit: kWr
+    clause_or_table: J6D3(3)(a)
+    letter_inferred: true
+  - name: ac_system_capacity_trigger_comparison
+    value: '> (more than)'
+    unit: n/a
+    clause_or_table: J6D3(3)(a)
+    letter_inferred: true
+  - name: heater_capacity_trigger
+    value: 1
+    unit: kW (subscript heating)
+    clause_or_table: J6D3(3)(b)
+    letter_inferred: true
+  - name: heater_capacity_trigger_comparison
+    value: '> (more than)'
+    unit: n/a
+    clause_or_table: J6D3(3)(b)
+    letter_inferred: true
+  - name: public_holiday_programming_horizon_min
+    value: 1
+    unit: year (at least 1 year ahead)
+    clause_or_table: J6D3(4)(b)
+    letter_inferred: true
+  - name: override_max_time_to_resume_normal
+    value: 2
+    unit: hours (no longer than)
+    clause_or_table: J6D3(4)(d)
+    letter_inferred: true
+  - name: exempt_continuous_use_hours
+    value: 24
+    unit: hour
+    clause_or_table: J6D3(5)(b)
+    letter_inferred: true
+  notes: 'The (4)(a) capability is qualitative (variable programmed times and days). (4)(c) requires override
+    by (i) a demand-operated control or (ii) a manual switch. Exemptions (5)(a): (i) a system serving
+    only one SOU in a Class 3 or 9c building, with Class 2 no longer listed (it was in 2022); (ii) only
+    a Class 4 part. (5)(b) covers a conditioned space needing 24-hour continuous use. Subclause numbers
+    (3), (4) and (5) are printed in the HTML.
+
+    '
+NCC2025-NSW-J6D3-time-switch-ac:
+  source_url: https://ncc.abcb.gov.au/editions/ncc-2025/adopted/volume-one/j-energy-efficiency/part-j6-air-conditioning-and-ventilation
+  edition_verified: true
+  thresholds:
+  - name: ac_system_capacity_trigger
+    value: 2
+    unit: kWr
+    clause_or_table: J6D3(3)(a)
+    letter_inferred: true
+  - name: ac_system_capacity_trigger_comparison
+    value: '> (more than)'
+    unit: n/a
+    clause_or_table: J6D3(3)(a)
+    letter_inferred: true
+  - name: heater_capacity_trigger
+    value: 1
+    unit: kW (subscript heating)
+    clause_or_table: J6D3(3)(b)
+    letter_inferred: true
+  - name: heater_capacity_trigger_comparison
+    value: '> (more than)'
+    unit: n/a
+    clause_or_table: J6D3(3)(b)
+    letter_inferred: true
+  - name: public_holiday_programming_horizon_min
+    value: 1
+    unit: year (at least 1 year ahead)
+    clause_or_table: J6D3(4)(b)
+    letter_inferred: true
+  - name: override_max_time_to_resume_normal
+    value: 2
+    unit: hours (no longer than)
+    clause_or_table: J6D3(4)(d)
+    letter_inferred: true
+  - name: exempt_continuous_use_hours
+    value: 24
+    unit: hour
+    clause_or_table: NSW J6D3(5)(b)
+    letter_inferred: true
+  notes: 'The NSW variation (REPLACE) replaces J6D3(5) only. NSW (5)(a) is a single item: a system serving
+    only one SOU in a Class 3 or 9c building. The Class 4 part exemption is removed in NSW. NSW (5)(b)
+    covers 24-hour continuous use. (3) and (4) are unchanged from the national text, so the numbers are
+    identical. NSW J6D1(1) lists plain "J6D2 to J6D13" (no NSW prefix) in 2025.
+
+    '
+NCC2025-J6D4-time-switch-mv:
+  source_url: https://ncc.abcb.gov.au/editions/ncc-2025/adopted/volume-one/j-energy-efficiency/part-j6-air-conditioning-and-ventilation
+  edition_verified: true
+  thresholds:
+  - name: mv_airflow_trigger
+    value: 1000
+    unit: L/s
+    clause_or_table: J6D4(4)
+    letter_inferred: false
+  - name: mv_airflow_trigger_comparison
+    value: '> (more than)'
+    unit: n/a
+    clause_or_table: J6D4(4)
+    letter_inferred: false
+  - name: public_holiday_programming_horizon_min
+    value: 1
+    unit: year (at least 1 year ahead)
+    clause_or_table: J6D4(5)(b)
+    letter_inferred: true
+  - name: override_max_time_to_resume_normal
+    value: 2
+    unit: hours (no longer than)
+    clause_or_table: J6D4(5)(d)
+    letter_inferred: true
+  - name: exempt_occupancy_hours
+    value: 24
+    unit: hour
+    clause_or_table: J6D4(7)(a)
+    letter_inferred: true
+  - name: exempt_continuous_operation
+    value: 24/7
+    unit: hours/days
+    clause_or_table: J6D4(7)(c)
+    letter_inferred: true
+  notes: '(5)(a) is qualitative scheduling. (5)(c) requires override by (i) a demand-operated control
+    or (ii) a manual switch. (6) exempts systems from (2), (4) and (5) when they serve (a) only one SOU
+    in a Class 3 or 9c building or (b) only a Class 4 part. (7) exempts systems from (4) and (5) for:
+    (a) a building needing mechanical ventilation for 24-hour occupancy; (b) a carpark exhaust system;
+    (c) systems required to run 24/7 for contaminants, pressurisation or the like.
+
+    '
+NCC2025-NSW-J6D4-time-switch-mv:
+  source_url: https://ncc.abcb.gov.au/editions/ncc-2025/adopted/volume-one/j-energy-efficiency/part-j6-air-conditioning-and-ventilation
+  edition_verified: true
+  thresholds:
+  - name: mv_airflow_trigger
+    value: 1000
+    unit: L/s
+    clause_or_table: J6D4(4)
+    letter_inferred: false
+  - name: mv_airflow_trigger_comparison
+    value: '> (more than)'
+    unit: n/a
+    clause_or_table: J6D4(4)
+    letter_inferred: false
+  - name: public_holiday_programming_horizon_min
+    value: 1
+    unit: year (at least 1 year ahead)
+    clause_or_table: J6D4(5)(b)
+    letter_inferred: true
+  - name: override_max_time_to_resume_normal
+    value: 2
+    unit: hours (no longer than)
+    clause_or_table: J6D4(5)(d)
+    letter_inferred: true
+  - name: exempt_occupancy_hours
+    value: 24
+    unit: hour
+    clause_or_table: J6D4(7)(a)
+    letter_inferred: true
+  - name: exempt_continuous_operation
+    value: 24/7
+    unit: hours/days
+    clause_or_table: J6D4(7)(c)
+    letter_inferred: true
+  notes: 'The 2025 page has two NSW J6D4 variations (REPLACE). (1) removes the Class 4 exception from
+    the deactivation requirement. (6) becomes a single exemption: a system serving only one SOU in a Class
+    3 or 9c building. The Class 4 part exemption from (2), (4) and (5) is therefore removed in NSW. (4),
+    (5) and (7) are unchanged, so the numbers are identical to the national rule.
+
+    '
+NCC2025-J6D4-exhaust-motor-stop:
+  source_url: https://ncc.abcb.gov.au/editions/ncc-2025/adopted/volume-one/j-energy-efficiency/part-j6-air-conditioning-and-ventilation
+  edition_verified: true
+  thresholds:
+  - name: exhaust_airflow_trigger
+    value: 1000
+    unit: L/s
+    clause_or_table: J6D4(3)
+    letter_inferred: false
+  - name: exhaust_airflow_trigger_comparison
+    value: '> (more than)'
+    unit: n/a
+    clause_or_table: J6D4(3)
+    letter_inferred: false
+  notes: 'Exempt: an exhaust system in an SOU in a Class 3 or 9c building (non-numeric). Class 2 is no
+    longer listed; it was listed in 2022 J6D4(2). No NSW variation applies to (3).
+
+    '
+NCC2025-J6D5-fan-vsd:
+  source_url: https://ncc.abcb.gov.au/editions/ncc-2025/adopted/volume-one/j-energy-efficiency/part-j6-air-conditioning-and-ventilation
+  edition_verified: true
+  thresholds:
+  - name: fan_input_power_trigger
+    value: 750
+    unit: W
+    clause_or_table: J6D5(5)
+    letter_inferred: false
+  - name: fan_input_power_trigger_comparison
+    value: '> (greater than)'
+    unit: n/a
+    clause_or_table: J6D5(5)
+    letter_inferred: false
+  - name: fan_input_power_measurement_point
+    value: peak efficiency point and full speed, incl. integrated motor control equipment
+    unit: n/a
+    clause_or_table: J6D5(5)
+    letter_inferred: false
+  - name: exempt_fan_input_power_max
+    value: 125
+    unit: W
+    clause_or_table: J6D5(6)(a)
+    letter_inferred: true
+  - name: exempt_fan_input_power_comparison
+    value: <= (less than or equal to)
+    unit: n/a
+    clause_or_table: J6D5(6)(a)
+    letter_inferred: true
+  - name: exempt_unducted_supply_air_capacity
+    value: 1000
+    unit: L/s
+    clause_or_table: J6D5(12)(a)
+    letter_inferred: true
+  - name: exempt_unducted_supply_air_comparison
+    value: < (less than)
+    unit: n/a
+    clause_or_table: J6D5(12)(a)
+    letter_inferred: true
+  notes: '(5) has three requirements. (a) The fan must be capable of variable speed. (b) A fan serving
+    a single room must be able to reduce flow when the space is within the deadband, if applicable. (c)
+    A fan serving more than one room must (i) be capable of variable volume and (ii) operate to a variable
+    pressure to the extent practicable. (6) exempts fans from (2)-(5) when they (a) draw 125 W or less,
+    (b) need to be explosion proof, or (c) are supply fans inside unitary AC equipment. (12) exempts systems
+    from (1)-(11) for: (a) fans in unducted AC systems under 1000 L/s supply; (b) fans dedicated solely
+    to fire and smoke control; (c) process component power; (d) kitchen exhaust systems. Note that 750
+    W and 125 W are in W, not kW. J6D5(1)(b) allows a whole-system alternative on fan power per unit flow.
+    2025 J6D4 has no separate MV fan VSD airflow trigger; the 2022 1000 L/s VSD triggers in J6D3(1)(e)
+    and J6D4(1)(c) are not present in 2025 J6D3 or J6D4.
+
+    '
+NCC2025-J6D6-duct-insulation:
+  source_url: https://ncc.abcb.gov.au/editions/ncc-2025/adopted/volume-one/j-energy-efficiency/part-j6-air-conditioning-and-ventilation
+  edition_verified: true
+  thresholds:
+  - name: r_min_flexible_ductwork
+    value: 1.0
+    unit: R-Value (no unit printed)
+    clause_or_table: J6D6(1)(b)(i)
+    letter_inferred: true
+  - name: r_min_cushion_box
+    value: equal to connecting ductwork
+    unit: R-Value
+    clause_or_table: J6D6(1)(b)(ii)
+    letter_inferred: true
+  - name: r_min_within_conditioned_space_cz1_to_7
+    value: 1.2
+    unit: R-Value (no unit printed)
+    clause_or_table: Table J6D6
+    letter_inferred: false
+  - name: r_min_within_conditioned_space_cz8
+    value: 2.0
+    unit: R-Value (no unit printed)
+    clause_or_table: Table J6D6
+    letter_inferred: false
+  - name: r_min_exposed_direct_sunlight_cz1_to_7
+    value: 3.0
+    unit: R-Value (no unit printed)
+    clause_or_table: Table J6D6
+    letter_inferred: false
+  - name: r_min_exposed_direct_sunlight_cz8
+    value: 3.0
+    unit: R-Value (no unit printed)
+    clause_or_table: Table J6D6
+    letter_inferred: false
+  - name: r_min_all_other_locations_cz1_to_7
+    value: 2.0
+    unit: R-Value (no unit printed)
+    clause_or_table: Table J6D6
+    letter_inferred: false
+  - name: r_min_all_other_locations_cz8
+    value: 3.0
+    unit: R-Value (no unit printed)
+    clause_or_table: Table J6D6
+    letter_inferred: false
+  - name: r_comparison
+    value: '>= (greater than or equal to)'
+    unit: n/a
+    clause_or_table: J6D6(1)(b)
+    letter_inferred: true
+  - name: vapour_barrier_membrane_min_overlap
+    value: 50
+    unit: mm
+    clause_or_table: J6D6(2)(c)(ii)(A)
+    letter_inferred: true
+  notes: 'Table values are identical to 2022. The exemptions differ: 2025 (3) has six items, (a)-(f):
+    (a) only or last room; (b) interface fittings; (c) return air in a conditioned space; (d) outdoor
+    and exhaust air ducts; (e) the floor of an in-situ AHU; (f) flexible fan connections. The 2022 exemption
+    for MEPS-compliant packaged, split and VRF equipment is not present in 2025. 2025 (4) adds fan coil
+    units to the excluded active components.
+
+    '
+NCC2025-J6D7-duct-sealing:
+  source_url: https://ncc.abcb.gov.au/editions/ncc-2025/adopted/volume-one/j-energy-efficiency/part-j6-air-conditioning-and-ventilation
+  edition_verified: true
+  thresholds:
+  - name: ac_system_capacity_trigger
+    value: 3000
+    unit: L/s
+    clause_or_table: J6D7
+    letter_inferred: false
+  - name: ac_system_capacity_trigger_comparison
+    value: '>= (3000 L/s or greater)'
+    unit: n/a
+    clause_or_table: J6D7
+    letter_inferred: false
+  notes: 'Same as 2022. Ductwork in the only or last room served is excluded. Sealing must follow AS 4254.1
+    and AS 4254.2 for static pressure. No numeric leakage limit is on the NCC page.
+
+    '
+NCC2025-J6D3-deadband:
+  source_url: https://ncc.abcb.gov.au/editions/ncc-2025/adopted/volume-one/j-energy-efficiency/part-j6-air-conditioning-and-ventilation
+  edition_verified: true
+  thresholds:
+  - name: min_control_deadband
+    value: 2
+    unit: °C
+    clause_or_table: J6D3(1)(h)
+    letter_inferred: true
+  - name: deadband_comparison
+    value: '>= (not less than)'
+    unit: n/a
+    clause_or_table: J6D3(1)(h)
+    letter_inferred: true
+  notes: 'Item order in 2025 J6D3(1) is: (a) deactivate; (b) single coil; (c) multi-zone; (d) economy
+    cycle; (e) water flow stop; (f) Class 3 door; (g) direct signals; (h) dead band. The letter (h) is
+    inferred from this order. The specialised applications exception is non-numeric.
+
+    '
+NCC2025-J6D10-elec-resistance-heat:
+  source_url: https://ncc.abcb.gov.au/editions/ncc-2025/adopted/volume-one/j-energy-efficiency/part-j6-air-conditioning-and-ventilation
+  edition_verified: true
+  thresholds:
+  - name: max_elec_heating_cz1_cz2
+    value: 40
+    unit: W/m2
+    clause_or_table: J6D10(1)(e)(i)(A)
+    letter_inferred: true
+  - name: table_climate_zones_per_clause
+    value: 3 to 8
+    unit: climate zone
+    clause_or_table: J6D10(1)(e)(i)(B)
+    letter_inferred: true
+  - name: floor_area_band_edge
+    value: 500
+    unit: m2
+    clause_or_table: Table J6D10
+    letter_inferred: false
+  - name: max_elec_heating_cz3_area_le_500
+    value: 50
+    unit: W/m2
+    clause_or_table: Table J6D10
+    letter_inferred: false
+  - name: max_elec_heating_cz4_area_le_500
+    value: 60
+    unit: W/m2
+    clause_or_table: Table J6D10
+    letter_inferred: false
+  - name: max_elec_heating_cz5_area_le_500
+    value: 55
+    unit: W/m2
+    clause_or_table: Table J6D10
+    letter_inferred: false
+  - name: max_elec_heating_cz6_area_le_500
+    value: 65
+    unit: W/m2
+    clause_or_table: Table J6D10
+    letter_inferred: false
+  - name: max_elec_heating_cz7_area_le_500
+    value: 70
+    unit: W/m2
+    clause_or_table: Table J6D10
+    letter_inferred: false
+  - name: max_elec_heating_cz3_area_gt_500
+    value: 40
+    unit: W/m2
+    clause_or_table: Table J6D10
+    letter_inferred: false
+  - name: max_elec_heating_cz4_area_gt_500
+    value: 50
+    unit: W/m2
+    clause_or_table: Table J6D10
+    letter_inferred: false
+  - name: max_elec_heating_cz5_area_gt_500
+    value: 45
+    unit: W/m2
+    clause_or_table: Table J6D10
+    letter_inferred: false
+  - name: max_elec_heating_cz6_area_gt_500
+    value: 55
+    unit: W/m2
+    clause_or_table: Table J6D10
+    letter_inferred: false
+  - name: max_elec_heating_cz7_area_gt_500
+    value: 60
+    unit: W/m2
+    clause_or_table: Table J6D10
+    letter_inferred: false
+  - name: max_elec_heating_cz8
+    value: UNREADABLE
+    unit: W/m2
+    clause_or_table: Table J6D10
+    letter_inferred: false
+  - name: heating_capacity_comparison
+    value: <= (not more than)
+    unit: n/a
+    clause_or_table: J6D10(1)(e)(i)
+    letter_inferred: true
+  - name: alt_max_annual_heating_energy
+    value: 15
+    unit: kWh/m2
+    clause_or_table: J6D10(1)(e)(ii)
+    letter_inferred: true
+  - name: alt_annual_energy_climate_zones
+    value: 1, 2, 3, 4, 5
+    unit: climate zone
+    clause_or_table: J6D10(1)(e)(ii)
+    letter_inferred: true
+  - name: alt_in_duct_reheat_limit_ref
+    value: 'J6D3(1)(c)(iv): 7.5'
+    unit: °C
+    clause_or_table: J6D10(1)(e)(iii) -> J6D3(1)(c)(iv)
+    letter_inferred: true
+  - name: bathroom_heater_max_capacity
+    value: 1.2
+    unit: kW
+    clause_or_table: J6D10(2)(a)
+    letter_inferred: true
+  - name: bathroom_heater_max_run_on
+    value: 15
+    unit: minutes
+    clause_or_table: J6D10(2)(b)
+    letter_inferred: true
+  notes: 'The 2025 table header is "Maximum electric resistance heating capacity". The clause now applies
+    Table J6D10 to CZ 3 to 8 regardless of gas availability; the 2022 "reticulated gas not available"
+    condition is gone. CZ1 and CZ2 share 40 W/m2; 2022 had CZ1 = 10 W/m2. The table has columns for CZ
+    3 to 7 only, with no CZ8 column (confirmed in raw HTML), even though the clause cites CZ 3 to 8. The
+    CZ8 limit is therefore UNREADABLE and needs engineer resolution. (1)(c) now adds the 4-pipe chiller
+    alongside the heat pump. (1)(e)(iii) points to J6D3(1)(c)(iv), zone-level reheat no more than 7.5°C
+    at any intended airflow. (1)(f) allows any combination. (2) is the bathroom heater allowance with
+    no building-class restriction in 2025. Related but out of scope: (5)(a)(i) reserved electrical capacity
+    references the (1)(e)(i)/(ii) limits; (5)(a)(ii) assumes nominal COP 3.25. The QLD variation blanks
+    (5), (6) and (7). The 2025 page has no NSW J6D10 variation.
+
+    '
+NCC2025-J6D9-pipe-insulation:
+  source_url: https://ncc.abcb.gov.au/editions/ncc-2025/adopted/volume-one/j-energy-efficiency/part-j6-air-conditioning-and-ventilation
+  edition_verified: true
+  thresholds:
+  - name: temp_band_low_temp_chilled_upper
+    value: 2
+    unit: °C (<= 2°C)
+    clause_or_table: Table J6D9a
+    letter_inferred: false
+  - name: temp_band_chilled
+    value: '> 2 and <= 20'
+    unit: °C
+    clause_or_table: Table J6D9a
+    letter_inferred: false
+  - name: temp_band_heated
+    value: '> 30 and <= 85'
+    unit: °C
+    clause_or_table: Table J6D9a
+    letter_inferred: false
+  - name: temp_band_high_temp_heated_lower
+    value: 85
+    unit: °C (> 85°C)
+    clause_or_table: Table J6D9a
+    letter_inferred: false
+  - name: dia_band_1
+    value: <= 40
+    unit: mm (nominal pipe diameter)
+    clause_or_table: Table J6D9a
+    letter_inferred: false
+  - name: dia_band_2
+    value: '> 40 and <= 80'
+    unit: mm (nominal pipe diameter)
+    clause_or_table: Table J6D9a
+    letter_inferred: false
+  - name: dia_band_3
+    value: '> 80 and <= 150'
+    unit: mm (nominal pipe diameter)
+    clause_or_table: Table J6D9a
+    letter_inferred: false
+  - name: dia_band_4
+    value: '> 150'
+    unit: mm (nominal pipe diameter)
+    clause_or_table: Table J6D9a
+    letter_inferred: false
+  - name: r_low_temp_chilled_dn_le_40
+    value: 1.3
+    unit: R-Value (no unit printed)
+    clause_or_table: Table J6D9a
+    letter_inferred: false
+  - name: r_low_temp_chilled_dn_40_80
+    value: 1.7
+    unit: R-Value (no unit printed)
+    clause_or_table: Table J6D9a
+    letter_inferred: false
+  - name: r_low_temp_chilled_dn_80_150
+    value: 2.0
+    unit: R-Value (no unit printed)
+    clause_or_table: Table J6D9a
+    letter_inferred: false
+  - name: r_low_temp_chilled_dn_gt_150
+    value: 2.7
+    unit: R-Value (no unit printed)
+    clause_or_table: Table J6D9a
+    letter_inferred: false
+  - name: r_chilled_dn_le_40
+    value: 1.0
+    unit: R-Value (no unit printed)
+    clause_or_table: Table J6D9a
+    letter_inferred: false
+  - name: r_chilled_dn_40_80
+    value: 1.5
+    unit: R-Value (no unit printed)
+    clause_or_table: Table J6D9a
+    letter_inferred: false
+  - name: r_chilled_dn_80_150
+    value: 2.0
+    unit: R-Value (no unit printed)
+    clause_or_table: Table J6D9a
+    letter_inferred: false
+  - name: r_chilled_dn_gt_150
+    value: 2.0
+    unit: R-Value (no unit printed)
+    clause_or_table: Table J6D9a
+    letter_inferred: false
+  - name: r_heated_dn_le_40
+    value: 1.7
+    unit: R-Value (no unit printed)
+    clause_or_table: Table J6D9a
+    letter_inferred: false
+  - name: r_heated_dn_40_80
+    value: 1.7
+    unit: R-Value (no unit printed)
+    clause_or_table: Table J6D9a
+    letter_inferred: false
+  - name: r_heated_dn_80_150
+    value: 1.7
+    unit: R-Value (no unit printed)
+    clause_or_table: Table J6D9a
+    letter_inferred: false
+  - name: r_heated_dn_gt_150
+    value: 1.7
+    unit: R-Value (no unit printed)
+    clause_or_table: Table J6D9a
+    letter_inferred: false
+  - name: r_high_temp_heated_dn_le_40
+    value: 2.7
+    unit: R-Value (no unit printed)
+    clause_or_table: Table J6D9a
+    letter_inferred: false
+  - name: r_high_temp_heated_dn_40_80
+    value: 2.7
+    unit: R-Value (no unit printed)
+    clause_or_table: Table J6D9a
+    letter_inferred: false
+  - name: r_high_temp_heated_dn_80_150
+    value: 2.7
+    unit: R-Value (no unit printed)
+    clause_or_table: Table J6D9a
+    letter_inferred: false
+  - name: r_high_temp_heated_dn_gt_150
+    value: 2.7
+    unit: R-Value (no unit printed)
+    clause_or_table: Table J6D9a
+    letter_inferred: false
+  - name: structural_penetration_r_factor
+    value: 0.5
+    unit: multiplier (R-Value may be halved)
+    clause_or_table: Table J6D9a note
+    letter_inferred: false
+  - name: refill_relief_piping_matching_length
+    value: 500
+    unit: mm
+    clause_or_table: J6D9(1)(d)
+    letter_inferred: true
+  notes: 'Table J6D9a is identical to 2022, including the gap between > 20°C and <= 30°C and the halving
+    note. (5)(a) heating fluids in 2025 are heated water, steam and condensate, without refrigerant; 2022
+    included refrigerant. Exemptions (4)(a)-(d) match 2022. MEPS appliances are excluded in (1) ("within
+    appliances covered by MEPS").
+
+    '

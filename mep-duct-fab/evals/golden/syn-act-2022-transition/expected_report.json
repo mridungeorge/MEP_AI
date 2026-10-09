@@ -1,0 +1,174 @@
+{
+  "banner": "DRAFT RULES: NOT ENGINEER-APPROVED",
+  "report_version": 1,
+  "engine": {
+    "name": "mep-engine",
+    "version": "0.1.0"
+  },
+  "draft_rules": [
+    "NCC2022-J6D3-econ-cycle",
+    "NCC2022-J6D4-mv-time-switch"
+  ],
+  "unassigned_rules": [
+    "NCC2022-J6D10-elec-heating-limit",
+    "NCC2022-J6D3-ac-fan-vsd",
+    "NCC2022-J6D3-ac-time-switch",
+    "NCC2022-J6D3-deadband",
+    "NCC2022-J6D4-exhaust-motor-stop",
+    "NCC2022-J6D4-mv-fan-vsd",
+    "NCC2022-J6D6-duct-insulation",
+    "NCC2022-J6D7-duct-sealing",
+    "NCC2022-J6D9-pipe-insulation"
+  ],
+  "project": {
+    "state": "ACT",
+    "ncc_edition": "NCC2022",
+    "climate_zone": 7,
+    "building_class": "6",
+    "approval_date": "2026-10-06"
+  },
+  "jurisdiction": {
+    "decision": "confirmed",
+    "warnings": [],
+    "refused_by": [],
+    "notes": [
+      "ACT: NCC2022 allowed during the NCC2025 transition until 2027-05-01"
+    ],
+    "override": null
+  },
+  "rule_pack": [
+    {
+      "id": "NCC2022-J6D3-econ-cycle",
+      "status": "draft"
+    },
+    {
+      "id": "NCC2022-J6D4-mv-time-switch",
+      "status": "draft"
+    }
+  ],
+  "summary": {
+    "PASS": 2,
+    "FAIL": 0,
+    "NEEDS_JUDGEMENT": 0,
+    "NOT_APPLICABLE": 0
+  },
+  "results": [
+    {
+      "subject_id": "ahu-1",
+      "rule_id": "NCC2022-J6D3-econ-cycle",
+      "outcome": "PASS",
+      "causes": [],
+      "citation": {
+        "rule_id": "NCC2022-J6D3-econ-cycle",
+        "document": "NCC 2022 Volume One",
+        "edition": "NCC2022",
+        "clause": "J6D3(1)(c), Table J6D3",
+        "url": "https://ncc.abcb.gov.au/editions/ncc-2022/adopted/volume-one/j-energy-efficiency/part-j6-air-conditioning-and-ventilation",
+        "rule_status": "draft"
+      },
+      "inputs_used": {
+        "climate_zone": {
+          "value": 7,
+          "unit": null,
+          "provenance": "engineer_confirmed"
+        },
+        "system_type": {
+          "value": "air_conditioning",
+          "unit": null,
+          "provenance": "engineer_confirmed"
+        },
+        "electricity_network_substation": {
+          "value": false,
+          "unit": null,
+          "provenance": "engineer_confirmed"
+        },
+        "provides_required_mech_ventilation": {
+          "value": true,
+          "unit": null,
+          "provenance": "engineer_confirmed"
+        },
+        "dehumidification_control_needed": {
+          "value": false,
+          "unit": null,
+          "provenance": "engineer_confirmed"
+        },
+        "airside_component_airflow": {
+          "value": 2600,
+          "unit": "L/s",
+          "provenance": "engineer_confirmed"
+        },
+        "economy_cycle": {
+          "value": true,
+          "unit": null,
+          "provenance": "engineer_confirmed"
+        }
+      },
+      "near_miss": {
+        "fraction": 0.05,
+        "is_near_miss": false,
+        "flips": [],
+        "not_evaluated": []
+      },
+      "fix_hypotheses": []
+    },
+    {
+      "subject_id": "fan-1",
+      "rule_id": "NCC2022-J6D4-mv-time-switch",
+      "outcome": "PASS",
+      "causes": [],
+      "citation": {
+        "rule_id": "NCC2022-J6D4-mv-time-switch",
+        "document": "NCC 2022 Volume One",
+        "edition": "NCC2022",
+        "clause": "J6D4(4)(a)-(c)",
+        "url": "https://ncc.abcb.gov.au/editions/ncc-2022/adopted/volume-one/j-energy-efficiency/part-j6-air-conditioning-and-ventilation",
+        "rule_status": "draft"
+      },
+      "inputs_used": {
+        "system_type": {
+          "value": "mechanical_ventilation",
+          "unit": null,
+          "provenance": "engineer_confirmed"
+        },
+        "electricity_network_substation": {
+          "value": false,
+          "unit": null,
+          "provenance": "engineer_confirmed"
+        },
+        "serves_single_sou_class_2_3_9c": {
+          "value": false,
+          "unit": null,
+          "provenance": "engineer_confirmed"
+        },
+        "serves_class_4_part": {
+          "value": false,
+          "unit": null,
+          "provenance": "engineer_confirmed"
+        },
+        "building_needs_24h_ventilation": {
+          "value": false,
+          "unit": null,
+          "provenance": "engineer_confirmed"
+        },
+        "mv_airflow": {
+          "value": 1000,
+          "unit": "L/s",
+          "provenance": "engineer_confirmed"
+        }
+      },
+      "near_miss": {
+        "fraction": 0.05,
+        "is_near_miss": true,
+        "flips": [
+          {
+            "input": "mv_airflow",
+            "change": 0.05,
+            "becomes": "FAIL"
+          }
+        ],
+        "not_evaluated": []
+      },
+      "fix_hypotheses": []
+    }
+  ]
+}

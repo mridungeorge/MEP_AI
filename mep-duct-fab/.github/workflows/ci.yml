@@ -1,0 +1,55 @@
+name: ci
+on:
+  push:
+  pull_request:
+  release:
+    types: [published]
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          python-version: "3.12"
+      - uses: pnpm/action-setup@v4
+      - run: pnpm install --frozen-lockfile
+      - run: uv sync --group dev --locked
+      - run: uv run ruff check .
+      - run: uv run mypy
+      - run: uv run python scripts/validate_rules.py
+      - run: uv run python scripts/release_gate.py --labels
+      - run: uv run python scripts/release_gate.py --scan
+      - run: uv run python scripts/ingest_accuracy.py --check
+      - run: pnpm --filter @mep/web run typecheck
+      - run: pnpm --filter @mep/web run test
+      - run: uv run pytest tests/rules tests/engine tests/ingest tests/api tests/diff tests/review tests/db
+      - run: pnpm exec supabase start && pnpm exec supabase db reset
+      - run: uv run pytest tests/rls
+      - run: uv run python scripts/review_db.py selftest
+      - run: uv run pytest tests/golden || [ $? -eq 5 ]  # 5 = no golden projects yet
+  # A release claim made any other way (a tag, a GitHub release created in the web UI) still shows up red here.
+  release-gate:
+    if: (startsWith(github.ref, 'refs/tags/') && !(startsWith(github.ref_name, 'sprint-') && !contains(github.ref_name, '.') && !contains(github.ref_name, '/'))) || github.event_name == 'release'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          python-version: "3.12"
+      - run: uv sync --group dev --locked
+      - run: uv run python scripts/release_gate.py --check
+  # Backstop for the local hooks: a change to a rule's sign-off or check fields needs a visible Engineer-Signoff trailer.
+  signoff:
+    if: github.event_name == 'pull_request' || github.ref != 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: git fetch origin main
+      - uses: astral-sh/setup-uv@v3
+        with:
+          python-version: "3.12"
+      - run: uv sync --group dev --locked
+      - run: uv run python scripts/check_signoff_changes.py --base origin/main

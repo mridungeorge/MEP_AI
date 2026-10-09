@@ -1,0 +1,10 @@
+{
+  "spec_version": "1",
+  "fitting": "rect_reducer",
+  "mark": "R-01",
+  "units": "mm",
+  "sheet_thickness_mm": 0.8,
+  "seam": { "type": "pittsburgh", "allowance_mm": 25 },
+  "connection": { "type": "tdc", "allowance_mm": 30 },
+  "geometry": { "width_in_mm": 600, "height_in_mm": 400, "width_out_mm": 400, "height_out_mm": 300, "length_mm": 500, "alignment": "flat_bottom" }
+}

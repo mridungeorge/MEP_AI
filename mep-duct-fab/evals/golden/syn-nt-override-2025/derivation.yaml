@@ -1,0 +1,13 @@
+# Derived by hand BEFORE the engine was run. The NT regulator says NCC 2025 does not apply, so the run is
+# refused unless an approver overrides with a reason; the override must be written to the ledger first.
+jurisdiction: overridden
+ledger_events:
+  - kind: jurisdiction_override
+    user_id: approver-golden
+    state: NT
+    edition: NCC2025
+results:
+  - subject: ahu-1
+    rule: NCC2025-J6D3-deadband
+    outcome: PASS                # 3 K is above the 2 K minimum
+    near_miss: false             # 2.85 K and 3.15 K both still pass

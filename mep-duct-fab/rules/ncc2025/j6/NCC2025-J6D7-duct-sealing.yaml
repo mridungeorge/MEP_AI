@@ -1,0 +1,150 @@
+id: NCC2025-J6D7-duct-sealing
+source:
+  document: NCC 2025 Volume One
+  edition: '2025'
+  clause: J6D7
+  url: https://ncc.abcb.gov.au/editions/ncc-2025/adopted/volume-one/j-energy-efficiency/part-j6-air-conditioning-and-ventilation
+applies_when:
+  edition: NCC2025
+  state:
+  - ALL
+  building_class:
+  - '2'
+  - '3'
+  - '4'
+  - '5'
+  - '6'
+  - 7a
+  - 7b
+  - '8'
+  - 9a
+  - 9b
+  - 9c
+  system_type: air_conditioning
+  exempt_when:
+  - duct_in_only_or_last_room_served == True
+  - is_electricity_substation == True
+inputs:
+- name: ac_system_airflow
+  unit: L/s
+  type: number
+  provenance: engineer_confirmed
+- name: duct_sealed_to_as4254_for_static_pressure
+  type: bool
+  provenance: engineer_confirmed
+- name: duct_in_only_or_last_room_served
+  type: bool
+  provenance: engineer_confirmed
+- name: system_type
+  type: enum
+  provenance: engineer_confirmed
+  values:
+  - air_conditioning
+  - air_conditioning_heating
+  - mechanical_ventilation
+  - exhaust
+- name: is_electricity_substation
+  type: bool
+  provenance: engineer_confirmed
+- name: building_class
+  type: string
+  provenance: engineer_confirmed
+  values:
+  - '2'
+  - '3'
+  - '4'
+  - '5'
+  - '6'
+  - 7a
+  - 7b
+  - '8'
+  - 9a
+  - 9b
+  - 9c
+threshold:
+  values:
+    sealing_trigger:
+      value: 3000
+      unit: L/s
+check: ac_system_airflow < threshold('sealing_trigger') or duct_sealed_to_as4254_for_static_pressure == True
+outcomes:
+  'true': PASS
+  'false': FAIL
+  missing_input: NEEDS_JUDGEMENT
+near_miss: 0.05
+fix_hypotheses:
+- 'Hypothesis: verify. Specify duct sealing to the AS 4254.1 / AS 4254.2 class for the system static pressure and record it on the drawings.'
+depends_on:
+- systems.ac_system_airflow
+- ducts.duct_sealed_to_as4254_for_static_pressure
+- ducts.duct_in_only_or_last_room_served
+- systems.system_type
+- project.is_electricity_substation
+- project.building_class
+tests:
+- name: large_system_sealed
+  inputs:
+    ac_system_airflow: 8000
+    duct_sealed_to_as4254_for_static_pressure: true
+    duct_in_only_or_last_room_served: false
+    system_type: air_conditioning
+    is_electricity_substation: false
+    building_class: '5'
+  expect: PASS
+- name: large_system_not_sealed
+  inputs:
+    ac_system_airflow: 8000
+    duct_sealed_to_as4254_for_static_pressure: false
+    duct_in_only_or_last_room_served: false
+    system_type: air_conditioning
+    is_electricity_substation: false
+    building_class: '5'
+  expect: FAIL
+- name: boundary_3000_not_sealed
+  inputs:
+    ac_system_airflow: 3000
+    duct_sealed_to_as4254_for_static_pressure: false
+    duct_in_only_or_last_room_served: false
+    system_type: air_conditioning
+    is_electricity_substation: false
+    building_class: '5'
+  expect: FAIL
+- name: below_3000_not_sealed
+  inputs:
+    ac_system_airflow: 2999
+    duct_sealed_to_as4254_for_static_pressure: false
+    duct_in_only_or_last_room_served: false
+    system_type: air_conditioning
+    is_electricity_substation: false
+    building_class: '5'
+  expect: PASS
+- name: last_room_served_exempt
+  inputs:
+    ac_system_airflow: 8000
+    duct_sealed_to_as4254_for_static_pressure: false
+    duct_in_only_or_last_room_served: true
+    system_type: air_conditioning
+    is_electricity_substation: false
+    building_class: '5'
+  expect: NOT_APPLICABLE
+- name: missing_sealing_status
+  inputs:
+    ac_system_airflow: 8000
+    duct_in_only_or_last_room_served: false
+    system_type: air_conditioning
+    is_electricity_substation: false
+    building_class: '5'
+  expect: NEEDS_JUDGEMENT
+- name: exempt_is_electricity_substation_true
+  inputs:
+    ac_system_airflow: 8000
+    duct_sealed_to_as4254_for_static_pressure: true
+    duct_in_only_or_last_room_served: false
+    system_type: air_conditioning
+    is_electricity_substation: true
+    building_class: '5'
+  expect: NOT_APPLICABLE
+notes: Encoded from ABCB NCC 2025 J6D7. Trigger is >= 3000 L/s. "Capacity" in L/s is read as the system design supply airflow (engineer to confirm). The AS 4254.1/.2 sealing class for the static pressure is not encoded (licensed AS text); the engineer confirms the boolean against the licensed standard. Evaluate per duct section outside the only or last room served.
+reviewed_by: null
+reviewed_on: null
+status: draft

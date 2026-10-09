@@ -1,0 +1,305 @@
+id: NCC2025-J6D10-elec-resistance-heat
+source:
+  document: NCC 2025 Volume One
+  edition: '2025'
+  clause: J6D10(1)(e)(i), J6D10(1)(e)(ii), Table J6D10
+  url: https://ncc.abcb.gov.au/editions/ncc-2025/adopted/volume-one/j-energy-efficiency/part-j6-air-conditioning-and-ventilation
+applies_when:
+  edition: NCC2025
+  state:
+  - ALL
+  building_class:
+  - '2'
+  - '3'
+  - '4'
+  - '5'
+  - '6'
+  - 7a
+  - 7b
+  - '8'
+  - 9a
+  - 9b
+  - 9c
+  heater_type: electric_resistance
+  exempt_when:
+  - is_electricity_substation == True
+  needs_judgement_when:
+  - in_duct_heater_reheat_path_claimed == True
+  - is_bathroom_heater == True
+inputs:
+- name: electric_heating_capacity
+  unit: W
+  type: number
+  provenance: engineer_confirmed
+- name: conditioned_floor_area
+  unit: m^2
+  type: number
+  provenance: engineer_confirmed
+- name: climate_zone
+  type: int
+  provenance: address_lookup_confirmed
+- name: heater_type
+  type: enum
+  provenance: engineer_confirmed
+  values:
+  - electric_resistance
+  - heat_pump
+  - gas
+  - hydronic
+  - other
+- name: annual_energy_path_claimed
+  type: bool
+  provenance: engineer_confirmed
+- name: annual_heating_energy_intensity
+  unit: kW*h/m^2
+  type: number
+  provenance: calculated
+- name: in_duct_heater_reheat_path_claimed
+  type: bool
+  provenance: engineer_confirmed
+- name: is_bathroom_heater
+  type: bool
+  provenance: engineer_confirmed
+- name: is_electricity_substation
+  type: bool
+  provenance: engineer_confirmed
+- name: building_class
+  type: string
+  provenance: engineer_confirmed
+  values:
+  - '2'
+  - '3'
+  - '4'
+  - '5'
+  - '6'
+  - 7a
+  - 7b
+  - '8'
+  - 9a
+  - 9b
+  - 9c
+threshold:
+  table: J6D10
+  values:
+    density:
+      unit: W/m^2
+      values:
+        1:
+          le_500: 40
+          gt_500: 40
+        2:
+          le_500: 40
+          gt_500: 40
+        3:
+          le_500: 50
+          gt_500: 40
+        4:
+          le_500: 60
+          gt_500: 50
+        5:
+          le_500: 55
+          gt_500: 45
+        6:
+          le_500: 65
+          gt_500: 55
+        7:
+          le_500: 70
+          gt_500: 60
+        8:
+          le_500: TODO_FROM_SOURCE
+          gt_500: TODO_FROM_SOURCE
+    area_split:
+      value: 500
+      unit: m^2
+    annual_energy:
+      value: 15
+      unit: kW*h/m^2
+    allowed_capacity_le_500:
+      formula: threshold('density', climate_zone, 'le_500') * conditioned_floor_area
+      unit: W
+    allowed_capacity_gt_500:
+      formula: threshold('density', climate_zone, 'gt_500') * conditioned_floor_area
+      unit: W
+check: (conditioned_floor_area <= threshold('area_split') and electric_heating_capacity <= threshold('allowed_capacity_le_500')) or (conditioned_floor_area > threshold('area_split') and electric_heating_capacity <= threshold('allowed_capacity_gt_500')) or (climate_zone <= 5 and annual_energy_path_claimed == True and annual_heating_energy_intensity <= threshold('annual_energy'))
+outcomes:
+  'true': PASS
+  'false': FAIL
+  missing_input: NEEDS_JUDGEMENT
+near_miss: 0.05
+fix_hypotheses:
+- 'Hypothesis: verify. Replace the electric resistance heater with a heat pump (reverse-cycle) heater.'
+- 'Hypothesis: verify. Reduce the electric heating capacity to within the Table J6D10 W/m2 limit for this climate zone and floor area.'
+- 'Hypothesis: verify. In CZ1-5, calculate annual heating energy; at or below 15 kWh/m2 meets (1)(e)(ii).'
+depends_on:
+- systems.electric_heating_capacity
+- spaces.conditioned_floor_area
+- project.climate_zone
+- systems.heater_type
+- systems.annual_energy_path_claimed
+- calcs.annual_heating_energy_intensity
+- systems.in_duct_heater_reheat_path_claimed
+- systems.is_bathroom_heater
+- project.is_electricity_substation
+- project.building_class
+tests:
+- name: cz6_small_area_boundary_pass
+  inputs:
+    electric_heating_capacity: 26000
+    conditioned_floor_area: 400
+    climate_zone: 6
+    heater_type: electric_resistance
+    annual_energy_path_claimed: false
+    in_duct_heater_reheat_path_claimed: false
+    is_bathroom_heater: false
+    is_electricity_substation: false
+    building_class: '5'
+  expect: PASS
+- name: cz6_small_area_over_limit
+  inputs:
+    electric_heating_capacity: 26100
+    conditioned_floor_area: 400
+    climate_zone: 6
+    heater_type: electric_resistance
+    annual_energy_path_claimed: false
+    in_duct_heater_reheat_path_claimed: false
+    is_bathroom_heater: false
+    is_electricity_substation: false
+    building_class: '5'
+  expect: FAIL
+- name: cz6_large_area_fail
+  inputs:
+    electric_heating_capacity: 36000
+    conditioned_floor_area: 600
+    climate_zone: 6
+    heater_type: electric_resistance
+    annual_energy_path_claimed: false
+    in_duct_heater_reheat_path_claimed: false
+    is_bathroom_heater: false
+    is_electricity_substation: false
+    building_class: '5'
+  expect: FAIL
+- name: area_boundary_500_uses_le_500_band
+  inputs:
+    electric_heating_capacity: 30000
+    conditioned_floor_area: 500
+    climate_zone: 4
+    heater_type: electric_resistance
+    annual_energy_path_claimed: false
+    in_duct_heater_reheat_path_claimed: false
+    is_bathroom_heater: false
+    is_electricity_substation: false
+    building_class: '5'
+  expect: PASS
+- name: cz2_over_40_fail
+  inputs:
+    electric_heating_capacity: 4100
+    conditioned_floor_area: 100
+    climate_zone: 2
+    heater_type: electric_resistance
+    annual_energy_path_claimed: false
+    in_duct_heater_reheat_path_claimed: false
+    is_bathroom_heater: false
+    is_electricity_substation: false
+    building_class: '5'
+  expect: FAIL
+- name: cz5_annual_energy_path_pass
+  inputs:
+    electric_heating_capacity: 9000
+    conditioned_floor_area: 100
+    climate_zone: 5
+    heater_type: electric_resistance
+    annual_energy_path_claimed: true
+    annual_heating_energy_intensity: 15
+    in_duct_heater_reheat_path_claimed: false
+    is_bathroom_heater: false
+    is_electricity_substation: false
+    building_class: '5'
+  expect: PASS
+- name: cz6_annual_energy_path_not_available
+  inputs:
+    electric_heating_capacity: 9000
+    conditioned_floor_area: 100
+    climate_zone: 6
+    heater_type: electric_resistance
+    annual_energy_path_claimed: true
+    annual_heating_energy_intensity: 10
+    in_duct_heater_reheat_path_claimed: false
+    is_bathroom_heater: false
+    is_electricity_substation: false
+    building_class: '5'
+  expect: FAIL
+- name: cz8_needs_judgement
+  inputs:
+    electric_heating_capacity: 5000
+    conditioned_floor_area: 100
+    climate_zone: 8
+    heater_type: electric_resistance
+    annual_energy_path_claimed: false
+    in_duct_heater_reheat_path_claimed: false
+    is_bathroom_heater: false
+    is_electricity_substation: false
+    building_class: '5'
+  expect: NEEDS_JUDGEMENT
+- name: heat_pump_not_applicable
+  inputs:
+    electric_heating_capacity: 50000
+    conditioned_floor_area: 100
+    climate_zone: 6
+    heater_type: heat_pump
+    annual_energy_path_claimed: false
+    in_duct_heater_reheat_path_claimed: false
+    is_bathroom_heater: false
+    is_electricity_substation: false
+    building_class: '5'
+  expect: NOT_APPLICABLE
+- name: missing_floor_area
+  inputs:
+    electric_heating_capacity: 5000
+    climate_zone: 6
+    heater_type: electric_resistance
+    annual_energy_path_claimed: false
+    in_duct_heater_reheat_path_claimed: false
+    is_bathroom_heater: false
+    is_electricity_substation: false
+    building_class: '5'
+  expect: NEEDS_JUDGEMENT
+- name: exempt_is_electricity_substation_true
+  inputs:
+    electric_heating_capacity: 26000
+    conditioned_floor_area: 400
+    climate_zone: 6
+    heater_type: electric_resistance
+    annual_energy_path_claimed: false
+    in_duct_heater_reheat_path_claimed: false
+    is_bathroom_heater: false
+    is_electricity_substation: true
+    building_class: '5'
+  expect: NOT_APPLICABLE
+- name: needs_in_duct_heater_reheat_path_claimed_true
+  inputs:
+    electric_heating_capacity: 26000
+    conditioned_floor_area: 400
+    climate_zone: 6
+    heater_type: electric_resistance
+    annual_energy_path_claimed: false
+    in_duct_heater_reheat_path_claimed: true
+    is_bathroom_heater: false
+    is_electricity_substation: false
+    building_class: '5'
+  expect: NEEDS_JUDGEMENT
+- name: needs_is_bathroom_heater_true
+  inputs:
+    electric_heating_capacity: 26000
+    conditioned_floor_area: 400
+    climate_zone: 6
+    heater_type: electric_resistance
+    annual_energy_path_claimed: false
+    in_duct_heater_reheat_path_claimed: false
+    is_bathroom_heater: true
+    is_electricity_substation: false
+    building_class: '5'
+  expect: NEEDS_JUDGEMENT
+notes: 'Encoded from ABCB NCC 2025 J6D10(1)(e)(i)-(ii). CZ8: clause cites Table J6D10 for CZ3-8 but the table has CZ3-7 only; CZ8 is TODO_FROM_SOURCE and returns NEEDS_JUDGEMENT. Area band: <= 500 m2 vs > 500 m2. Floor area is that of the conditioned space served (engineer to confirm per heater or per system). Mixed heater types under (1)(f) not encoded.'
+reviewed_by: null
+reviewed_on: null
+status: draft

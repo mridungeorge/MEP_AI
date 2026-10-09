@@ -1,0 +1,15 @@
+description: "Synthetic NSW Class 5 project on NCC 2022 using a state variation and a formula threshold (not pilot data)"
+synthetic: true
+project: {state: NSW, ncc_edition: NCC2022, climate_zone: 5, building_class: "5", approval_date: "2026-10-06"}
+subjects:
+  - id: heater-1
+    rules: [NCC2022-NSW-J6D10-elec-heating-limit]
+    inputs:
+      system_type: {value: air_conditioning_heating}
+      electricity_network_substation: {value: false}
+      is_j6d10_2_bathroom_heater: {value: false}
+      electric_heating_capacity: {value: 22000, unit: W}
+      conditioned_floor_area: {value: 400, unit: m^2}
+      reticulated_gas_at_boundary: {value: false}
+      annual_heating_energy_intensity: {value: 40, unit: kW*h/m^2}
+      in_duct_heater_complies_reheat_limit: {value: false}

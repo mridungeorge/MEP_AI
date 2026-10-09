@@ -1,0 +1,9 @@
+# Golden project metadata. A project is REAL only when synthetic is false AND it names a pilot firm and a data
+# agreement. Everything below is synthetic: made up to exercise the engine, outcomes derived by hand.
+name: syn-vic-office-2025
+synthetic: true
+origin: synthetic hand-derived (no pilot-firm data)
+firm: null
+data_agreement: null
+engineer_signed_off_by: null
+description: "Synthetic VIC Class 5 office, NCC 2025, climate zone 6 (not pilot data)"

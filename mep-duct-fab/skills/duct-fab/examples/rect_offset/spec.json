@@ -1,0 +1,10 @@
+{
+  "spec_version": "1",
+  "fitting": "rect_offset",
+  "mark": "O-01",
+  "units": "mm",
+  "sheet_thickness_mm": 0.8,
+  "seam": { "type": "grooved", "allowance_mm": 22 },
+  "connection": { "type": "angle_flange", "allowance_mm": 28 },
+  "geometry": { "width_mm": 500, "height_mm": 300, "length_mm": 600, "offset_x_mm": 150, "offset_y_mm": 100 }
+}
