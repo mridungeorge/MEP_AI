@@ -9,7 +9,9 @@
 
 Run:  uvicorn --factory mep.api.server:app_from_env --port 8000
 """
+import logging
 import os
+import re
 from pathlib import Path
 
 from fastapi import Depends, FastAPI
@@ -28,6 +30,16 @@ from mep.api.uploads_pg import PgUploads
 from mep.diff.graph import build_graph
 from mep.engine.loader import RulePack, load_pack
 
+
+class _RedactShareTokens(logging.Filter):
+    """The certifier token is the credential and sits in the URL path: keep it out of the access log."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if isinstance(record.args, tuple):
+            record.args = tuple(re.sub(r"(/share/)[^/\s?\"]+", r"\1[redacted]", a) if isinstance(a, str) else a for a in record.args)
+        return True
+
+
 REPO_ROOT = Path(__file__).resolve().parents[4]
 DEMO_JWT_SECRET = "super-secret-jwt-token-with-at-least-32-characters-long"   # `supabase start` default
 
@@ -35,6 +47,7 @@ DEMO_JWT_SECRET = "super-secret-jwt-token-with-at-least-32-characters-long"   # 
 def create_pg_app(dsn: str, jwt_secret: str, pack: RulePack, cors_origins: list[str] | None = None,
                   supabase_url: str | None = None, anon_key: str | None = None) -> FastAPI:
     jwks_url = f"{supabase_url.rstrip('/')}/auth/v1/.well-known/jwks.json" if supabase_url else None
+    logging.getLogger("uvicorn.access").addFilter(_RedactShareTokens())
     current_user = make_current_user(dsn, jwt_secret, jwks_url)
     app = create_app(None, current_user, pack, ledger=PgLedger(dsn))
 

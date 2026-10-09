@@ -185,7 +185,10 @@ def test_bulk_approval_needs_a_random_spot_check_that_is_done_and_clean(admin):
     call(f["checker"], "select gate2_review(%s, 'reject', 'this one is wrong', %s)", (picked[1], sample))
     call(f["checker"], "select gate2_review(%s, 'approve', 'examined in the spot check', %s)", (picked[2], sample))
     refused(f["checker"], "select gate2_bulk_approve(%s)", (sample,), "found 1 problem")     # a problem in the sample: no bulk at all
-    assert admin.execute("select count(*) from review where bulk", ()).fetchone()[0] >= 0
+    # re-approving the rejected line does NOT undo the problem: the spot-check is burned for good
+    call(f["checker"], "select gate2_review(%s, 'approve', 'second thoughts, it is fine', %s)", (picked[1], sample))
+    refused(f["checker"], "select gate2_bulk_approve(%s)", (sample,), "found 1 problem")
+    refused(f["checker"], "select gate2_prepare_bulk(%s)", (f["revision"],), "line by line")
     assert admin.execute("select count(*) from review where sample_id = %s and bulk", (sample,)).fetchone()[0] == 0
 
 
@@ -327,7 +330,7 @@ def test_removing_the_tail_of_the_ledger_breaks_a_signoff_anchor(admin):
         result = verify(admin, f["firm"])
     finally:
         admin.execute("alter table ledger_event enable trigger ledger_event_no_update")
-    assert result[0] is False and "anchor" in result[3]
+    assert result[0] is False and ("anchor" in result[3] or "end of the ledger" in result[3])
 
 
 def test_the_ledger_cannot_be_truncated_or_rewritten_by_a_client(admin):
@@ -465,3 +468,35 @@ def test_the_diff_can_only_be_confirmed_through_the_service_and_created_from_is_
         admin.execute("select confirm_revision_diff_as(%s, %s, %s)", (f["checker"], f["revision"], "a" * 64))
     o = seed(admin, results=1)                                                                         # an open revision
     refused(o["designer"], "update revision set created_from_sha256 = 'x' where id = %s", (o["revision"],), "created_from_sha256")
+
+
+# ---- Phase 4a review round 1 (migration 0013) ----------------------------------------------------------------------
+
+def test_only_one_sample_can_be_open_so_a_checker_cannot_shop_for_one(admin):
+    f = frozen(admin, results=12)
+    call(f["checker"], "select gate2_prepare_bulk(%s)", (f["revision"],))
+    refused(f["checker"], "select gate2_prepare_bulk(%s)", (f["revision"],), "already open")
+
+
+def test_one_person_cannot_sign_two_gates_even_after_a_role_change(admin):
+    f = frozen(admin, results=2)
+    review_all(f)
+    call(f["checker"], "select sign_gate(%s, 'gate2')", (f["revision"],))
+    admin.execute("update app_user set role = 'approver', registration_no = 'RPEQ 777' where id = %s", (f["checker"],))
+    refused(f["checker"], "select sign_gate(%s, 'gate3', 'RPEQ 777')", (f["revision"],), "different person")
+
+
+def test_the_ledger_backfill_bypass_is_gone_and_the_end_of_the_chain_is_protected(admin):
+    f = frozen(admin, results=1)
+    with psycopg.connect(DB_URL, autocommit=False) as c, pytest.raises(psycopg.errors.RaiseException, match="append-only"):
+        c.execute("select set_config('mep.ledger_backfill', 'on', true)")
+        c.execute("update ledger_event set kind = 'x' where firm_id = %s", (f["firm"],))
+    # deleting the LAST rows (after every sign-off anchor) is caught by the recorded head
+    admin.execute("alter table ledger_event disable trigger ledger_event_no_update")
+    try:
+        admin.execute("delete from ledger_event where firm_id = %s and seq = (select max(seq) from ledger_event where firm_id = %s)",
+                      (f["firm"], f["firm"]))
+        result = verify(admin, f["firm"])
+    finally:
+        admin.execute("alter table ledger_event enable trigger ledger_event_no_update")
+    assert result[0] is False and "end of the ledger" in result[3]

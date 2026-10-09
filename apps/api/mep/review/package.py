@@ -18,8 +18,6 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
-from mep.review.classifier import classify
-
 PACKAGE_VERSION = 1
 DRAFT_BANNER = "DRAFT RULES: NOT ENGINEER-APPROVED"
 GATES = ("gate1", "gate2", "gate3")
@@ -55,7 +53,7 @@ def assemble(conn: psycopg.Connection[Any], firm_id: UUID, revision_id: UUID) ->
         (revision_id, firm_id, firm_id)).fetchall()
     results = cur.execute(
         "select rr.id, rr.subject_id, rr.rule_id, rr.part, rr.result::text as outcome, rr.citation, rr.causes, rr.near_miss,"
-        " rr.fix_hypotheses, rr.review_class, rr.stale, rr.inputs, v.decision, v.reason, v.bulk, v.spot_check, v.created_at as reviewed_at,"
+        " rr.fix_hypotheses, rr.review_class, rr.review_reasons, rr.stale, rr.inputs, v.decision, v.reason, v.bulk, v.spot_check, v.created_at as reviewed_at,"
         " u.email as reviewer from rule_result rr left join review_latest v on v.rule_result_id = rr.id"
         " left join auth.users u on u.id = v.user_id where rr.revision_id = %s and rr.firm_id = %s and rr.current"
         " order by rr.subject_id, rr.rule_id", (revision_id, firm_id)).fetchall()
@@ -74,11 +72,9 @@ def assemble(conn: psycopg.Connection[Any], firm_id: UUID, revision_id: UUID) ->
     signed = {s["gate"] for s in signoffs}
     lines = []
     for r in results:
-        c = classify({"outcome": r["outcome"], "stale": r["stale"], "near_miss": r["near_miss"], "causes": r["causes"],
-                      "inputs_used": r["inputs"]})
         lines.append({
             "subject": r["subject_id"], "rule_id": r["rule_id"], "part": r["part"], "outcome": r["outcome"],
-            "citation": r["citation"], "review_class": r["review_class"], "reasons": list(c.reasons), "stale": r["stale"],
+            "citation": r["citation"], "review_class": r["review_class"], "reasons": list(r["review_reasons"] or []), "stale": r["stale"],
             "decision": r["decision"], "reason": r["reason"], "bulk": bool(r["bulk"]), "spot_check": bool(r["spot_check"]),
             "reviewed_by": r["reviewer"], "reviewed_at": r["reviewed_at"], "fix_hypotheses": r["fix_hypotheses"]})
     counts: dict[str, int] = {}
@@ -111,6 +107,8 @@ def assemble(conn: psycopg.Connection[Any], firm_id: UUID, revision_id: UUID) ->
 
 def status_line(pkg: dict[str, Any]) -> str:
     st = pkg["status"]
+    if st["complete"] and not pkg["ledger"]["verified"]:
+        return "NOT VERIFIED: the audit ledger hash chain does not verify"
     if st["complete"]:
         return "SIGNED: Gate 1 (designer), Gate 2 (checker) and Gate 3 (approver)"
     return "NOT FULLY SIGNED: missing " + ", ".join(g.replace("gate", "Gate ") for g in st["missing"])
@@ -121,7 +119,7 @@ def to_pdf(pkg: dict[str, Any]) -> bytes:
     buf = io.BytesIO()
     banner = pkg.get("banner")
     status = status_line(pkg)
-    ok = pkg["status"]["complete"]
+    ok = pkg["status"]["complete"] and pkg["ledger"]["verified"]
 
     def decorate(canvas: Any, doc: Any) -> None:
         canvas.saveState()
@@ -168,7 +166,8 @@ def to_pdf(pkg: dict[str, Any]) -> bytes:
     for r in pkg["results"]:
         c = r["citation"]
         how = "not reviewed" if r["decision"] is None else (
-            f"{r['decision']}{' (bulk, after spot-check)' if r['bulk'] else ''}: {r['reason']} | {r['reviewed_by'] or ''}")
+            f"{'accepted FAIL' if (r['decision'] == 'approve' and r['outcome'] == 'FAIL') else r['decision']}"
+            f"{' (bulk, after spot-check)' if r['bulk'] else ''}: {r['reason']} | {r.get('reviewed_by') or ''}")
         extra = ("; ".join(r["reasons"]) + " | ") if r["reasons"] else ""
         rows.append([Paragraph(escape(str(v)), cell) for v in (
             r["subject"] + (f" (part {r['part'] + 1})" if r["part"] is not None else ""),

@@ -240,7 +240,8 @@ test("designer froze it; checker reviews (spot-check, line by line) and signs Ga
   await expect(checker.getByRole("alert").filter({ hasText: "stale, unclassified, unreviewed or not approved" })).toBeVisible();
 
   const draw = checker.getByRole("button", { name: "Draw the spot-check sample" });
-  if (await draw.isEnabled()) {
+  await expect(draw).toBeEnabled();                       // the seeded run must have clean passes: the bulk path is not optional
+  {
     await draw.click();
     await expect(checker.getByTestId("sample-info")).toBeVisible();
     await checker.getByRole("button", { name: "Approve the remaining clean passes" }).click();     // refused: the sample is not examined

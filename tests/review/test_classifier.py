@@ -45,6 +45,11 @@ def test_a_result_that_differs_from_its_parent_is_flipped_even_when_it_passes():
     assert classify(r(outcome="FAIL"), parent={"outcome": "PASS"}).klass == "fail"        # fail still outranks flipped
 
 
+def test_a_pass_whose_near_miss_test_could_not_vary_every_input_is_not_clean():
+    c = classify(r(near_miss={"is_near_miss": False, "not_evaluated": ["control_deadband"]}))
+    assert c.klass == "near_miss" and "control_deadband" in c.reasons[0]
+
+
 def test_database_shaped_rows_are_read_too():
     row = {"subject_id": "s", "rule_id": "R", "result": "PASS", "inputs": {}, "causes": [], "near_miss": None, "stale": False}
     assert classify(row).is_clean

@@ -77,8 +77,9 @@ class PgReview:
             n = 0
             for r in rows:
                 c = classes[(r["subject_id"], r["rule_id"])]
-                n += conn.execute("update rule_result set review_class = %s where id = %s and review_class is distinct from %s",
-                                  (c.klass, r["id"], c.klass)).rowcount
+                n += conn.execute("update rule_result set review_class = %s, review_reasons = %s::jsonb where id = %s"
+                                  " and (review_class, review_reasons) is distinct from (%s, %s::jsonb)",
+                                  (c.klass, json.dumps(list(c.reasons)), r["id"], c.klass, json.dumps(list(c.reasons)))).rowcount
             return n
 
     # ---- the Gate 2 worksheet ---------------------------------------------------------------------------------------
@@ -91,7 +92,7 @@ class PgReview:
                 raise ReviewRefused("revision not found", 404)
             rows = conn.execute(
                 "select rr.id, rr.subject_id, rr.rule_id, rr.part, rr.result::text as outcome, rr.citation, rr.causes, rr.near_miss,"
-                " rr.review_class, rr.stale, rr.fix_hypotheses, rr.inputs, v.decision, v.reason, v.bulk, v.spot_check, v.user_id,"
+                " rr.review_class, rr.review_reasons, rr.stale, rr.fix_hypotheses, rr.inputs, v.decision, v.reason, v.bulk, v.spot_check, v.user_id,"
                 " v.created_at from rule_result rr left join review_latest v on v.rule_result_id = rr.id"
                 " where rr.revision_id = %s and rr.firm_id = %s and rr.current order by rr.subject_id, rr.rule_id",
                 (revision_id, self._user.firm_id)).fetchall()
@@ -100,14 +101,11 @@ class PgReview:
             sample = conn.execute("select id, candidate_ids, sample_ids, created_at from review_sample where revision_id = %s"
                                   " and created_by = %s and used_at is null order by created_at desc limit 1",
                                   (revision_id, self._user.user_id)).fetchone()
-        from mep.review.classifier import classify
         lines = []
         for r in rows:
-            c = classify({"outcome": r["outcome"], "stale": r["stale"], "near_miss": r["near_miss"], "causes": r["causes"],
-                          "inputs_used": r["inputs"]})
             lines.append({
                 "id": str(r["id"]), "subject_id": r["subject_id"], "rule_id": r["rule_id"], "part": r["part"], "outcome": r["outcome"],
-                "citation": r["citation"], "review_class": r["review_class"], "reasons": list(c.reasons), "stale": r["stale"],
+                "citation": r["citation"], "review_class": r["review_class"], "reasons": list(r["review_reasons"] or []), "stale": r["stale"],
                 "fix_hypotheses": r["fix_hypotheses"], "decision": r["decision"], "reason": r["reason"],
                 "bulk": bool(r["bulk"]), "spot_check": bool(r["spot_check"]),
                 "reviewed_by_me": r["user_id"] == self._user.user_id if r["decision"] else None,
@@ -210,6 +208,16 @@ class PgShare:
         self._dsn = dsn
 
     def open(self, token: str, client: str | None) -> dict[str, Any] | None:
+        """The package for the token, cut down to what a certifier needs (no firm-wide ledger counts, no reviewer addresses)."""
+        out = self._open(token, client)
+        if out is not None:
+            for k in ("events", "head_seq", "head_hash"):
+                out["ledger"].pop(k, None)
+            for r in out["results"]:
+                r.pop("reviewed_by", None)
+        return out
+
+    def _open(self, token: str, client: str | None) -> dict[str, Any] | None:
         if not token or len(token) > 200:
             return None
         with psycopg.connect(self._dsn, autocommit=False, row_factory=dict_row) as conn:

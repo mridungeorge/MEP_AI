@@ -7,7 +7,7 @@ read-only, for a limited time, and each opening is logged in the ledger.
 from typing import Annotated, Any, Literal, Protocol
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Path, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
@@ -114,7 +114,7 @@ def sign(revision_id: UUID, gate: Literal["gate2", "gate3"], body: SignBody, use
 
 @router.get("/ledger/verify")
 def verify(user: Annotated[CurrentUser, Depends(current_user)], svc: Service) -> dict[str, Any]:
-    return svc.verify_ledger()
+    return _run(svc.verify_ledger)  # type: ignore[no-any-return]
 
 
 @router.get("/revisions/{revision_id}/package")
@@ -122,12 +122,21 @@ def get_package(revision_id: UUID, user: Annotated[CurrentUser, Depends(current_
     return _run(svc.package, revision_id)  # type: ignore[no-any-return]
 
 
-def _pdf(svc: ReviewService, revision_id: UUID, package: dict[str, Any]) -> Response:
+def _validated_pdf(package: dict[str, Any]) -> tuple[bytes, dict[str, Any]]:
+    """A PDF whose validator failed is never returned (non-negotiable 9)."""
     data = pkg.to_pdf(package)
     validator = pkg.validate_pdf(data, package)
-    svc.record_artifact(revision_id, data, validator, package["status"]["complete"])
+    if not validator["passed"]:
+        failed = sorted(k for k, ok in validator["checks"].items() if not ok)
+        raise _err(500, "validator_failed", "the report failed its own checks and is withheld: " + ", ".join(failed))
+    return data, validator
+
+
+def _pdf(svc: ReviewService, revision_id: UUID, package: dict[str, Any]) -> Response:
+    data, validator = _validated_pdf(package)
+    svc.record_artifact(revision_id, data, validator, package["status"]["complete"] and package["ledger"]["verified"])
     return Response(content=data, media_type="application/pdf", headers={
-        "Content-Disposition": f'inline; filename="compliance-{revision_id}.pdf"', "X-Validator": "passed" if validator["passed"] else "failed"})
+        "Content-Disposition": f'inline; filename="compliance-{revision_id}.pdf"', "X-Validator": "passed"})
 
 
 @router.get("/revisions/{revision_id}/package.pdf")
@@ -148,7 +157,7 @@ def list_share(revision_id: UUID, user: Annotated[CurrentUser, Depends(current_u
 
 
 @router.delete("/revisions/{revision_id}/share-links/{link_id}")
-def revoke_share(revision_id: UUID, link_id: Annotated[str, Field(pattern=r"^[0-9a-f]{12}$")],
+def revoke_share(revision_id: UUID, link_id: Annotated[str, Path(pattern=r"^[0-9a-f]{12}$")],
                  user: Annotated[CurrentUser, Depends(current_user)], svc: Service) -> dict[str, Any]:
     _run(svc.revoke_share, revision_id, link_id)
     return {"revoked": True}
@@ -167,11 +176,12 @@ def _open(share: ShareService, token: str, request: Request) -> dict[str, Any]:
 def share_package(token: str, request: Request, share: Share) -> Response:
     import json
     package = _open(share, token, request)
-    return Response(content=json.dumps(package), media_type="application/json", headers={"Cache-Control": "no-store"})
+    return Response(content=json.dumps(package), media_type="application/json",
+                    headers={"Cache-Control": "no-store", "Referrer-Policy": "no-referrer"})
 
 
 @router.get("/share/{token}/report.pdf")
 def share_pdf(token: str, request: Request, share: Share) -> Response:
-    data = pkg.to_pdf(_open(share, token, request))
+    data, _ = _validated_pdf(_open(share, token, request))
     return Response(content=data, media_type="application/pdf", headers={
-        "Cache-Control": "no-store", "Content-Disposition": 'inline; filename="compliance-package.pdf"'})
+        "Cache-Control": "no-store", "Referrer-Policy": "no-referrer", "Content-Disposition": 'inline; filename="compliance-package.pdf"'})

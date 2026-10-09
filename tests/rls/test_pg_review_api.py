@@ -156,8 +156,7 @@ def test_bulk_approval_through_the_api(admin, client, pack):
     rev, ck = f["revision"], auth(f, "checker")
     ws = client.get(f"/revisions/{rev}/review", headers=ck).json()
     clean = [r for r in ws["results"] if r["review_class"] == "clean_pass"]
-    if len(clean) < 2:
-        pytest.skip("the run produced fewer than two clean passes")
+    assert len(clean) >= 2, "the seeded run must produce clean passes, or this test proves nothing"
     sid = client.post(f"/revisions/{rev}/review/bulk/prepare", headers=ck).json()["sample_id"]
     assert client.post(f"/revisions/{rev}/review/bulk/approve", headers=ck, json={"sample_id": sid}).status_code == 409   # not examined yet
     sample = client.get(f"/revisions/{rev}/review", headers=ck).json()["sample"]

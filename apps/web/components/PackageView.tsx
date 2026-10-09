@@ -6,8 +6,8 @@ export function PackageView({ pkg }: { pkg: Package }) {
   return (
     <section aria-label="Compliance package">
       {pkg.banner && <p role="status" data-testid="draft-banner" style={{ background: "#fef3c7", padding: 8 }}>{pkg.banner}</p>}
-      <p data-testid="package-status" style={{ fontWeight: 600, color: st.complete ? "#166534" : "#b91c1c" }}>
-        {st.complete ? "SIGNED: Gate 1 (designer), Gate 2 (checker) and Gate 3 (approver)"
+      <p data-testid="package-status" style={{ fontWeight: 600, color: st.complete && pkg.ledger.verified ? "#166534" : "#b91c1c" }}>
+        {st.complete && !pkg.ledger.verified ? "NOT VERIFIED: the audit ledger hash chain does not verify" : st.complete ? "SIGNED: Gate 1 (designer), Gate 2 (checker) and Gate 3 (approver)"
           : `NOT FULLY SIGNED: missing ${st.missing.map((g) => g.replace("gate", "Gate ")).join(", ")}`}
       </p>
       <p>
@@ -33,7 +33,7 @@ export function PackageView({ pkg }: { pkg: Package }) {
             <tr key={`${r.subject}-${r.rule_id}-${r.part ?? ""}`}>
               <td>{r.subject}</td><td>{r.rule_id}</td><td>{r.citation.document} {r.citation.clause} ({r.citation.rule_status})</td>
               <td>{r.outcome}</td><td>{r.review_class ?? "-"}</td>
-              <td>{r.decision ? `${r.decision}${r.bulk ? " (bulk, after spot-check)" : ""}: ${r.reason}` : "not reviewed"}</td>
+              <td>{r.decision ? `${r.decision === "approve" && r.outcome === "FAIL" ? "accepted FAIL" : r.decision}${r.bulk ? " (bulk, after spot-check)" : ""}: ${r.reason}` : "not reviewed"}</td>
             </tr>
           ))}
         </tbody>

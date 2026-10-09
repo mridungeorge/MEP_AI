@@ -7,7 +7,8 @@ Pure and deterministic. It decides nothing about compliance; it only sorts resul
 
 Order, most serious first: fail, needs_judgement, stale, flipped, near_miss, not_applicable, lookup_input, clean_pass.
 
-A result is a clean pass only when ALL hold: the outcome is PASS; it is not a near miss (the rule's own near-miss test); no cause is
+A result is a clean pass only when ALL hold: the outcome is PASS; it is not a near miss (the rule's own near-miss test, which must
+have varied every input it could: a rule that declares no near-miss fraction has nothing to test and is judged on the rest); no cause is
 recorded; it is not stale; the same result in the parent revision (if there is one) was also a PASS; and every input it used was
 confirmed by the engineer, not read from an address lookup. Anything the classifier cannot read is NOT a clean pass.
 """
@@ -65,6 +66,9 @@ def classify(result: Mapping[str, Any], parent: Mapping[str, Any] | None = None)
     near = result.get("near_miss")
     if isinstance(near, Mapping) and near.get("is_near_miss"):
         reasons["near_miss"] = "a small change to an input would flip the outcome"
+    elif isinstance(near, Mapping) and near.get("not_evaluated"):
+        reasons["near_miss"] = "the near-miss test could not vary every input (" + ", ".join(
+            sorted(str(x) for x in near["not_evaluated"])) + ")"
     elif outcome == "PASS" and result.get("near_miss") is not None and not isinstance(near, Mapping):
         reasons["near_miss"] = "the near-miss record is unreadable"
     causes = result.get("causes")
