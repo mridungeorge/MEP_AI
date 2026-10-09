@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""PreToolUse (Bash): keep agents off the shared local Supabase database.
+"""PreToolUse (Bash and PowerShell): keep agents off the shared local Supabase database.
 
 Reviewers use `python scripts/review_db.py` (a disposable database with a read-only role).
 This hook blocks shell commands that name the shared DB's port or container. It cannot see

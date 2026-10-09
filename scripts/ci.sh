@@ -14,6 +14,9 @@ run python -c "import yaml, jsonschema, pint" || { echo "ci.sh: missing deps (va
 run python -m ruff check .
 run python -m mypy
 run python scripts/validate_rules.py
+# sign-off/approval changes since the newest *-gate or restore-* tag need an Engineer-Signoff trailer; no tag = fail closed.
+# Needs a git checkout with tags (a bare `git archive` has no history: run the gate from a clone).
+run python scripts/check_signoff_changes.py --base-tag
 run python scripts/release_gate.py --labels   # every golden project is labelled; synthetic ones say so
 run python scripts/release_gate.py --scan     # no release claims while zero real golden projects exist
 run python scripts/ingest_accuracy.py --check   # the measured-accuracy report is current
@@ -28,6 +31,7 @@ run python -m pytest tests/rls
 run python scripts/review_db.py selftest
 grep -q "Database isolation (mandatory)" .claude/agents/adversarial-reviewer.md || { echo "ci.sh: reviewer agent lacks the database isolation rule"; exit 1; }
 grep -q guard_signoff_bash .claude/settings.json || { echo "ci.sh: sign-off Bash hook is not registered"; exit 1; }
+grep -q '"matcher": "Bash|PowerShell"' .claude/settings.json || { echo "ci.sh: shell guards are not registered for PowerShell"; exit 1; }
 grep -q guard_review_db .claude/settings.json || { echo "ci.sh: database isolation hook is not registered"; exit 1; }
 # exit 5 = no golden projects yet (Sprint 1+); any other failure is real
 rc=0; run python -m pytest tests/golden || rc=$?
