@@ -1,0 +1,440 @@
+{
+  "ahu-1/NCC2025-J6D3-deadband": {
+    "subject_id": "ahu-1",
+    "rule_id": "NCC2025-J6D3-deadband",
+    "chains": [
+      [
+        {
+          "kind": "cause",
+          "id": "change:input:control_deadband",
+          "text": "system ahu-1: control_deadband 2 -> 1",
+          "via": "",
+          "path": ""
+        },
+        {
+          "kind": "fact",
+          "id": "fact:control_deadband",
+          "text": "control_deadband is declared a dependency of the rule",
+          "via": "depends_on",
+          "path": "systems.control_deadband"
+        },
+        {
+          "kind": "rule",
+          "id": "rule:NCC2025-J6D3-deadband",
+          "text": "rule NCC2025-J6D3-deadband (NCC 2025 Volume One J6D3(1)(h))",
+          "via": "",
+          "path": ""
+        },
+        {
+          "kind": "result",
+          "id": "result:ahu-1/NCC2025-J6D3-deadband",
+          "text": "ahu-1: PASS -> FAIL",
+          "via": "",
+          "path": ""
+        }
+      ],
+      [
+        {
+          "kind": "cause",
+          "id": "change:input:control_deadband",
+          "text": "system ahu-1: control_deadband 2 -> 1",
+          "via": "",
+          "path": ""
+        },
+        {
+          "kind": "fact",
+          "id": "fact:control_deadband",
+          "text": "control_deadband is an input of the rule",
+          "via": "input",
+          "path": ""
+        },
+        {
+          "kind": "rule",
+          "id": "rule:NCC2025-J6D3-deadband",
+          "text": "rule NCC2025-J6D3-deadband (NCC 2025 Volume One J6D3(1)(h))",
+          "via": "",
+          "path": ""
+        },
+        {
+          "kind": "result",
+          "id": "result:ahu-1/NCC2025-J6D3-deadband",
+          "text": "ahu-1: PASS -> FAIL",
+          "via": "",
+          "path": ""
+        }
+      ]
+    ]
+  },
+  "ahu-1/NCC2025-J6D3-econ-cycle": {
+    "subject_id": "ahu-1",
+    "rule_id": "NCC2025-J6D3-econ-cycle",
+    "chains": [
+      [
+        {
+          "kind": "cause",
+          "id": "change:space:area_m2",
+          "text": "space G-MTG added",
+          "via": "",
+          "path": ""
+        },
+        {
+          "kind": "fact",
+          "id": "scope:spaces",
+          "text": "spaces (any field) is declared a dependency of the rule",
+          "via": "scope",
+          "path": "spaces.dehumidification_control_needed"
+        },
+        {
+          "kind": "rule",
+          "id": "rule:NCC2025-J6D3-econ-cycle",
+          "text": "rule NCC2025-J6D3-econ-cycle (NCC 2025 Volume One J6D3(1)(d), Table J6D3)",
+          "via": "",
+          "path": ""
+        },
+        {
+          "kind": "result",
+          "id": "result:ahu-1/NCC2025-J6D3-econ-cycle",
+          "text": "ahu-1: FAIL -> PASS",
+          "via": "",
+          "path": ""
+        }
+      ],
+      [
+        {
+          "kind": "cause",
+          "id": "change:space:area_m2",
+          "text": "space G-OFF: area_m2 120.0 -> 150.0",
+          "via": "",
+          "path": ""
+        },
+        {
+          "kind": "fact",
+          "id": "scope:spaces",
+          "text": "spaces (any field) is declared a dependency of the rule",
+          "via": "scope",
+          "path": "spaces.dehumidification_control_needed"
+        },
+        {
+          "kind": "rule",
+          "id": "rule:NCC2025-J6D3-econ-cycle",
+          "text": "rule NCC2025-J6D3-econ-cycle (NCC 2025 Volume One J6D3(1)(d), Table J6D3)",
+          "via": "",
+          "path": ""
+        },
+        {
+          "kind": "result",
+          "id": "result:ahu-1/NCC2025-J6D3-econ-cycle",
+          "text": "ahu-1: FAIL -> PASS",
+          "via": "",
+          "path": ""
+        }
+      ],
+      [
+        {
+          "kind": "cause",
+          "id": "change:space:use",
+          "text": "space Plant: use plant -> plant room",
+          "via": "",
+          "path": ""
+        },
+        {
+          "kind": "fact",
+          "id": "scope:spaces",
+          "text": "spaces (any field) is declared a dependency of the rule",
+          "via": "scope",
+          "path": "spaces.dehumidification_control_needed"
+        },
+        {
+          "kind": "rule",
+          "id": "rule:NCC2025-J6D3-econ-cycle",
+          "text": "rule NCC2025-J6D3-econ-cycle (NCC 2025 Volume One J6D3(1)(d), Table J6D3)",
+          "via": "",
+          "path": ""
+        },
+        {
+          "kind": "result",
+          "id": "result:ahu-1/NCC2025-J6D3-econ-cycle",
+          "text": "ahu-1: FAIL -> PASS",
+          "via": "",
+          "path": ""
+        }
+      ],
+      [
+        {
+          "kind": "cause",
+          "id": "change:space:area_m2",
+          "text": "space G-STR removed",
+          "via": "",
+          "path": ""
+        },
+        {
+          "kind": "fact",
+          "id": "scope:spaces",
+          "text": "spaces (any field) is declared a dependency of the rule",
+          "via": "scope",
+          "path": "spaces.dehumidification_control_needed"
+        },
+        {
+          "kind": "rule",
+          "id": "rule:NCC2025-J6D3-econ-cycle",
+          "text": "rule NCC2025-J6D3-econ-cycle (NCC 2025 Volume One J6D3(1)(d), Table J6D3)",
+          "via": "",
+          "path": ""
+        },
+        {
+          "kind": "result",
+          "id": "result:ahu-1/NCC2025-J6D3-econ-cycle",
+          "text": "ahu-1: FAIL -> PASS",
+          "via": "",
+          "path": ""
+        }
+      ],
+      [
+        {
+          "kind": "cause",
+          "id": "change:input:economy_cycle",
+          "text": "system ahu-1: economy_cycle False -> True",
+          "via": "",
+          "path": ""
+        },
+        {
+          "kind": "fact",
+          "id": "fact:economy_cycle",
+          "text": "economy_cycle is declared a dependency of the rule",
+          "via": "depends_on",
+          "path": "systems.economy_cycle"
+        },
+        {
+          "kind": "rule",
+          "id": "rule:NCC2025-J6D3-econ-cycle",
+          "text": "rule NCC2025-J6D3-econ-cycle (NCC 2025 Volume One J6D3(1)(d), Table J6D3)",
+          "via": "",
+          "path": ""
+        },
+        {
+          "kind": "result",
+          "id": "result:ahu-1/NCC2025-J6D3-econ-cycle",
+          "text": "ahu-1: FAIL -> PASS",
+          "via": "",
+          "path": ""
+        }
+      ],
+      [
+        {
+          "kind": "cause",
+          "id": "change:input:economy_cycle",
+          "text": "system ahu-1: economy_cycle False -> True",
+          "via": "",
+          "path": ""
+        },
+        {
+          "kind": "fact",
+          "id": "fact:economy_cycle",
+          "text": "economy_cycle is an input of the rule",
+          "via": "input",
+          "path": ""
+        },
+        {
+          "kind": "rule",
+          "id": "rule:NCC2025-J6D3-econ-cycle",
+          "text": "rule NCC2025-J6D3-econ-cycle (NCC 2025 Volume One J6D3(1)(d), Table J6D3)",
+          "via": "",
+          "path": ""
+        },
+        {
+          "kind": "result",
+          "id": "result:ahu-1/NCC2025-J6D3-econ-cycle",
+          "text": "ahu-1: FAIL -> PASS",
+          "via": "",
+          "path": ""
+        }
+      ]
+    ]
+  },
+  "ahu-2/NCC2025-J6D3-econ-cycle": {
+    "subject_id": "ahu-2",
+    "rule_id": "NCC2025-J6D3-econ-cycle",
+    "chains": [
+      [
+        {
+          "kind": "cause",
+          "id": "change:space:area_m2",
+          "text": "space G-MTG added",
+          "via": "",
+          "path": ""
+        },
+        {
+          "kind": "fact",
+          "id": "scope:spaces",
+          "text": "spaces (any field) is declared a dependency of the rule",
+          "via": "scope",
+          "path": "spaces.dehumidification_control_needed"
+        },
+        {
+          "kind": "rule",
+          "id": "rule:NCC2025-J6D3-econ-cycle",
+          "text": "rule NCC2025-J6D3-econ-cycle (NCC 2025 Volume One J6D3(1)(d), Table J6D3)",
+          "via": "",
+          "path": ""
+        },
+        {
+          "kind": "result",
+          "id": "result:ahu-2/NCC2025-J6D3-econ-cycle",
+          "text": "ahu-2: PASS -> FAIL",
+          "via": "",
+          "path": ""
+        }
+      ],
+      [
+        {
+          "kind": "cause",
+          "id": "change:space:area_m2",
+          "text": "space G-OFF: area_m2 120.0 -> 150.0",
+          "via": "",
+          "path": ""
+        },
+        {
+          "kind": "fact",
+          "id": "scope:spaces",
+          "text": "spaces (any field) is declared a dependency of the rule",
+          "via": "scope",
+          "path": "spaces.dehumidification_control_needed"
+        },
+        {
+          "kind": "rule",
+          "id": "rule:NCC2025-J6D3-econ-cycle",
+          "text": "rule NCC2025-J6D3-econ-cycle (NCC 2025 Volume One J6D3(1)(d), Table J6D3)",
+          "via": "",
+          "path": ""
+        },
+        {
+          "kind": "result",
+          "id": "result:ahu-2/NCC2025-J6D3-econ-cycle",
+          "text": "ahu-2: PASS -> FAIL",
+          "via": "",
+          "path": ""
+        }
+      ],
+      [
+        {
+          "kind": "cause",
+          "id": "change:space:use",
+          "text": "space Plant: use plant -> plant room",
+          "via": "",
+          "path": ""
+        },
+        {
+          "kind": "fact",
+          "id": "scope:spaces",
+          "text": "spaces (any field) is declared a dependency of the rule",
+          "via": "scope",
+          "path": "spaces.dehumidification_control_needed"
+        },
+        {
+          "kind": "rule",
+          "id": "rule:NCC2025-J6D3-econ-cycle",
+          "text": "rule NCC2025-J6D3-econ-cycle (NCC 2025 Volume One J6D3(1)(d), Table J6D3)",
+          "via": "",
+          "path": ""
+        },
+        {
+          "kind": "result",
+          "id": "result:ahu-2/NCC2025-J6D3-econ-cycle",
+          "text": "ahu-2: PASS -> FAIL",
+          "via": "",
+          "path": ""
+        }
+      ],
+      [
+        {
+          "kind": "cause",
+          "id": "change:space:area_m2",
+          "text": "space G-STR removed",
+          "via": "",
+          "path": ""
+        },
+        {
+          "kind": "fact",
+          "id": "scope:spaces",
+          "text": "spaces (any field) is declared a dependency of the rule",
+          "via": "scope",
+          "path": "spaces.dehumidification_control_needed"
+        },
+        {
+          "kind": "rule",
+          "id": "rule:NCC2025-J6D3-econ-cycle",
+          "text": "rule NCC2025-J6D3-econ-cycle (NCC 2025 Volume One J6D3(1)(d), Table J6D3)",
+          "via": "",
+          "path": ""
+        },
+        {
+          "kind": "result",
+          "id": "result:ahu-2/NCC2025-J6D3-econ-cycle",
+          "text": "ahu-2: PASS -> FAIL",
+          "via": "",
+          "path": ""
+        }
+      ],
+      [
+        {
+          "kind": "cause",
+          "id": "change:input:max_airside_component_airflow",
+          "text": "system ahu-2: max_airside_component_airflow 1199 -> 1200",
+          "via": "",
+          "path": ""
+        },
+        {
+          "kind": "fact",
+          "id": "fact:max_airside_component_airflow",
+          "text": "max_airside_component_airflow is declared a dependency of the rule",
+          "via": "depends_on",
+          "path": "systems.max_airside_component_airflow"
+        },
+        {
+          "kind": "rule",
+          "id": "rule:NCC2025-J6D3-econ-cycle",
+          "text": "rule NCC2025-J6D3-econ-cycle (NCC 2025 Volume One J6D3(1)(d), Table J6D3)",
+          "via": "",
+          "path": ""
+        },
+        {
+          "kind": "result",
+          "id": "result:ahu-2/NCC2025-J6D3-econ-cycle",
+          "text": "ahu-2: PASS -> FAIL",
+          "via": "",
+          "path": ""
+        }
+      ],
+      [
+        {
+          "kind": "cause",
+          "id": "change:input:max_airside_component_airflow",
+          "text": "system ahu-2: max_airside_component_airflow 1199 -> 1200",
+          "via": "",
+          "path": ""
+        },
+        {
+          "kind": "fact",
+          "id": "fact:max_airside_component_airflow",
+          "text": "max_airside_component_airflow is an input of the rule",
+          "via": "input",
+          "path": ""
+        },
+        {
+          "kind": "rule",
+          "id": "rule:NCC2025-J6D3-econ-cycle",
+          "text": "rule NCC2025-J6D3-econ-cycle (NCC 2025 Volume One J6D3(1)(d), Table J6D3)",
+          "via": "",
+          "path": ""
+        },
+        {
+          "kind": "result",
+          "id": "result:ahu-2/NCC2025-J6D3-econ-cycle",
+          "text": "ahu-2: PASS -> FAIL",
+          "via": "",
+          "path": ""
+        }
+      ]
+    ]
+  }
+}

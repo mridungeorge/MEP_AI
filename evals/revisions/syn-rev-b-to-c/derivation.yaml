@@ -1,0 +1,49 @@
+# Derived BY HAND from the rule text and from the rules' own test cases BEFORE any code was run on this pair.
+# Thresholds used: CZ6 economy-cycle limit 1200 L/s (the check is  airflow < 1200 or economy_cycle);
+#                  dead band minimum 2 K (check  deadband >= 2 K); duct sealing trigger 3000 L/s (not below 3000 and not sealed -> FAIL).
+# Dependency facts (the rules' own `depends_on`): econ-cycle declares spaces.dehumidification_control_needed; deadband and
+# duct-sealing declare no spaces.* fact.
+
+spaces:                       # matched by IFC GUID, else by name + centroid within 1 m
+  - {change: changed, key: G-OFF, matched_by: guid, fields: {area_m2: [120.0, 150.0]}}      # 25 % more: far outside the 0.5 % tolerance
+  - {change: changed, key: Plant, matched_by: name+centroid, fields: {use: [plant, plant room]}}   # centroid moved 0.45 m: same room
+  - {change: removed, key: G-STR}
+  - {change: added, key: G-MTG}
+
+inputs:
+  - {change: changed, system: ahu-1, name: control_deadband, old: 2, new: 1}
+  - {change: changed, system: ahu-1, name: economy_cycle, old: false, new: true}
+  - {change: changed, system: ahu-2, name: max_airside_component_airflow, old: 1199, new: 1200}
+
+results:
+  rev_b:
+    - {subject: ahu-1, rule: NCC2025-J6D3-econ-cycle, outcome: FAIL}      # 1500 L/s is not below 1200 and there is no cycle
+    - {subject: ahu-1, rule: NCC2025-J6D3-deadband, outcome: PASS}        # 2 K is at the minimum
+    - {subject: ahu-1, rule: NCC2025-J6D7-duct-sealing, outcome: FAIL}    # 3000 L/s is not below 3000 and the duct is not sealed
+    - {subject: ahu-2, rule: NCC2025-J6D3-econ-cycle, outcome: PASS}      # 1199 L/s is below 1200
+  rev_c:
+    - {subject: ahu-1, rule: NCC2025-J6D3-econ-cycle, outcome: PASS}      # an economy cycle is now fitted
+    - {subject: ahu-1, rule: NCC2025-J6D3-deadband, outcome: FAIL}        # 1 K is below the 2 K minimum
+    - {subject: ahu-1, rule: NCC2025-J6D7-duct-sealing, outcome: FAIL}    # nothing it reads changed
+    - {subject: ahu-2, rule: NCC2025-J6D3-econ-cycle, outcome: FAIL}      # 1200 L/s is not below 1200
+
+# A B result is stale when a change reaches its rule along a graph edge. System-level changes touch only that system's results;
+# space changes touch every subject's results of the rules that declare a spaces.* dependency (econ-cycle only).
+stale:
+  - {subject: ahu-1, rule: NCC2025-J6D3-deadband, because: [control_deadband]}
+  - {subject: ahu-1, rule: NCC2025-J6D3-econ-cycle, because: [economy_cycle, spaces]}
+  - {subject: ahu-2, rule: NCC2025-J6D3-econ-cycle, because: [max_airside_component_airflow, spaces]}
+not_stale:
+  - {subject: ahu-1, rule: NCC2025-J6D7-duct-sealing}     # none of its inputs changed and it declares no spaces dependency
+
+# The reasoning chain for each stale result: cause -> fact -> rule -> result (each fact -> rule link is a graph edge).
+trace:
+  ahu-1/NCC2025-J6D3-deadband:
+    chain_count: 2          # control_deadband is read both as an input and as the declared dependency systems.control_deadband
+    ends_with: "ahu-1: PASS -> FAIL"
+  ahu-1/NCC2025-J6D3-econ-cycle:
+    chain_count: 6          # 4 space differences (area, use, removed, added) via the spaces scope + economy_cycle via 2 edges
+    ends_with: "ahu-1: FAIL -> PASS"
+  ahu-2/NCC2025-J6D3-econ-cycle:
+    chain_count: 6          # the same 4 space differences + max_airside_component_airflow via 2 edges
+    ends_with: "ahu-2: PASS -> FAIL"

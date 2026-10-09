@@ -30,7 +30,13 @@ def _norm(text: Any) -> str:
 
 
 def _num(v: Any) -> float | None:
-    return None if v is None or isinstance(v, bool) else float(v)
+    """The value as a number, or None for anything that is not one (text inputs, booleans, missing values)."""
+    if v is None or isinstance(v, bool):
+        return None
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
 
 
 @dataclass(frozen=True)
@@ -237,6 +243,7 @@ def stale_results(graph: DependencyGraph, changes: Sequence[tuple[Change, str | 
             for edge in graph.affected(change):
                 if edge.target == "rule:" + rule:
                     stale = by_key.setdefault((subject, rule), StaleResult(subject, rule))
-                    if not any(c.change == change and c.subject == tag and c.edge == edge for c in stale.causes):
+                    if not any(c.change == change and c.subject == tag and c.edge == edge and c.detail == detail
+                           for c in stale.causes):
                         stale.causes.append(Cause(change, tag, detail, edge))
     return [by_key[k] for k in sorted(by_key)]

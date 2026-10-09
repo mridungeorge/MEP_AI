@@ -147,3 +147,10 @@ def test_a_project_change_to_the_edition_makes_everything_stale_and_nothing_chan
     assert stale_results(graph, changes_of([], []), results) == []
     unchanged = changes_of(diff_spaces([sp("R", "G")], [sp("R", "G", area=20.05)]), [])
     assert stale_results(graph, unchanged, results) == []
+
+
+def test_text_and_boolean_inputs_are_compared_by_value_not_as_numbers():
+    old = {"ahu-1": {"system_type": ("air_conditioning", None), "economy_cycle": (False, None)}}
+    new = {"ahu-1": {"system_type": ("exhaust", None), "economy_cycle": (False, None)}}
+    assert [(i.name, i.old, i.new) for i in diff_inputs(old, new)] == [("system_type", "air_conditioning", "exhaust")]
+    assert diff_inputs(old, old) == []

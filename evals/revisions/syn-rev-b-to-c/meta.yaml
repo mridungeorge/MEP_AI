@@ -1,0 +1,9 @@
+# Synthetic revision pair. Nothing here is pilot-firm data; every expected value was derived by hand from the rule text and the
+# rules' own test cases (see derivation.yaml). Do not regenerate the expected files to make a test pass: a difference is a finding.
+name: syn-rev-b-to-c
+synthetic: true
+origin: synthetic hand-derived (no pilot-firm data)
+firm: null
+data_agreement: null
+engineer_signed_off_by: null
+description: "Synthetic revision B -> C of a VIC Class 5 office (not pilot data)"
