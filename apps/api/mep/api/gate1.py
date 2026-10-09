@@ -35,6 +35,7 @@ CONFIRM_ROLES = frozenset({"designer"})
 MAX_PARTS = 50
 MAX_AREA_M2 = 10_000_000
 MAX_CONFIRM_ROWS = 5000
+BUILDING_PART = "building_part"   # the schedule input that names the building part a system belongs to
 
 router = APIRouter()
 
@@ -264,6 +265,20 @@ def update_input(revision_id: UUID, input_id: str, body: InputModel, user: User,
     return _write(repo, revision_id, user, "input", input_id, body.model_dump())
 
 
+class PartAssignment(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    part: Annotated[int, Field(strict=True, ge=0, le=MAX_PARTS - 1)]      # position in the project's building parts
+
+
+@router.put("/revisions/{revision_id}/gate1/systems/{tag}/part")
+def assign_part(revision_id: UUID, tag: str, body: PartAssignment, user: User, repo: Repo) -> dict[str, Any]:
+    """A system names the building part it serves. It is an input like any other: it lands as 'default', a designer
+    confirms it, an edit (or a change to the parts) withdraws the confirmation."""
+    return _write(repo, revision_id, user, "input", None,
+                  {"system": tag, "name": BUILDING_PART, "value": body.part, "unit": "dimensionless"})
+
+
 @router.post("/revisions/{revision_id}/gate1/confirm")
 def confirm(revision_id: UUID, body: ConfirmRequest, user: User, repo: Repo) -> dict[str, Any]:
     if user.role not in CONFIRM_ROLES:  # the role is the injected user's, never the request's
@@ -338,11 +353,20 @@ def run_rules(revision_id: UUID, user: User, repo: Repo, pack: Pack, ledger: Led
     unconfirmed = [f"{k} {n}" for k, n, r in rows if r.get("confirmed_by") is None]
     if unconfirmed:
         return _refuse("gate1_required", [f"{x} is not confirmed at Gate 1" for x in unconfirmed])
+    classes = data["project"]["building_class"]
+    n_parts = len(classes) if isinstance(classes, list) else 1
+    if n_parts > 1:      # a mixed-use project: every system must serve a building part that exists
+        missing = [f"system {s['id']}: choose the building part it serves (this project has {n_parts})"
+                   for s in data.get("systems", []) if s.get("part") is None]
+        outside = [f"system {s['id']}: building part {s['part']} does not exist (parts are 0 to {n_parts - 1})"
+                   for s in data.get("systems", []) if s.get("part") is not None and not 0 <= s["part"] < n_parts]
+        if missing or outside:
+            return _refuse("gate1_required", missing + outside)
     subjects = [
         Subject(s["id"], list(s.get("rules", [])), {
             i["name"]: InputValue(i["value"], i.get("unit"), Provenance(i["provenance"]),
                                   confirmed=i.get("confirmed_by") is not None)
-            for i in s.get("inputs", [])}, part=s.get("part"))
+            for i in s.get("inputs", []) if i["name"] != BUILDING_PART}, part=s.get("part"))
         for s in data.get("systems", [])]
     try:
         report = run(RunRequest(_project(data["project"], revision_id, user.firm_id), subjects), pack, ledger=ledger)

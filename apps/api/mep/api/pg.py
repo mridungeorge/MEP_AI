@@ -244,6 +244,15 @@ class PgRepository:
                        data: dict[str, Any]) -> tuple[Any, str | None]:
         """The same checks as the schedule: the name is an input of the project's edition, the unit is converted to the
         rule's declared unit (pint), and a system type is one the rules know."""
+        if data["name"] == "building_part":            # which part of the building the system serves (not a rule input)
+            count = conn.execute(
+                "select count(*) as n from building_part bp join revision r on r.project_id = bp.project_id and"
+                " r.firm_id = bp.firm_id where r.id = %s and r.firm_id = %s", (revision_id, firm_id)).fetchone()["n"]
+            value = data.get("value")
+            if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value < count:
+                raise InvalidInputError("enter the building parts first, then name one of them" if count == 0 else
+                                        f"building_part must be a whole number from 0 to {count - 1}")
+            return value, "dimensionless"
         if self._pack is None:
             return data.get("value"), data.get("unit")
         row = conn.execute("select p.ncc_edition from revision r join project p on p.id = r.project_id and"
@@ -376,7 +385,9 @@ class PgRepository:
                           and r["provenance"] == "engineer_confirmed"), None)
             rules = [] if self._pack is None or typed is None else rules_for_system_type(
                 self._pack, proj["ncc_edition"], proj["state"], str(typed))
-            run_systems.append({"id": s["tag"] or str(s["id"]), "rules": rules, "part": None, "inputs": rows})
+            part = next((int(r["value"]) for r in rows if r["name"] == "building_part" and r["confirmed_by"] is not None
+                         and r["provenance"] == "engineer_confirmed"), None)
+            run_systems.append({"id": s["tag"] or str(s["id"]), "rules": rules, "part": part, "inputs": rows})
         building_class: Any = [{"building_class": p["building_class"], "storeys": p["storeys"],
                                 "area_m2": _num(p["area_m2_value"]), "confirmed_by": p["confirmed_by"]} for p in parts]
         return {"project": {"state": proj["state"], "ncc_edition": proj["ncc_edition"],
