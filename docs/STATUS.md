@@ -31,6 +31,11 @@ Updated: 2026-10-09 (recovery after a device change; see "Recovery 2026-10-09")
   devcontainer. The devcontainer is the gate environment.
 
 ## Sprint 2 finish (2026-10-09, after the recovery)
+- **Gate (2026-10-09):** tag `sprint-2-gate` = `dca8eb0`. `scripts/ci.sh` ran green, with `set -e`, on a fresh `git clone` of that commit in the
+  devcontainer (Linux, Python 3.12, local Supabase in Docker): ruff, mypy strict, 24 rules, sign-off check against `restore-2026-10-09`,
+  web typecheck + 15 vitest, 1251 engine/rules/ingest/API/hook tests, 210 RLS + Postgres API tests, 5 Playwright e2e, review_db selftest,
+  128 golden (+2 skipped: the refused-run cases). Last known before the loss: 1184 / 181 / 128. GitHub CI has not run. `tests/skills`
+  (235, duct-fab) is not part of `ci.sh` yet (needs cadquery, see docs/skills/duct-fab.md); it passed separately in the container.
 Rebuilt because the snapshot did not hold it. Reviewed in two rounds by the adversarial reviewer (round 1: no blockers, ten
 should-fix; round 2: no blockers, four should-fix, all fixed; the fixes in the last commit before the tag have had no third review).
 - **Hooks:** every hook that matches Bash also matches PowerShell (`Bash|PowerShell`); the sign-off guard reads a command two ways
