@@ -5,20 +5,32 @@ local devcontainer gate is the reference (tag `sprint-2-gate`). GitHub CI has ne
 Updated: 2026-10-09 (recovery after a device change; see "Recovery 2026-10-09")
 
 ## Resume here (updated 2026-10-10)
-Unattended multi-phase build. Order: PHASE 2.5 finish -> PHASE 3 (revision diff) -> PHASE 4a (review, sign-off, deliverable); STOP after 4a.
-A phase is done when its `*-gate` tag exists. **Phase 2.5: done (`sprint-2.5-gate`).** **Current phase: 3.**
-Phase 3 status: built and tested but NOT yet committed as separate items: dependency graph (`diff/graph.py`), revision diff core
-(`diff/revision.py`), reasoning trace (`diff/trace.py`), cross-rule re-run (`engine/cross_rule.py`), synthetic golden pair
-(`evals/revisions/syn-rev-b-to-c`), DB scaffolding (migration 0008: lineage rule, stored results, diff confirmation, freeze),
-`diff/service.py`, `api/revisions.py` (lineage, results, diff, diff/confirm, freeze), run persistence and the diff gate on the run.
-Still to do in Phase 3: (a) a new upload on a FROZEN revision creates a child revision (copy systems/inputs, ingest the file, carry
-confirmation for unchanged spaces) in `api/uploads_pg.py`; (b) RLS/API tests for lineage, stored results, diff, diff confirm, freeze;
-(c) UI: upload new revision, diff review + confirm, trace view; (d) Playwright full flow; (e) review (max two rounds), gate, tag
-`sprint-3-gate`. Then Phase 4a (see the user's phase prompt in the conversation: classifier, Gate 2/3, ledger hash chain, share link,
-PDF, Playwright) and STOP.
-Notes: the local Supabase signs tokens with ES256 (JWKS); the API verifies that and HS256 (`auth.py`). Mail for the magic-link tests goes to
-Mailpit (`http://127.0.0.1:54324`). Run everything through `.claude/hooks/devcontainer_exec.py` or inside the container. In the container
-`~/ws` is a synced work copy (never `uv sync` there: it removes cadquery); clean gates run from `git clone` copies (`~/gate3`).
+Unattended multi-phase build. Order: PHASE 2.5 -> PHASE 3 (revision diff) -> PHASE 4a (review, sign-off, deliverable); STOP after 4a.
+A phase is done when its `*-gate` tag exists. **Done: 2.5 (`sprint-2.5-gate`), 3 (`sprint-3-gate`).** **Current phase: 4a.**
+Phase 4a built so far (committed): classifier (`review/classifier.py`), migration 0010 (Gate 2 review functions with the random
+spot-check bulk approval, `sign_gate` state machine, ledger hash chain + `verify_ledger` + audit triggers, share links), API
+(`api/review.py`, `review_pg.py`, `review/package.py` PDF + validator), DB tests `tests/rls/test_pg_signoff.py`, API tests
+`tests/rls/test_pg_review_api.py`. Still to do: UI (Gate 2 worksheet, bulk spot-check, sign-off screens, share-link creation, public
+`/share/[token]` page; `Shell` must treat `/share/` as public), Playwright designer -> checker -> approver -> signed package -> share
+link, approver registration numbers are set by the service only (no UI), 4a review (max two rounds), gate, tag `sprint-4a-gate`, STOP
+and report. Do NOT start 4b.
+Notes: the local Supabase signs tokens with ES256 (JWKS). Mail for magic links goes to Mailpit (`http://127.0.0.1:54324`). Run everything
+in the devcontainer; `~/ws` is a synced work copy (never `uv sync` there); clean gates run from `git clone` copies (`~/gate3`).
+Existing open revisions have results without an input fingerprint (`inputs_hash` NULL): they must be re-run once before they can be frozen.
+
+## Phase 3 (2026-10-10): done, tag `sprint-3-gate`
+- Built: revision lineage (child revision on upload to a frozen revision; systems copied with confirmations; unchanged confirmed spaces
+  carried and ledgered), dependency graph (all 24 rules), revision diff (GUID else name + centroid), stale set, reasoning trace verified
+  against graph edges, cross-rule re-run with per-input conflicts, synthetic Rev B -> C golden pair, run persistence, diff confirmation
+  bound to the diff hash, freeze with an input fingerprint (`live_inputs_hash`), revision screen + Playwright (10 e2e tests).
+- Review: round 1 found 2 blockers + 5 should-fix (frozen results rewritten by a re-run; freeze with stale results; conflict
+  misattribution; diff confirm not bound to what was seen; run TOCTOU; sibling children; client-made children), all fixed (0011).
+  Round 2 found 3 blockers (snapshot mix in the run load, lock order at freeze, hash collisions) + hash coverage + guard whitelist +
+  confirm function exposed + hash oracle + `created_from_sha256` writable, all fixed (0012). **The round-2 fixes had no third review**;
+  they are covered by `tests/rls/test_pg_signoff.py` (last section) and `tests/rls/test_pg_lineage.py`. Not reproduced with two live
+  sessions: the freeze/edit and run/freeze races (argued from lock order).
+- Known limits: reasoning traces list the stale results only; carried confirmations keep the parent's values for matched spaces
+  within tolerance (the discarded new-model values are in the ledger); untagged systems are diffed by id.
 
 ## Phase 2.5 (2026-10-10): done, tag `sprint-2.5-gate`
 - Built: local auth config (port 3100, mail rate limit, public signup off), Supabase magic-link sign-in, `/me`, `/revisions`, role in the

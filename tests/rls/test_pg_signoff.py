@@ -463,4 +463,5 @@ def test_the_diff_can_only_be_confirmed_through_the_service_and_created_from_is_
     refused(f["designer"], "select confirm_revision_diff(%s, %s)", (f["revision"], "a" * 64), "permission denied")
     with pytest.raises(psycopg.errors.InsufficientPrivilege, match="only a designer"):
         admin.execute("select confirm_revision_diff_as(%s, %s, %s)", (f["checker"], f["revision"], "a" * 64))
-    refused(f["designer"], "update revision set created_from_sha256 = 'x' where id = %s", (f["revision"],), "")
+    o = seed(admin, results=1)                                                                         # an open revision
+    refused(o["designer"], "update revision set created_from_sha256 = 'x' where id = %s", (o["revision"],), "created_from_sha256")
