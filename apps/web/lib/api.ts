@@ -29,7 +29,7 @@ export class ApiError extends Error {
   }
 }
 
-export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
+export async function apiFetch<T>(path: string, init: RequestInit = {}, retried = false): Promise<T> {
   const headers = new Headers(init.headers);
   const acting = getActingRole();
   if (acting) headers.set("X-Acting-Role", acting);
@@ -39,6 +39,14 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
     headers.set("Content-Type", "application/json");
   }
   const res = await fetch(`${BASE_URL}${path}`, { ...init, headers });
+  if (res.status === 403 && acting && !retried) {
+    // the chosen acting role is no longer permitted (the firm's mode or the person's roles changed): forget it and retry as themselves
+    const body = (await res.clone().json().catch(() => ({}))) as ApiErrorBody;
+    if ((body.detail as { code?: string } | undefined)?.code === "not_permitted_role") {
+      setActingRole(null);
+      return apiFetch<T>(path, init, true);
+    }
+  }
   if (!res.ok) {
     let body: ApiErrorBody = {};
     try {

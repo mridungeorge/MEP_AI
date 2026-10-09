@@ -18,8 +18,10 @@ A registered engineer who is responsible for the design in the state concerned:
 1. **Verify on the register.** Search the person by name and number on the register's own website. Check: the name matches, the number
    matches, the status is current/not suspended, and the area of practice covers mechanical services. Take a screenshot or PDF.
    Write down: the register, the date, the exact number, what you saw.
-2. **Make sure the person has an account**: they have signed in once, or `scripts/seed_demo.py` / the Supabase dashboard (Authentication >
-   Users > Invite) created them, and `app_user` has them as role `approver` in the right firm.
+2. **Make sure the person has an account in the right firm** as role `approver`:
+   `admin_users.py add-firm --name "<firm>"` (once per firm), then
+   `admin_users.py add-user --firm "<firm>" --email jo@firm.example --role approver` (creates the sign-in account too; it needs
+   `MEP_SUPABASE_URL` and `MEP_SUPABASE_SERVICE_KEY`). Changing someone's role later: `admin_users.py set-role --email ... --role ...`.
 3. **Set the number with the service script** (needs `MEP_DB_URL` for the project; see `deploy/env.api.example`):
 
    ```

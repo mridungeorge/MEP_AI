@@ -130,11 +130,9 @@ def test_the_signer_mode_change_and_registration_changes_are_ledgered(admin):
                          " 'app_user_changed') order by seq desc limit 2", (f["firm"],)).fetchall()
     assert rows[0][0] == "app_user_changed" and rows[0][1]["registration_no"] == "RPEQ 54321"
     assert rows[0][1]["previous"]["registration_no"] == "RPEQ 12345"
-    assert rows[1][0] == "firm_signer_mode_changed" and rows[1][1] == {"from": "strict", "to": "small_firm",
-                                                                       "independence_notice": "NOT INDEPENDENTLY CHECKED"} or \
-        rows[1][1]["to"] == "small_firm"
-    refused(f["designer"], "update firm set signer_mode = 'small_firm' where id = %s", (f["firm"],), "")        # not a client setting
-    refused(f["approver"], "update app_user set registration_no = 'X-1234' where id = %s", (f["approver"],), "")
+    assert rows[1][0] == "firm_signer_mode_changed" and rows[1][1]["from"] == "strict" and rows[1][1]["to"] == "small_firm"
+    refused(f["designer"], "update firm set signer_mode = 'small_firm' where id = %s", (f["firm"],), "permission denied")  # not a client setting
+    refused(f["approver"], "update app_user set registration_no = 'X-1234' where id = %s", (f["approver"],), "permission denied")
 
 
 def test_strict_mode_still_needs_three_different_people_and_the_gate1_signer_cannot_review(admin):
@@ -151,8 +149,8 @@ def test_approving_a_fail_needs_a_category_an_explanation_and_never_a_bulk_sampl
     ck = f["checker"]
     refused(ck, "select gate2_review(%s, 'approve', 'the checker accepts this failure')", (r0,), "needs a reason category")
     refused(ck, "select gate2_review(%s, 'approve', 'short', null, 'out_of_scope')", (r0,), "at least 10 characters")
-    refused(ck, "select gate2_review(%s, 'approve', 'the checker accepts this failure', null, 'whatever')", (r0,), "")      # closed set
-    refused(ck, "select gate2_review(%s, 'approve', 'the checker accepts this failure', null, 'performance_solution')", (r0,), "")
+    refused(ck, "select gate2_review(%s, 'approve', 'the checker accepts this failure', null, 'whatever')", (r0,), "violates check constraint")      # closed set
+    refused(ck, "select gate2_review(%s, 'approve', 'the checker accepts this failure', null, 'performance_solution')", (r0,), "review_performance_solution_reference")
     refused(ck, "select gate2_review(%s, 'approve', 'a long enough explanation', null, 'out_of_scope')",
             (f["results"][1],), "only applies to approving a FAIL")                                                   # a PASS has none
     refused(ck, "select gate2_review(%s, 'reject', 'a long enough explanation', null, 'out_of_scope')", (r0,), "only applies")
@@ -180,9 +178,8 @@ def test_a_disputed_rule_is_recorded_and_written_to_the_engineer_review_list(adm
     text = md.read_text(encoding="utf-8")
     assert text.startswith("# Disputed rules") and "`NCC2025-R0` disputed" in text and "misread this configuration" in text
     assert "rule_dispute_recorded" in {r[0] for r in admin.execute("select kind from ledger_event where firm_id = %s", (f["firm"],))}
-    refused(f["designer"], "select count(*) from rule_dispute where false; insert into rule_dispute (firm_id, rule_id, revision_id,"
-            " rule_result_id, flagged_by, reason) values (gen_random_uuid(), 'x', gen_random_uuid(), gen_random_uuid(), %s, 'x')",
-            (f["designer"],), "")
+    refused(f["designer"], "insert into rule_dispute (firm_id, rule_id, revision_id, rule_result_id, flagged_by, reason)"
+            " values (%s, 'x', %s, %s, %s, 'x')", (f["firm"], f["revision"], f["results"][0], f["designer"]), "permission denied")
 
 
 def test_gate3_needs_each_accepted_fail_acknowledged_individually_by_the_approver(admin):
@@ -194,13 +191,13 @@ def test_gate3_needs_each_accepted_fail_acknowledged_individually_by_the_approve
     refused(f["approver"], "select sign_gate(%s, 'gate3', 'RPEQ 12345')", (f["revision"],), "2 accepted FAIL(s)")
     refused(f["checker"], "select gate3_acknowledge_fail(%s, 'acknowledged by me')", (f["results"][0],), "only an approver")
     refused(f["approver"], "select gate3_acknowledge_fail(%s, 'acknowledged by me')", (f["results"][2],), "not an accepted FAIL")
-    refused(f["approver"], "select gate3_acknowledge_fail(%s, '  ')", (f["results"][0],), "")
+    refused(f["approver"], "select gate3_acknowledge_fail(%s, '  ')", (f["results"][0],), "fail_ack_note_check")
     call(f["approver"], "select gate3_acknowledge_fail(%s, 'acknowledged: reviewed the explanation')", (f["results"][0],))
-    refused(f["approver"], "select gate3_acknowledge_fail(%s, 'acknowledged again')", (f["results"][0],), "")             # once each
+    refused(f["approver"], "select gate3_acknowledge_fail(%s, 'acknowledged again')", (f["results"][0],), "fail_ack_rule_result_id_key")             # once each
     refused(f["approver"], "select sign_gate(%s, 'gate3', 'RPEQ 12345')", (f["revision"],), "1 accepted FAIL(s)")
     call(f["approver"], "select gate3_acknowledge_fail(%s, 'acknowledged: reviewed the explanation')", (f["results"][1],))
     call(f["approver"], "select sign_gate(%s, 'gate3', 'RPEQ 12345')", (f["revision"],))
-    refused(f["approver"], "select gate3_acknowledge_fail(%s, 'too late')", (f["results"][0],), "")
+    refused(f["approver"], "select gate3_acknowledge_fail(%s, 'too late')", (f["results"][0],), "Gate 3 is already signed")
     with pytest.raises(psycopg.errors.RaiseException):
         admin.execute("update fail_ack set note = 'changed' where rule_result_id = %s", (f["results"][0],))
 
@@ -356,3 +353,55 @@ def test_race_a_freeze_arriving_during_a_run_waits_and_then_freezes_the_new_resu
     assert admin.execute("select frozen_at is not null from revision where id = %s", (f["revision"],)).fetchone()[0]
     assert {r[0] for r in admin.execute("select rule_id from rule_result where revision_id = %s and current", (f["revision"],))} == {"NCC2025-RN"}
     assert live_matches_results(admin, f)
+
+
+# ---- review round 1 (migration 0016) -------------------------------------------------------------------------------
+
+def second_approver(admin, f, registration="RPEQ 22222"):
+    u = str(uuid.uuid4())
+    admin.execute("insert into auth.users (id, email) values (%s, %s)", (u, f"approver2-{u}@test.invalid"))
+    admin.execute("insert into app_user (id, firm_id, role, registration_no) values (%s, %s, 'approver', %s)", (u, f["firm"], registration))
+    return u
+
+
+def test_a_mode_switch_cannot_launder_reviews_done_in_small_firm_mode(admin):
+    f = frozen(admin, results=2)
+    admin.execute("update firm set signer_mode = 'small_firm' where id = %s", (f["firm"],))
+    admin.execute("update app_user set also_roles = '{designer,checker}' where id = %s", (f["approver"],))
+    for rid in f["results"]:
+        run_as(f["approver"], "select gate2_review(%s, 'approve', 'reviewed by the person who also froze it')", (rid,), acting="checker")
+    admin.execute("update firm set signer_mode = 'strict' where id = %s", (f["firm"],))
+    assert admin.execute("select distinct signer_mode from review where revision_id = %s", (f["revision"],)).fetchall() == [("small_firm",)]
+    package = pkg.assemble(admin, uuid.UUID(f["firm"]), uuid.UUID(f["revision"]))
+    assert package is not None and package["independence_notice"] == "NOT INDEPENDENTLY CHECKED"
+    assert package["status"]["signed_gates"] == ["gate1"]
+
+
+def test_only_the_gate3_signers_own_acknowledgements_count(admin):
+    f = frozen(admin, results=2, classes={0: "fail"})
+    call(f["checker"], "select gate2_review(%s, 'approve', 'accepted for the stated reason, see file', null, 'out_of_scope')", (f["results"][0],))
+    call(f["checker"], "select gate2_review(%s, 'approve', 'checked against the clause')", (f["results"][1],))
+    call(f["checker"], "select sign_gate(%s, 'gate2')", (f["revision"],))
+    other = second_approver(admin, f)
+    call(f["approver"], "select gate3_acknowledge_fail(%s, 'acknowledged by the first approver')", (f["results"][0],))
+    refused(other, "select sign_gate(%s, 'gate3', 'RPEQ 22222')", (f["revision"],), "1 accepted FAIL(s) need")        # not his acknowledgement
+    refused(f["designer"], "select gate3_acknowledge_fail(%s, 'x acknowledged')", (f["results"][0],), "only an approver")
+
+
+def test_a_strict_approver_who_signed_earlier_cannot_acknowledge(admin):
+    f = frozen(admin, results=2, classes={0: "fail"})
+    call(f["checker"], "select gate2_review(%s, 'approve', 'accepted for the stated reason, see file', null, 'out_of_scope')", (f["results"][0],))
+    call(f["checker"], "select gate2_review(%s, 'approve', 'checked against the clause')", (f["results"][1],))
+    call(f["checker"], "select sign_gate(%s, 'gate2')", (f["revision"],))
+    admin.execute("update app_user set role = 'approver', registration_no = 'RPEQ 33333' where id = %s", (f["checker"],))      # gate 2 signer promoted
+    refused(f["checker"], "select gate3_acknowledge_fail(%s, 'acknowledged as the checker')", (f["results"][0],), "someone else" if False else "must be someone else")
+
+
+def test_a_demo_registration_is_refused_outside_the_demo_firm(admin):
+    f = frozen(admin, results=1)
+    review_all(f)
+    call(f["checker"], "select sign_gate(%s, 'gate2')", (f["revision"],))
+    admin.execute("update app_user set registration_no = 'DEMO-0001' where id = %s", (f["approver"],))
+    refused(f["approver"], "select sign_gate(%s, 'gate3', 'DEMO-0001')", (f["revision"],), "placeholders")
+    admin.execute("update firm set name = 'Demo Mechanical (synthetic) test' where id = %s", (f["firm"],))
+    call(f["approver"], "select sign_gate(%s, 'gate3', 'DEMO-0001')", (f["revision"],))

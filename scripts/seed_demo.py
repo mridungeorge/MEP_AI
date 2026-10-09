@@ -6,7 +6,8 @@ docs/demo-script.md. Run it against a database YOU own (local Supabase or your c
 
 Environment (see deploy/env.api.example; nothing is read from git):
     MEP_DB_URL                  Postgres connection string of the project (the service role / pooler string)
-    MEP_JWT_SECRET              the project's JWT secret (used only to talk to the API code in-process while seeding)
+    MEP_JWT_SECRET              YOUR OWN random secret for the API (NOT the Supabase JWT secret); used only to talk to the API code
+                                in-process while seeding
     MEP_SUPABASE_URL            https://<ref>.supabase.co  (or http://127.0.0.1:54321 locally)
     MEP_SUPABASE_SERVICE_KEY    the service_role key (creates the three sign-in users; never leaves this machine)
 
@@ -73,22 +74,30 @@ def main() -> None:
     ap.add_argument("--checker", required=True)
     ap.add_argument("--approver", required=True)
     ap.add_argument("--mode", choices=["strict", "small_firm"], default="strict")
+    ap.add_argument("--firm-name", default=FIRM_NAME, help='for a second demo set: a name starting "Demo Mechanical (synthetic)"')
     args = ap.parse_args()
     emails = {"designer": args.designer, "checker": args.checker, "approver": args.approver}
     if len({e.lower() for e in emails.values()}) < 3 and args.mode == "strict":
         sys.exit("strict mode needs three different e-mail addresses (use small_firm for one person)")
+    if not args.firm_name.startswith(FIRM_NAME):
+        sys.exit(f'the demo firm name must start with "{FIRM_NAME}" (DEMO- registration numbers are only valid in a demo firm)')
+    one_person = len({e.lower() for e in emails.values()}) == 1
+    if one_person and args.mode != "small_firm":
+        sys.exit("one e-mail address for all three roles needs --mode small_firm")
     dsn, secret = need("MEP_DB_URL"), need("MEP_JWT_SECRET")
     supabase_url, service_key = need("MEP_SUPABASE_URL"), need("MEP_SUPABASE_SERVICE_KEY")
     golden = yaml.safe_load(GOLDEN.read_text(encoding="utf-8"))
     assert golden.get("synthetic") is True, "the demo project must be the synthetic golden project"
 
     with psycopg.connect(dsn, autocommit=True) as conn:
-        firm = conn.execute("select id from firm where name = %s", (FIRM_NAME,)).fetchone()
+        firm = conn.execute("select id from firm where name = %s", (args.firm_name,)).fetchone()
         firm_id = str(firm[0]) if firm else str(uuid.uuid4())
         if not firm:
-            conn.execute("insert into firm (id, name) values (%s, %s)", (firm_id, FIRM_NAME))
+            conn.execute("insert into firm (id, name) values (%s, %s)", (firm_id, args.firm_name))
         ids = {role: ensure_user(conn, supabase_url, service_key, email) for role, email in emails.items()}
         for role, uid in ids.items():
+            if one_person and role != "approver":
+                continue                      # one person: ONE account, as the approver, acting as the other two
             conn.execute("insert into app_user (id, firm_id, role, registration_no) values (%s, %s, %s, %s)"
                          " on conflict (id) do nothing", (uid, firm_id, role, DEMO_REGISTRATION if role == "approver" else None))
         if args.mode == "small_firm":       # one person may hold every gate; every package then says NOT INDEPENDENTLY CHECKED
@@ -108,7 +117,8 @@ def main() -> None:
                      (revision_id, firm_id, project_id))
 
     client = TestClient(create_pg_app(dsn, secret, load_pack(ROOT / "rules")))
-    h = {"Authorization": f"Bearer {mint_token(secret, ids['designer'], ttl_seconds=600)}"}
+    h = {"Authorization": f"Bearer {mint_token(secret, ids['designer'], ttl_seconds=600)}",
+         **({"X-Acting-Role": "designer"} if one_person else {})}
     base = f"/revisions/{revision_id}"
     r = client.put(f"{base}/gate1/parts", headers=h, json={"parts": [{"building_class": p["building_class"], "storeys": 4, "area_m2": 2400}]})
     r.raise_for_status()

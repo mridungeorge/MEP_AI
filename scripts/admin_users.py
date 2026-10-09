@@ -8,6 +8,12 @@ adds the verification evidence as its own entry). Run with the SERVICE connectio
     uv run python scripts/admin_users.py grant-roles --email jo@firm.example --roles designer,checker      # small_firm only
     uv run python scripts/admin_users.py set-signer-mode --firm "Firm Pty Ltd" --mode small_firm
     uv run python scripts/admin_users.py show --firm "Firm Pty Ltd"
+
+Onboarding a real firm (all ledgered; the person then signs in by magic link):
+    uv run python scripts/admin_users.py add-firm --name "Firm Pty Ltd"
+    uv run python scripts/admin_users.py add-user --firm "Firm Pty Ltd" --email jo@firm.example --role approver
+    uv run python scripts/admin_users.py set-role --email jo@firm.example --role checker
+add-user creates the sign-in account through the Supabase admin API: it also needs MEP_SUPABASE_URL and MEP_SUPABASE_SERVICE_KEY.
 """
 import argparse
 import json
@@ -20,6 +26,15 @@ import psycopg
 
 REGISTERS = ("NER", "RPEQ", "OTHER")
 NUMBER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ./-]{2,39}$")
+
+
+def firm_id(conn: psycopg.Connection[Any], name: str) -> Any:
+    rows = conn.execute("select id from firm where name = %s", (name,)).fetchall()
+    if not rows:
+        sys.exit(f"no firm named {name!r}")
+    if len(rows) > 1:
+        sys.exit(f"{len(rows)} firms are named {name!r}: names are not unique, refusing to guess")
+    return rows[0][0]
 
 
 def connect() -> psycopg.Connection[Any]:
@@ -68,9 +83,9 @@ def grant_roles(a: argparse.Namespace) -> None:
 
 def set_mode(a: argparse.Namespace) -> None:
     with connect() as conn:
-        row = conn.execute("select id, signer_mode from firm where name = %s", (a.firm,)).fetchone()
-        if row is None:
-            sys.exit(f"no firm named {a.firm!r}")
+        fid = firm_id(conn, a.firm)
+        row = conn.execute("select id, signer_mode from firm where id = %s", (fid,)).fetchone()
+        assert row is not None
         conn.execute("update firm set signer_mode = %s where id = %s", (a.mode, row[0]))
         if a.mode == "strict":
             conn.execute("update app_user set also_roles = '{}' where firm_id = %s", (row[0],))
@@ -80,10 +95,59 @@ def set_mode(a: argparse.Namespace) -> None:
 
 def show(a: argparse.Namespace) -> None:
     with connect() as conn:
+        fid = firm_id(conn, a.firm)
         rows = conn.execute("select a.email, u.role::text, u.also_roles::text[], u.registration_no, f.signer_mode from app_user u"
-                            " join auth.users a on a.id = u.id join firm f on f.id = u.firm_id where f.name = %s order by u.role", (a.firm,)).fetchall()
+                            " join auth.users a on a.id = u.id join firm f on f.id = u.firm_id where f.id = %s order by u.role", (fid,)).fetchall()
     for r in rows:
         print(f"{r[0]:40s} {r[1]:9s} also={','.join(r[2]) or '-':16s} registration={r[3] or '-':14s} mode={r[4]}")
+
+
+ROLES = ("designer", "checker", "approver")
+
+
+def add_firm(a: argparse.Namespace) -> None:
+    name = a.name.strip()
+    if len(name) < 3 or len(name) > 120:
+        sys.exit("--name must be 3 to 120 characters")
+    with connect() as conn:
+        if conn.execute("select 1 from firm where name = %s", (name,)).fetchone():
+            sys.exit(f"a firm named {name!r} already exists")
+        fid = conn.execute("insert into firm (name) values (%s) returning id", (name,)).fetchone()[0]
+        conn.execute("insert into ledger_event (firm_id, kind, payload) values (%s, 'firm_created', %s::jsonb)",
+                     (fid, json.dumps({"name": name, "signer_mode": "strict"})))
+    print(f"created firm {name!r} ({fid}); signer mode strict")
+
+
+def add_user(a: argparse.Namespace) -> None:
+    import httpx
+    url, key = os.environ.get("MEP_SUPABASE_URL", ""), os.environ.get("MEP_SUPABASE_SERVICE_KEY", "")
+    if not url or not key:
+        sys.exit("MEP_SUPABASE_URL and MEP_SUPABASE_SERVICE_KEY are needed to create the sign-in account")
+    with connect() as conn:
+        fid = firm_id(conn, a.firm)
+        row = conn.execute("select id from auth.users where lower(email) = lower(%s)", (a.email,)).fetchone()
+        if row is None:
+            r = httpx.post(f"{url.rstrip('/')}/auth/v1/admin/users", timeout=30, headers={"apikey": key, "Authorization": f"Bearer {key}"},
+                           json={"email": a.email, "email_confirm": True})
+            r.raise_for_status()
+            uid = r.json()["id"]
+        else:
+            uid = row[0]
+        if conn.execute("select 1 from app_user where id = %s", (uid,)).fetchone():
+            sys.exit(f"{a.email} already belongs to a firm; use set-role to change the role")
+        conn.execute("insert into app_user (id, firm_id, role) values (%s, %s, %s)", (uid, fid, a.role))
+    print(f"added {a.email} to {a.firm!r} as {a.role}" + ("; now register their number (register-approver)" if a.role == "approver" else ""))
+
+
+def set_role(a: argparse.Namespace) -> None:
+    with connect() as conn:
+        uid, _firm, old, reg, _mode = user_row(conn, a.email)
+        if old == a.role:
+            sys.exit(f"{a.email} is already a {old}")
+        if a.role != "approver":
+            reg = None                                  # a registration number belongs to the approver role only
+        conn.execute("update app_user set role = %s, registration_no = %s, also_roles = '{}' where id = %s", (a.role, reg, uid))
+    print(f"{a.email}: {old} -> {a.role} (ledgered); open sign-ins keep working until the next request, which uses the new role")
 
 
 def main() -> None:
@@ -104,6 +168,18 @@ def main() -> None:
     p.add_argument("--firm", required=True)
     p.add_argument("--mode", choices=["strict", "small_firm"], required=True)
     p.set_defaults(fn=set_mode)
+    p = sub.add_parser("add-firm")
+    p.add_argument("--name", required=True)
+    p.set_defaults(fn=add_firm)
+    p = sub.add_parser("add-user")
+    p.add_argument("--firm", required=True)
+    p.add_argument("--email", required=True)
+    p.add_argument("--role", choices=ROLES, required=True)
+    p.set_defaults(fn=add_user)
+    p = sub.add_parser("set-role")
+    p.add_argument("--email", required=True)
+    p.add_argument("--role", choices=ROLES, required=True)
+    p.set_defaults(fn=set_role)
     p = sub.add_parser("show")
     p.add_argument("--firm", required=True)
     p.set_defaults(fn=show)

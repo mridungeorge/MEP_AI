@@ -133,7 +133,8 @@ def test_the_whole_chain_designer_checker_approver_package_and_share_link(admin,
     assert "mep_share=" in cookie and "httponly" in cookie and "samesite=strict" in cookie and token not in cookie
     got = public.get("/share/package")                                                                         # the session cookie, no token in the URL
     assert got.status_code == 200 and got.json()["status"]["complete"] and got.headers["cache-control"] == "no-store"
-    assert "reviewed_by" not in json.dumps(got.json())
+    assert "reviewed_by" not in json.dumps(got.json()) and "acknowledged_by" not in json.dumps(got.json())
+    assert got.json()["accepted_fails"] and all("acknowledged_by" not in a["accepted_fail"] for a in got.json()["accepted_fails"])
     shared_pdf = public.get("/share/report.pdf")
     assert shared_pdf.status_code == 200 and shared_pdf.content[:5] == b"%PDF-"
     assert TestClient(client.app).get("/share/package").status_code == 401                                    # a fresh client has no session

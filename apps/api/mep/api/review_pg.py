@@ -56,8 +56,8 @@ def record_disputed(dsn: str, result_id: UUID) -> bool:
     existing = path.read_text(encoding="utf-8") if path.exists() else DISPUTED_HEADER
     if marker in existing:
         return False
-    line = (f"- `{d['rule_id']}` disputed {d['flagged_at']:%Y-%m-%d} (revision {d['revision_id']}): "
-            f"{' '.join(str(d['reason']).split())[:400]} {marker}\n")
+    reason = " ".join(str(d["reason"]).split()).replace("<!--", "").replace("-->", "")[:400]      # a reason cannot forge a marker
+    line = f"- `{d['rule_id']}` disputed {d['flagged_at']:%Y-%m-%d} (revision {d['revision_id']}): {reason} {marker}\n"
     path.write_text(existing + ("" if existing.endswith("\n") else "\n") + line, encoding="utf-8")
     return True
 
@@ -273,6 +273,9 @@ class PgShare:
                 out["ledger"].pop(k, None)
             for r in out["results"]:
                 r.pop("reviewed_by", None)
+                if r.get("accepted_fail"):
+                    r["accepted_fail"].pop("acknowledged_by", None)      # the approver's address is not for the certifier's copy
             for r in out["accepted_fails"]:
                 r.pop("reviewed_by", None)
+                r["accepted_fail"].pop("acknowledged_by", None)
         return out

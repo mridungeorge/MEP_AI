@@ -31,7 +31,7 @@ function Header({ email }: { email: string | undefined }) {
       ) : null}
       {me && <span data-testid="user-role" title={me.firm_name ?? ""}>role: {me.role}</span>}
       {error && <span role="alert" style={{ color: "#b91c1c" }}>{error}</span>}
-      <button type="button" onClick={() => void supabase().auth.signOut()}>Sign out</button>
+      <button type="button" onClick={() => { setActingRole(null); void supabase().auth.signOut(); }}>Sign out</button>
     </header>
   );
 }

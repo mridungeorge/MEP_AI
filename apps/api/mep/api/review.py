@@ -191,14 +191,22 @@ COOKIE = "mep_share"
 _attempts: dict[str, list[float]] = {}
 
 
+def _client_key(request: Request) -> str:
+    """The throttle key: the RIGHTMOST X-Forwarded-For hop (the one our own proxy appended; the left ones are the client's to forge)."""
+    forwarded = request.headers.get("x-forwarded-for", "")
+    hops = [h.strip() for h in forwarded.split(",") if h.strip()]
+    return hops[-1] if hops else (request.client.host if request.client else "?")
+
+
 def _throttle(client: str) -> None:
     now = time.monotonic()
     recent = [t for t in _attempts.get(client, []) if now - t < 60]
     if len(recent) >= EXCHANGES_PER_MINUTE:
         raise _err(429, "too_many_requests", "too many attempts; wait a minute")
     _attempts[client] = [*recent, now]
-    if len(_attempts) > 10_000:
-        _attempts.clear()
+    if len(_attempts) > 10_000:       # drop the oldest half, never everybody's history at once
+        for key in list(_attempts)[:5_000]:
+            _attempts.pop(key, None)
 
 
 class ExchangeBody(BaseModel):
@@ -208,7 +216,7 @@ class ExchangeBody(BaseModel):
 @router.post("/share/exchange")
 def share_exchange(body: ExchangeBody, request: Request, share: Share) -> Response:
     import json
-    _throttle(request.client.host if request.client else "?")
+    _throttle(_client_key(request))
     got = share.exchange(body.token, request.headers.get("user-agent"))
     if got is None:      # unknown, expired and revoked look the same
         raise _err(404, "not_found", "this link is not valid or has expired")

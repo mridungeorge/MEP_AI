@@ -97,7 +97,12 @@ def assemble(conn: psycopg.Connection[Any], firm_id: UUID, revision_id: UUID) ->
             "reviewed_by": r["reviewer"], "reviewed_at": r["reviewed_at"], "fix_hypotheses": r["fix_hypotheses"]})
     lines.sort(key=lambda x: (x["accepted_fail"] is None, x["subject"], x["rule_id"]))      # accepted FAILs first
     firm_row = cur.execute("select signer_mode from firm where id = %s", (firm_id,)).fetchone()
-    not_independent = (firm_row is not None and firm_row["signer_mode"] == "small_firm") or any(s["signer_mode"] != "strict" for s in signoffs)
+    small_review = cur.execute(
+        "select (exists (select 1 from review where revision_id = %s and signer_mode <> 'strict')"
+        " or exists (select 1 from fail_ack where revision_id = %s and signer_mode <> 'strict')) as small",
+        (revision_id, revision_id)).fetchone()
+    not_independent = ((firm_row is not None and firm_row["signer_mode"] == "small_firm")
+                       or any(s["signer_mode"] != "strict" for s in signoffs) or bool(small_review and small_review["small"]))
     counts: dict[str, int] = {}
     for line in lines:
         counts[line["outcome"]] = counts.get(line["outcome"], 0) + 1
@@ -192,7 +197,8 @@ def to_pdf(pkg: dict[str, Any]) -> bytes:
             a, c = r["accepted_fail"], r["citation"]
             fr.append([Paragraph(escape(str(v or "-")), cell) for v in (
                 r["subject"], f"{r['rule_id']} - {c.get('document', '')} {c.get('clause', '')}", a["category"], a["reference"],
-                a["explanation"], (f"{a['acknowledgement']} ({a['acknowledged_by'] or ''})" if a["acknowledged"] else "NOT ACKNOWLEDGED"))])
+                a["explanation"], ((f"{a['acknowledgement']} ({a['acknowledged_by']})" if a.get("acknowledged_by") else str(a["acknowledgement"]))
+                 if a["acknowledged"] else "NOT ACKNOWLEDGED"))])
         ft = Table(fr, repeatRows=1, colWidths=[24 * mm, 62 * mm, 28 * mm, 34 * mm, 65 * mm, 52 * mm])
         ft.setStyle(TableStyle([("GRID", (0, 0), (-1, -1), 0.25, colors.grey), ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#FDE68A")),
                                 ("VALIGN", (0, 0), (-1, -1), "TOP")]))

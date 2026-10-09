@@ -98,3 +98,33 @@ def test_the_disputed_export_matches_the_table(admin, tmp_path):
     p = run("export_disputed.py", "--out", str(out))
     n = admin.execute("select count(*) from rule_dispute").fetchone()[0]
     assert f"{n} dispute(s)" in p.stdout and out.read_text(encoding="utf-8").startswith("# Disputed rules")
+
+
+def test_one_person_alone_gets_one_approver_account_that_acts_as_the_other_roles(admin):
+    tag = uuid.uuid4().hex[:8]
+    e = f"solo-{tag}@demo.invalid"
+    name = f"Demo Mechanical (synthetic) solo {tag}"
+    run("seed_demo.py", "--designer", e, "--checker", e, "--approver", e, ok=False)                                 # strict refuses one address
+    run("seed_demo.py", "--designer", e, "--checker", e, "--approver", e, "--mode", "small_firm", "--firm-name", name)
+    rows = admin.execute("select u.role::text, u.also_roles::text, u.registration_no from app_user u join firm f on f.id = u.firm_id"
+                         " where f.name = %s", (name,)).fetchall()
+    assert rows == [("approver", "{designer,checker}", "DEMO-0001")]
+    run("seed_demo.py", "--designer", e, "--checker", e, "--approver", e, "--mode", "small_firm", "--firm-name", "Not the demo", ok=False)
+
+
+def test_onboarding_a_real_firm_is_scripted_and_ledgered(admin):
+    tag = uuid.uuid4().hex[:8]
+    firm, e = f"Onboard Pty Ltd {tag}", f"jo-{tag}@onboard.invalid"
+    run("admin_users.py", "add-firm", "--name", firm)
+    run("admin_users.py", "add-firm", "--name", firm, ok=False)
+    run("admin_users.py", "add-user", "--firm", firm, "--email", e, "--role", "designer")
+    run("admin_users.py", "add-user", "--firm", firm, "--email", e, "--role", "checker", ok=False)                  # already in a firm
+    run("admin_users.py", "set-role", "--email", e, "--role", "approver")
+    run("admin_users.py", "register-approver", "--email", e, "--number", "NER 4455667", "--register", "NER", "--verified-by", "A. Admin",
+        "--evidence", "NER search 12 Oct 2026: name and number match, current, mechanical")
+    out = run("admin_users.py", "show", "--firm", firm).stdout
+    assert e in out and "approver" in out and "NER 4455667" in out
+    kinds = {r[0] for r in admin.execute("select e.kind from ledger_event e join firm f on f.id = e.firm_id where f.name = %s", (firm,))}
+    assert {"firm_created", "app_user_changed", "approver_registration_verified"} <= kinds
+    admin.execute("insert into firm (name) values (%s)", (firm,))                                                   # a duplicate name
+    run("admin_users.py", "show", "--firm", firm, ok=False)
