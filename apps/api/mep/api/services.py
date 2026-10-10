@@ -4,21 +4,27 @@ None of this is compliance. It is arithmetic on figures the designer entered (ev
 ceiling void, or a take-off, is visible early. Results say CLASH / CLEAR / NO DATA, never PASS or FAIL.
 """
 import csv
+import hashlib
+import json
 import io
 import math
+import tempfile
+from pathlib import Path
 from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
 import psycopg
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from starlette.concurrency import run_in_threadpool
 from fastapi.responses import Response
 from psycopg.rows import dict_row
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from mep.api.revisions import DESIGNER_ROLES, Repo, _err
 from mep.api.revisions import User as RevUser
+from mep import clash
 from mep.engine import units
 
 router = APIRouter()
@@ -291,3 +297,74 @@ def quantities_xlsx(revision_id: UUID, user: RevUser, repo: Repo, dsn: Dsn) -> R
     wb.save(buf)
     return Response(content=buf.getvalue(), media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     headers={"Content-Disposition": 'attachment; filename="quantities.xlsx"', "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
+
+
+# ---------------------------------------------------------------------------------------------------------------------------- clash-lite
+@router.post("/revisions/{revision_id}/clash/models")
+async def upload_model(revision_id: UUID, user: RevUser, repo: Repo, dsn: Dsn, discipline: Annotated[Literal["electrical", "hydraulic", "fire"], Form()],
+                       file: Annotated[UploadFile, File()]) -> dict[str, Any]:
+    _open_revision(repo, user, revision_id)
+    data = await file.read(clash.MAX_BYTES + 1)
+    if len(data) > clash.MAX_BYTES:
+        raise _err(413, "too_large", "a model is at most 100 MiB")
+    if not data.lstrip()[:20].startswith(b"ISO-10303-21"):
+        raise _err(422, "not_ifc", "that is not an IFC (STEP) file")
+    digest = hashlib.sha256(data).hexdigest()
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "model.ifc"
+        path.write_bytes(data)
+        try:
+            boxes, skipped, problems = await run_in_threadpool(clash.read_boxes, path)
+        except clash.ClashIfcError as exc:
+            raise _err(422, "unreadable_ifc", str(exc)) from None
+    name = (file.filename or "model.ifc")[:200]
+    try:
+        with psycopg.connect(dsn, autocommit=False, row_factory=dict_row) as conn:
+            row = conn.execute("insert into clash_model (firm_id, revision_id, discipline, file_name, file_sha256, element_count, skipped, problems, created_by)"
+                               " values (%s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s) returning id",
+                               (user.firm_id, revision_id, discipline, name, digest, len(boxes), skipped, json.dumps(problems), user.user_id)).fetchone()
+            assert row is not None
+            with conn.cursor() as cur:
+                cur.executemany("insert into clash_element (firm_id, model_id, revision_id, guid, ifc_class, name, min_x, min_y, min_z, max_x, max_y, max_z)"
+                                " values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                                [(user.firm_id, row["id"], revision_id, b.guid[:64], b.ifc_class[:60], (b.name or "")[:200] or None, *b.lo, *b.hi) for b in boxes])
+    except psycopg.errors.UniqueViolation:
+        raise _err(409, "duplicate", "that exact file is already uploaded to this revision") from None
+    except psycopg.errors.RaiseException as exc:
+        raise _err(409, "revision_frozen", str(exc).splitlines()[0]) from None
+    return {"model_id": str(row["id"]), "elements": len(boxes), "skipped": skipped, "problems": problems}
+
+
+def clashes_of(dsn: str, user: Any, revision_id: UUID) -> dict[str, Any]:
+    with _as_user(dsn, user) as conn:
+        clearance = float(conn.execute("select void_clearance_mm from firm where id = %s", (user.firm_id,)).fetchone()["void_clearance_mm"])
+        models = conn.execute("select id, discipline, file_name, element_count, skipped, problems, created_at from clash_model where revision_id = %s and firm_id = %s order by created_at",
+                              (revision_id, user.firm_id)).fetchall()
+        elems = conn.execute("select model_id, guid, ifc_class, name, min_x, min_y, min_z, max_x, max_y, max_z from clash_element where revision_id = %s and firm_id = %s",
+                             (revision_id, user.firm_id)).fetchall()
+    by_model: dict[Any, list[clash.Box]] = {}
+    for e in elems:
+        by_model.setdefault(e["model_id"], []).append(clash.Box(e["guid"], e["ifc_class"], e["name"], (float(e["min_x"]), float(e["min_y"]), float(e["min_z"])),
+                                                              (float(e["max_x"]), float(e["max_y"]), float(e["max_z"]))))
+    ducts = [r for r in runs_of(dsn, user, revision_id) if r["kind"] == "duct"]
+    found = clash.detect(ducts, [{"discipline": m["discipline"], "file_name": m["file_name"], "elements": by_model.get(m["id"], [])} for m in models], clearance)
+    return {"note": "Warnings only. Boxes are axis-aligned, so a diagonal or bent element can raise a false alarm; ducts need entered coordinates to be checked.",
+            "clearance_mm": clearance, "ducts_checked": sum(1 for d in ducts if d["x0"] is not None), "ducts_without_coordinates": sum(1 for d in ducts if d["x0"] is None),
+            "models": [{"id": str(m["id"]), "discipline": m["discipline"], "file_name": m["file_name"], "elements": m["element_count"], "skipped": m["skipped"],
+                        "problems": m["problems"]} for m in models], "clashes": found}
+
+
+@router.get("/revisions/{revision_id}/clash")
+def clash_view(revision_id: UUID, user: RevUser, repo: Repo, dsn: Dsn) -> dict[str, Any]:
+    if repo.revision_info(revision_id, user.firm_id) is None:
+        raise _err(404, "not_found", "revision not found")
+    return clashes_of(dsn, user, revision_id)
+
+
+@router.get("/revisions/{revision_id}/clash.bcfzip")
+def clash_bcf(revision_id: UUID, user: RevUser, repo: Repo, dsn: Dsn) -> Response:
+    if repo.revision_info(revision_id, user.firm_id) is None:
+        raise _err(404, "not_found", "revision not found")
+    found = clashes_of(dsn, user, revision_id)["clashes"]
+    return Response(content=clash.bcf_zip(found, f"Revision {revision_id}", "MEP Co-pilot"), media_type="application/octet-stream",
+                    headers={"Content-Disposition": 'attachment; filename="clash-lite.bcfzip"', "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})

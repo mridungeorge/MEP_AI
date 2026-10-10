@@ -2,7 +2,7 @@
 import { supabase } from "./supabase";
 import type {
   ApiErrorBody, BuildingPart, ConfirmResponse, Gate1State, ImportResponse, RowRef,
-  AdminOverview, BillingOverview, PerfOverview, FixesResponse, NewProject, NotificationPrefs, ProjectHistory, ProjectRow, PendingRegistration, MyInvitation, AgentNote, AgentReply, VisionJob, CardPreview, EvidenceResponse, Lineage, Me, ShortcutResult, SkillCard, SkillRunRow, SkillRunSummary, SkillSummary, Package, ShareLinkView, Worksheet, RevisionDiff, RevisionResults, RevisionSummary, RunRulesResponse, SpaceInput, SpaceRow, SystemInputInput, SystemInputRow, UploadResponse,
+  AdminOverview, BillingOverview, ClashView, Quantities, ServiceItem, VoidView, PerfOverview, FixesResponse, NewProject, NotificationPrefs, ProjectHistory, ProjectRow, PendingRegistration, MyInvitation, AgentNote, AgentReply, VisionJob, CardPreview, EvidenceResponse, Lineage, Me, ShortcutResult, SkillCard, SkillRunRow, SkillRunSummary, SkillSummary, Package, ShareLinkView, Worksheet, RevisionDiff, RevisionResults, RevisionSummary, RunRulesResponse, SpaceInput, SpaceRow, SystemInputInput, SystemInputRow, UploadResponse,
 } from "./types";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -206,6 +206,17 @@ export const api = {
     if (f.description) fd.set("description", f.description);
     if (f.file) fd.set("file", f.file);
     return apiFetch<{ evidence_id: string }>(`${rev(r)}/performance/${encodeURIComponent(subject)}/${encodeURIComponent(rule)}/evidence`, { method: "POST", body: fd });
+  },
+  services: (r: string) => apiFetch<{ items: ServiceItem[] }>(`${rev(r)}/services`),
+  addService: (r: string, body: Record<string, unknown>) => apiFetch<{ id: string }>(`${rev(r)}/services`, json("POST", body)),
+  deleteService: (r: string, id: string) => apiFetch<{ deleted: boolean }>(`${rev(r)}/services/${id}`, { method: "DELETE" }),
+  ceilingVoid: (r: string) => apiFetch<VoidView>(`${rev(r)}/ceiling-void`),
+  quantities: (r: string) => apiFetch<Quantities>(`${rev(r)}/quantities`),
+  clash: (r: string) => apiFetch<ClashView>(`${rev(r)}/clash`),
+  uploadClashModel: (r: string, discipline: string, file: File) => {
+    const fd = new FormData();
+    fd.set("discipline", discipline); fd.set("file", file);
+    return apiFetch<{ elements: number }>(`${rev(r)}/clash/models`, { method: "POST", body: fd });
   },
   askAgent: (r: string, agent: string, message: string) => apiFetch<AgentReply>(`${rev(r)}/agents/${agent}/message`, json("POST", { message })),
   agentNotes: (r: string, kind?: string) => apiFetch<AgentNote[]>(`${rev(r)}/agent-notes${kind ? `?kind=${kind}` : ""}`),

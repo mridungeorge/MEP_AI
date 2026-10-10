@@ -396,3 +396,13 @@ export interface FixesResponse { subject_id: string; rule_id: string; outcome: s
 export interface PerfEvidence { id: string; title: string; tool: string | null; description: string | null; metrics: { name: string; value: number; unit: string }[]; file_name: string | null; file_sha256: string | null; created_at: string }
 export interface PerfRow { subject_id: string; rule_id: string; clause: string | null; performance_solution_likely: boolean; flag: string | null; pathway: "DTS" | "PERFORMANCE_SOLUTION"; note: string | null; evidence: PerfEvidence[] }
 export interface PerfOverview { banner: string; results: PerfRow[] }
+
+/** services schedule, ceiling void, quantities, clash-lite */
+export interface ServiceItem { id: string; kind: "duct" | "fitting" | "terminal"; tag: string; system_tag: string | null; space_id: string | null; shape: "rect" | "round" | null;
+  width_mm: number | null; depth_mm: number | null; diameter_mm: number | null; length_m: number | null; insulation_mm: number; fitting_type: string | null; quantity: number; airflow_ls: number | null }
+export interface VoidRow { space_id: string; space: string; ceiling_void_mm: number | null; status: "CLASH" | "CLEAR" | "NO DATA"; reason?: string; deepest_duct?: string; required_mm?: number; margin_mm?: number }
+export interface VoidView { note: string; clearance_mm: number; spaces: VoidRow[] }
+export interface Quantities { duct_by_size: { shape: string; size_mm: string; count: number; length_m: number; surface_area_m2: number }[]; fittings: { type: string; quantity: number }[];
+  insulation: { thickness_mm: number; area_m2: number }[]; terminals_per_space: { space: string; quantity: number }[]; basis: string }
+export interface ClashView { note: string; clearance_mm: number; ducts_checked: number; ducts_without_coordinates: number; models: { id: string; discipline: string; file_name: string; elements: number; skipped: number; problems: string[] }[];
+  clashes: { duct_tag: string; discipline: string; model: string; element_class: string; element_name: string | null; kind: "OVERLAP" | "CLEARANCE"; gap_mm: number; level: string }[] }
