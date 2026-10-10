@@ -95,16 +95,23 @@ Skip it for a first look: everything except Drafting works without it.
 
 ## Step 6. Smoke test (10 minutes)
 
-Automatic first (about 1 minute). It needs a throwaway revision (the demo seed creates one; use it BEFORE the live demo, the script freezes it when
-you give it the checker and approver tokens) and a signed-in designer's access token (browser dev tools > Application > local storage > the
-Supabase `access_token`, or the tokens the seed's own API secret can mint):
+Automatic first (about 1 minute). The script confirms everything it is shown and, with the checker and approver tokens, FREEZES and SIGNS the
+revision, so it only works on a throwaway project: create one separately from the demo project (do not run it on the demo revision):
 
 ```
-uv run python scripts/staging_smoke.py --api https://<name>.up.railway.app --revision <revision id> --designer-token '<JWT>'
+uv run python scripts/seed_demo.py --smoke --designer you+designer@yourdomain --checker you+checker@yourdomain --approver you+approver@yourdomain
 ```
 
-It signs in, uploads the fixture IFC, does Gate 1, runs the rules and checks the report; add `--checker-token`, `--approver-token` and
-`--registration DEMO-0001` and it also signs Gates 2 and 3 and makes, uses and revokes a share link. Then the manual steps:
+It prints the throwaway revision id. You need a signed-in access token for each role (browser dev tools > Application > local storage > the Supabase
+`access_token` after a magic-link sign-in). Put them in environment variables, not on the command line (history and `ps` would keep them):
+
+```
+export SMOKE_DESIGNER_TOKEN=... SMOKE_CHECKER_TOKEN=... SMOKE_APPROVER_TOKEN=... SMOKE_REGISTRATION=DEMO-0001
+uv run python scripts/staging_smoke.py --api https://<name>.up.railway.app --revision <the throwaway revision id>
+```
+
+It signs in, uploads the fixture IFC, does Gate 1, runs the rules and checks the report, signs Gates 2 and 3 and makes, uses and revokes a share
+link (with only SMOKE_DESIGNER_TOKEN it stops after the report). It refuses a revision whose project is not the SMOKE TEST one. Then the manual steps:
 
 
 1. Open the Vercel URL; you are sent to Sign in. Enter the designer address; the link arrives; the header shows `role: designer`.

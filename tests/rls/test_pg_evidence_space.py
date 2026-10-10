@@ -106,3 +106,45 @@ def test_confirming_and_then_renaming_withdraws_the_confirmation_but_keeps_the_p
     raw = admin.execute("select area_m2_provenance::text, confirmed_by from space where id = %s", (sid,)).fetchone()
     assert raw[0] == "engineer_confirmed" and raw[1] is None            # the engine still refuses it: nobody confirmed this version
     assert client.post(f"/revisions/{f['revision']}/run-rules", headers=h.auth(f["designer"])).status_code == 409
+
+
+def test_a_designer_cannot_attach_an_evidence_link_to_a_typed_space_or_point_at_another_firms_row(admin, tmp_path):
+    client, f, src = evidence_ready(admin, tmp_path)
+    _, g, _ = evidence_ready(admin, tmp_path)
+    foreign = admin.execute("select id from extraction where revision_id = %s and field = 'area' limit 1", (g["revision"],)).fetchone()[0]
+    mine = admin.execute("select id from extraction where revision_id = %s and field = 'area' limit 1", (f["revision"],)).fetchone()[0]
+    typed = client.post(f"/revisions/{f['revision']}/gate1/spaces", headers=h.auth(f["designer"]), json={"name": "Typed", "area_m2": 42}).json()["id"]
+    for target in (foreign, mine):
+        with pytest.raises(psycopg.errors.Error):
+            admin.execute("update space set evidence_area_id = %s, evidence_page = 7, evidence_area_unit = 'm^2' where id = %s", (target, typed))
+    with pytest.raises(psycopg.errors.Error):
+        admin.execute("update space set evidence_page = 7 where id = %s", (typed,))
+    assert add(client, f, src).status_code == 200            # the real add still works: the forged link could not take its slot
+
+
+def test_resending_an_unchanged_evidence_area_is_not_an_error_but_a_changed_one_is(admin, tmp_path):
+    client, f, src = evidence_ready(admin, tmp_path)
+    sid = add(client, f, src).json()["space_id"]
+    url = f"/revisions/{f['revision']}/gate1/spaces/{sid}"
+    area = next(s for s in client.get(f"/revisions/{f['revision']}/gate1", headers=h.auth(f["designer"])).json()["spaces"] if s["id"] == sid)["area_m2"]
+    ok = client.put(url, headers=h.auth(f["designer"]), json={"name": "Renamed again", "area_m2": area})
+    assert ok.status_code == 200 and ok.json()["provenance"] == "extracted"
+    assert client.put(url, headers=h.auth(f["designer"]), json={"area_m2": area + 1}).status_code == 409
+
+
+def test_the_unit_factors_in_the_database_equal_pint(admin, tmp_path):
+    from mep.engine.units import UREG
+    for unit, qty in (("ft^2", "ft**2"), ("mm^2", "mm**2")):
+        client, f, src = evidence_ready(admin, tmp_path)
+        sid = add(client, f, src, area_unit=unit).json()["space_id"]
+        stored = float(admin.execute("select area_m2_value from space where id = %s", (sid,)).fetchone()[0])
+        read = float(admin.execute("select value_number from extraction where revision_id = %s and entity_key = 'p1-1' and field = 'area'",
+                                   (f["revision"],)).fetchone()[0])
+        assert stored == pytest.approx(UREG.Quantity(read, qty).to("m**2").magnitude, rel=1e-6)
+    for unit, qty in (("m", "m"), ("in", "inch"), ("ft", "ft")):
+        client, f, src = evidence_ready(admin, tmp_path, {"spaces": [{"name": "Plant", "area": 24, "ceiling_void": 0.5}]})
+        sid = add(client, f, src, key="p1-1", void_unit=unit).json()["space_id"]
+        stored = float(admin.execute("select ceiling_void_mm_value from space where id = %s", (sid,)).fetchone()[0])
+        read = float(admin.execute("select value_number from extraction where revision_id = %s and entity_key = 'p1-1' and field = 'ceiling_void'",
+                                   (f["revision"],)).fetchone()[0])
+        assert stored == pytest.approx(UREG.Quantity(read, qty).to("mm").magnitude, rel=1e-6)

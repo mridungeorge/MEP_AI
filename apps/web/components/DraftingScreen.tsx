@@ -200,7 +200,7 @@ export function DraftingScreen({ projectId, revisionId }: { projectId: string; r
         </section>
       )}
 
-      <AgentPanel revisionId={revisionId} title="Drafting assistant" agents={[...DESIGNER_AGENT]} kinds={DESIGNER_KINDS} />
+      <AgentPanel revisionId={revisionId} onChanged={() => void loadDrafts()} title="Drafting assistant" agents={[...DESIGNER_AGENT]} kinds={DESIGNER_KINDS} />
 
       <section aria-label="Earlier runs">
         <h2>Earlier runs</h2>

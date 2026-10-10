@@ -291,3 +291,15 @@ def test_a_note_written_after_the_freeze_is_marked_post_freeze_by_the_database(a
     assert marks == {str(open_rev["revision"]): False, str(frozen_rev["revision"]): True}
     with pytest.raises(psycopg.errors.Error):                     # the flag cannot be moved or unmarked afterwards
         admin.execute("update agent_note set post_freeze = false where revision_id = %s", (frozen_rev["revision"],))
+
+
+def test_confirming_the_same_card_version_twice_is_fine_and_a_foreign_note_is_not_linked(admin, client):
+    f, g = h.seed(admin), h.seed(admin)
+    use_runtime(client, [("fill_spec_card", {"skill": "space-envelope", "fields": SPEC_FIELDS})])
+    ask(client, g, "designer")
+    foreign_note = admin.execute("select id from agent_note where revision_id = %s limit 1", (g["revision"],)).fetchone()[0]
+    url = f"/revisions/{f['revision']}/skills/space-envelope/confirm-card"
+    body = {"spec": SPEC_FIELDS, "note_id": str(foreign_note)}
+    assert client.post(url, headers=h.auth(f["designer"]), json=body).status_code == 200
+    assert client.post(url, headers=h.auth(f["designer"]), json=body).status_code == 200            # a double click
+    assert admin.execute("select count(*), count(note_id) from spec_confirmation where revision_id = %s", (f["revision"],)).fetchone() == (1, 0)

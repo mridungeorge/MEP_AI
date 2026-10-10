@@ -5,6 +5,7 @@
 It holds the database credential; the containers it starts hold nothing and have no network. A job is run by `runner.run_skill` with a
 DockerExecutor, so the validator-passes-twice rule is the same as everywhere. Run it where a Docker-compatible runtime exists.
 """
+import contextlib
 import json
 import os
 import socket
@@ -42,10 +43,16 @@ def process(conn: psycopg.Connection[dict[str, Any]], job: dict[str, Any], execu
                      (f"the worker could not run this job ({type(exc).__name__})", job["id"]))
         return
     meta, contents = result_to_json(result if isinstance(result, SkillRunResult) else SkillRunResult("build_failed"))
-    with conn.transaction():
-        for name, data in contents.items():
-            conn.execute("insert into skill_job_file (job_id, firm_id, name, content) values (%s, %s, %s, %s)", (job["id"], job["firm_id"], name, data))
-        conn.execute("update skill_job set status = 'done', finished_at = now(), result = %s::jsonb where id = %s", (json.dumps(meta), job["id"]))
+    try:
+        with conn.transaction():
+            for name, data in contents.items():
+                conn.execute("insert into skill_job_file (job_id, firm_id, name, content) values (%s, %s, %s, %s)", (job["id"], job["firm_id"], name, data))
+            conn.execute("update skill_job set status = 'done', finished_at = now(), result = %s::jsonb where id = %s and status = 'running'",
+                         (json.dumps(meta), job["id"]))
+    except psycopg.Error as exc:
+        with contextlib.suppress(psycopg.Error):
+            conn.execute("update skill_job set status = 'failed', finished_at = now(), error = %s where id = %s and status = 'running'",
+                         (f"the result could not be stored ({type(exc).__name__})", job["id"]))
 
 
 def housekeeping(conn: psycopg.Connection[dict[str, Any]]) -> None:

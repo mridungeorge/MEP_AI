@@ -104,8 +104,10 @@ def test_a_hanging_job_is_killed_by_the_wall_clock():
         (work / "out").mkdir()
         ex = DockerExecutor(IMAGE or "")
         # drive the executor's own runner with a command that never ends
-        got = ex._run(work, ["sleep", "600"], out_writable=True, wall=3, cpu=5, memory=1 << 30)
-    assert got is None or got.returncode != 0
+        got = ex._run(work, ["-c", "import time; time.sleep(600)"], out_writable=True, wall=3, cpu=5, memory=1 << 30, entrypoint="python")
+    assert got is None                                                                       # stopped by the wall clock, not by finishing
+    left = subprocess.run(["docker", "ps", "-a", "--filter", "name=mep-job-", "--format", "{{.Names}}"], capture_output=True, text=True, check=False)
+    assert left.stdout.strip() == ""                                                          # and the container is gone
 
 
 EXAMPLES = ROOT / "skills" / "space-envelope" / "examples"

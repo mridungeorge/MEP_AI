@@ -85,7 +85,7 @@ def message(revision_id: UUID, agent: Agent, body: MessageBody, user: User, fact
     try:
         reply = runtime.converse(layer, body.message)
     except TimeoutError:
-        raise _err(504, "agent_timeout", "the agent took too long and was stopped") from None
+        raise _err(504, "agent_timeout", "the agent took too long; anything it already started (a build) may still finish: check the runs list") from None
     # the model's own words are never shown as they came: outcomes and compliance wording come only from the stored results
     shown = filter_free_text(reply.text, {r["rule_id"] for r in backend.results()})
     return {"agent": agent.value, "reply": shown.text, "reply_is": "an assistant's note, not a rule result", "redactions": len(shown.redactions),

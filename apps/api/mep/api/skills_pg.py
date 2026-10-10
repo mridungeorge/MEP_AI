@@ -16,7 +16,7 @@ from psycopg.rows import dict_row
 
 from mep.api.schedule import CurrentUser
 from mep.skills_runner.jobs import enqueue_and_wait
-from mep.skills_runner.runner import SkillRunResult, run_skill
+from mep.skills_runner.runner import SkillRunResult, SkillUnavailable, run_skill
 
 
 class SkillsRefused(Exception):
@@ -30,8 +30,8 @@ def spec_sha(spec: dict[str, Any]) -> str:
 
 
 class PgSkills:
-    def __init__(self, dsn: str, user: CurrentUser) -> None:
-        self._dsn, self._user = dsn, user
+    def __init__(self, dsn: str, user: CurrentUser, executor: str | None = None) -> None:
+        self._dsn, self._user, self._executor = dsn, user, executor
 
     @contextmanager
     def _as_user(self) -> Iterator[psycopg.Connection[dict[str, Any]]]:
@@ -46,7 +46,12 @@ class PgSkills:
     # ---- running ------------------------------------------------------------------------------------------------------
     def execute(self, revision_id: UUID, skill: str, spec: dict[str, Any]) -> SkillRunResult:
         """MEP_SKILL_EXECUTOR=queue: the build runs in the separate drafting worker (a job in the queue). Otherwise in a child process here."""
-        if os.environ.get("MEP_SKILL_EXECUTOR") == "queue":
+        mode = self._executor or os.environ.get("MEP_SKILL_EXECUTOR", "local")
+        if mode == "disabled":
+            raise SkillUnavailable("drafting is switched off on this server: set MEP_SKILL_EXECUTOR=queue and run the drafting worker")
+        if mode not in ("local", "queue"):
+            raise SkillUnavailable(f"MEP_SKILL_EXECUTOR={mode!r} is not understood (use queue)")
+        if mode == "queue":
             return enqueue_and_wait(self._dsn, firm_id=self._user.firm_id, revision_id=revision_id, user_id=self._user.user_id, skill=skill, spec=spec)
         return run_skill(skill, spec)
 

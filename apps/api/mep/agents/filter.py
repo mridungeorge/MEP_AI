@@ -17,14 +17,14 @@ CLAUSE = re.compile(r"\b[A-J]\d{1,2}[A-Z]\d{1,2}\b", re.IGNORECASE)
 # any word that states or implies an outcome / compliance
 CLAIM_STEMS = re.compile(r"\b(pass(?:es|ed|ing)?(?![-\w])|fail(?:s|ed|ing|ure|ures)?\b|compl(?:y|ies|ied|ying|iance|iant)\b|non[- ]?compl\w*"
                          r"|conform(?:s|ed|ing|ance|ant)?\b|satisf(?:y|ies|ied|ying|actory)\b|accept(?:s|ed|ing|able|ance)?\b|approv(?:e|es|ed|ing|al)\b"
-                         r"|meets?|met|ok|okay|cumple|green|fine|within limits)\b"
+                         r"|meets?|met|ok|okay|cumple|green|fine|within (?:the )?limits?|conformity|adher\w*|success\w*|sufficient|resolved|clears? the)\b"
                          "|[✅✔☑❌✖]", re.IGNORECASE)
 NEEDS_JUDGEMENT = re.compile(r"\bneeds?[_ ]judg\w*", re.IGNORECASE)
 NOT_APPLICABLE = re.compile(r"\bnot[_ ]applicable\b", re.IGNORECASE)
 OWN_STEMS = {"PASS": r"pass(?:es|ed|ing)?", "FAIL": r"fail(?:s|ed|ing|ure|ures)?", "NEEDS_JUDGEMENT": r"needs?[_ ]judg\w*", "NOT_APPLICABLE": r"not[_ ]applicable"}
 # a hypothesis may say a result FAILS; it may not say anything will pass / comply / meet / be accepted
 HYPOTHESIS_CLAIM = re.compile(r"\b(pass(?:es|ed|ing)?(?![-\w])|compl(?:y|ies|ied|ying|iance|iant)\b|non[- ]?compl\w*|conform\w*|satisf\w*|accept\w*|approv\w*"
-                              r"|meets?|ok|okay|achiev\w*|cumple|no longer fail\w*|green|fine|within limits)\b"
+                              r"|meets?|ok|okay|achiev\w*|cumple|no longer fail\w*|green|fine|within (?:the )?limits?|conformity|adher\w*|success\w*|sufficient|resolved|clears? the)\b"
                               "|[✅✔☑]", re.IGNORECASE)
 LOOKALIKES = str.maketrans({
     "А": "A", "В": "B", "С": "C", "Е": "E", "Н": "H", "К": "K", "М": "M", "О": "O", "Р": "P",
@@ -47,6 +47,7 @@ class Filtered:
 def fold(text: str) -> str:
     """NFKC, every dash-like character to '-', look-alike Cyrillic/Greek letters to Latin, hidden characters removed."""
     text = _HIDDEN_RE.sub("", unicodedata.normalize("NFKC", text))
+    text = re.sub(r"\b(?:[A-Za-z][.\- ]){3,}[A-Za-z]\b", lambda m: re.sub(r"[.\- ]", "", m.group(0)), text)      # P.A.S.S / p-a-s-s
     text = "".join("-" if unicodedata.category(c) == "Pd" else c for c in text).translate(LOOKALIKES)
     out = []
     for ch in unicodedata.normalize("NFKD", text):

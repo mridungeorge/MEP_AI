@@ -11,6 +11,7 @@ compliance value is computed here.
 import hashlib
 import json
 import os
+import stat
 import subprocess
 import sys
 import tempfile
@@ -22,11 +23,12 @@ from typing import Any, Protocol
 from mep.skills_runner.registry import MEDIA_TYPES, availability, get_skill
 
 CPU_SECONDS = 120
-MEMORY_BYTES = 6 * 1024 ** 3
+MEMORY_BYTES = 3 * 1024 ** 3
 WALL_SECONDS = 240
 FILE_BYTES = 50 * 1024 * 1024
 MAX_SPEC_BYTES = 1024 * 1024
 MAX_TOTAL_BYTES = 100 * 1024 * 1024
+MAX_OUTPUT_FILES = 20
 _SLOTS = threading.BoundedSemaphore(3)
 
 
@@ -135,13 +137,55 @@ def run_skill(name: str, spec: dict[str, Any], *, wall_seconds: int = WALL_SECON
         _SLOTS.release()
 
 
+class UnsafeOutput(Exception):
+    """The job left something in its output directory that is not a plain file of a sane size."""
+
+
+def read_regular(path: Path, limit: int) -> bytes:
+    """Read a plain file the job wrote: never follow a symlink, never open a FIFO or device (they would block or never end), and refuse anything
+    over `limit` BEFORE reading it."""
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | getattr(os, "O_CLOEXEC", 0))
+    except OSError as exc:
+        raise UnsafeOutput(f"{path.name} cannot be opened safely ({type(exc).__name__})") from None
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode):
+            raise UnsafeOutput(f"{path.name} is not a plain file")
+        if st.st_size > limit:
+            raise UnsafeOutput(f"{path.name} is larger than {limit} bytes")
+        with os.fdopen(fd, "rb", closefd=False) as fh:
+            data = fh.read(limit + 1)
+        if len(data) > limit:
+            raise UnsafeOutput(f"{path.name} is larger than {limit} bytes")
+        return data
+    finally:
+        os.close(fd)
+
+
+def check_output_dir(out: Path) -> None:
+    """The output directory holds plain files only (no links, directories, FIFOs or devices) and a bounded number of them."""
+    count = 0
+    with os.scandir(out) as it:
+        for entry in it:
+            count += 1
+            if count > MAX_OUTPUT_FILES:
+                raise UnsafeOutput("the build left too many files")
+            if entry.is_symlink() or not entry.is_file(follow_symlinks=False):
+                raise UnsafeOutput(f"{entry.name} is not a plain file")
+
+
 def _release(skill: str, work: Path, executor: Executor, wall: int, cpu: int, memory: int) -> SkillRunResult:
     out = work / "out"
     try:
-        manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
+        check_output_dir(out)
+    except (OSError, UnsafeOutput) as exc:
+        return SkillRunResult("revalidation_failed", f"the build's output was refused: {exc}")
+    try:
+        manifest = json.loads(read_regular(out / "manifest.json", 1 << 20).decode("utf-8"))
         listed = manifest["files"]
         assert isinstance(listed, list) and listed
-    except (OSError, ValueError, KeyError, AssertionError):
+    except (OSError, ValueError, KeyError, AssertionError, UnsafeOutput):
         return SkillRunResult("revalidation_failed", "the build left no readable manifest")
     files: list[RunFile] = []
     total = 0
@@ -151,7 +195,9 @@ def _release(skill: str, work: Path, executor: Executor, wall: int, cpu: int, me
             return SkillRunResult("revalidation_failed", f"the manifest names an unsafe file: {name!r}")
         path = out / name
         try:
-            data = path.read_bytes()
+            data = read_regular(path, FILE_BYTES)
+        except UnsafeOutput as exc:
+            return SkillRunResult("revalidation_failed", f"{name} was refused: {exc}")
         except OSError:
             return SkillRunResult("revalidation_failed", f"{name} is listed in the manifest but missing")
         total += len(data)
@@ -162,7 +208,10 @@ def _release(skill: str, work: Path, executor: Executor, wall: int, cpu: int, me
             return SkillRunResult("revalidation_failed", f"{name} does not match the manifest's checksum")
         role = str(entry.get("role", name.rsplit(".", 1)[-1]))
         files.append(RunFile(name, role, MEDIA_TYPES.get(name.rsplit(".", 1)[-1].lower(), "application/octet-stream"), len(data), digest, data))
-    manifest_bytes = (out / "manifest.json").read_bytes()
+    try:
+        manifest_bytes = read_regular(out / "manifest.json", 1 << 20)
+    except (OSError, UnsafeOutput):
+        return SkillRunResult("revalidation_failed", "the build left no readable manifest")
     files.append(RunFile("manifest.json", "manifest", "application/json", len(manifest_bytes), hashlib.sha256(manifest_bytes).hexdigest(),
                          manifest_bytes))
     checked = executor.validate(skill, work, wall=wall, cpu=cpu, memory=memory)

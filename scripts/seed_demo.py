@@ -39,6 +39,7 @@ FIRM_NAME = "Demo Mechanical (synthetic)"
 ADDRESS = "1 Demo Street, Melbourne VIC (synthetic office)"
 GOLDEN = ROOT / "evals" / "golden" / "syn-vic-office-2025" / "project.yaml"
 DEMO_REGISTRATION = "DEMO-0001"
+SMOKE_ADDRESS = "SMOKE TEST (throwaway, synthetic)"
 
 
 def need(name: str) -> str:
@@ -74,6 +75,8 @@ def main() -> None:
     ap.add_argument("--checker", required=True)
     ap.add_argument("--approver", required=True)
     ap.add_argument("--mode", choices=["strict", "small_firm"], default="strict")
+    ap.add_argument("--smoke", action="store_true",
+                    help=f'create the separate throwaway project "{SMOKE_ADDRESS}" that scripts/staging_smoke.py is allowed to freeze and sign (instead of the demo project)')
     ap.add_argument("--firm-name", default=FIRM_NAME, help='for a second demo set: a name starting "Demo Mechanical (synthetic)"')
     args = ap.parse_args()
     emails = {"designer": args.designer, "checker": args.checker, "approver": args.approver}
@@ -106,15 +109,16 @@ def main() -> None:
         if args.mode == "small_firm":       # one person may hold every gate; every package then says NOT INDEPENDENTLY CHECKED
             conn.execute("update firm set signer_mode = 'small_firm' where id = %s", (firm_id,))
             conn.execute("update app_user set also_roles = '{designer,checker}' where id = %s", (ids["approver"],))
-        project = conn.execute("select id from project where firm_id = %s and address = %s", (firm_id, ADDRESS)).fetchone()
+        address = SMOKE_ADDRESS if args.smoke else ADDRESS
+        project = conn.execute("select id from project where firm_id = %s and address = %s", (firm_id, address)).fetchone()
         if project:
-            print(f"demo project already exists ({project[0]}); nothing more to create")
+            print(f"project {address!r} already exists ({project[0]}); nothing more to create")
             report(firm_id, ids, emails, args.mode)
             return
         p = golden["project"]
         project_id, revision_id = str(uuid.uuid4()), str(uuid.uuid4())
         conn.execute("insert into project (id, firm_id, address, state, climate_zone, ncc_edition, approval_date)"
-                     " values (%s, %s, %s, %s, %s, %s, %s)", (project_id, firm_id, ADDRESS, p["state"], p["climate_zone"],
+                     " values (%s, %s, %s, %s, %s, %s, %s)", (project_id, firm_id, address, p["state"], p["climate_zone"],
                                                                p["ncc_edition"], date.fromisoformat(str(p["approval_date"]))))
         conn.execute("insert into revision (id, firm_id, project_id, architect_rev) values (%s, %s, %s, 'A')",
                      (revision_id, firm_id, project_id))

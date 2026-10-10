@@ -232,6 +232,12 @@ class PgRepository(RevisionMethods):
                     # the database trigger withdraws the confirmation
                     # an untouched value keeps 'extracted' (it was never looked at); anything else becomes 'default'
                     linked = {"area_m2": "evidence_area_id", "ceiling_void_mm": "evidence_void_id"}
+                    for f in ("area_m2", "ceiling_void_mm"):        # a resend of an unchanged evidence value is not an edit
+                        if f"{f}_value" in cols and conn.execute(
+                                f"select 1 from space where id = %s and revision_id = %s and firm_id = %s and {linked[f]} is not null"
+                                f" and {f}_value is not distinct from %s", (sid, revision_id, firm_id, cols[f"{f}_value"])).fetchone():
+                            cols.pop(f"{f}_value")
+                            cols.pop(f"{f}_provenance", None)
                     if any(k in cols for k in ("area_m2_value", "ceiling_void_mm_value")) and conn.execute(
                             "select 1 from space where id = %s and revision_id = %s and firm_id = %s and ("
                             + " or ".join(f"({linked[f]} is not null and {f}_value is distinct from %s)"

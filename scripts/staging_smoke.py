@@ -4,7 +4,7 @@ Runs against ANY deployment of the API (local, staging, a preview URL); it reads
 (for example the one `scripts/seed_demo.py` creates, before the live demo). Run it ONCE per revision: after the run the revision has results, and
 rerunning is refused (that is the product working). Nothing is hard-coded: no URL, no key.
 
-    uv run python scripts/staging_smoke.py --api https://<your-api> --revision <revision-uuid> --designer-token <JWT>
+    uv run python scripts/staging_smoke.py --api https://<your-api> --revision <revision-uuid> --designer-token <JWT>   (or SMOKE_DESIGNER_TOKEN)
         [--checker-token <JWT> --approver-token <JWT> --registration "<the approver's registered number>"]
         [--ifc path/to/model.ifc] [--json]
 
@@ -30,7 +30,9 @@ DEFAULT_IFC = ROOT / "tests" / "fixtures" / "ifc" / "bsi-arch-ifc4.ifc"
 
 
 class Smoke:
-    def __init__(self, api: str, token: str, revision: str, ifc: Path, checker_token: str = "", approver_token: str = "", registration: str = "") -> None:
+    def __init__(self, api: str, token: str, revision: str, ifc: Path, checker_token: str = "", approver_token: str = "", registration: str = "",
+                 confirm_throwaway: str = "") -> None:
+        self.confirm_throwaway = confirm_throwaway
         self.api, self.revision, self.ifc = api.rstrip("/"), revision, ifc
         self.client = httpx.Client(base_url=self.api, timeout=120, headers={"Authorization": f"Bearer {token}"})
         self.checker = httpx.Client(base_url=self.api, timeout=120, headers={"Authorization": f"Bearer {checker_token}"}) if checker_token else None
@@ -45,6 +47,17 @@ class Smoke:
 
     def rev(self, path: str = "") -> str:
         return f"/revisions/{self.revision}{path}"
+
+    def _is_throwaway(self) -> bool:
+        """This script confirms everything it is shown and (with the checker and approver tokens) freezes and signs: only on a revision whose project
+        is marked SMOKE TEST (scripts/seed_demo.py --smoke), or one you name again with --i-confirm-this-revision-is-throwaway <revision id>."""
+        r = self.client.get("/revisions")
+        mine = next((x for x in r.json() if x.get("id") == self.revision), None) if r.status_code == 200 and isinstance(r.json(), list) else None
+        marked = bool(mine) and str(mine.get("address", "")).startswith("SMOKE TEST")
+        named = self.confirm_throwaway == self.revision
+        return self.step("the revision is a throwaway one", marked or named,
+                         "project is marked SMOKE TEST" if marked else ("named with --i-confirm-this-revision-is-throwaway" if named else
+                         "refused: use the project made by `seed_demo.py --smoke`, or pass --i-confirm-this-revision-is-throwaway <revision id>"))
 
     def _sign_off(self) -> bool:
         assert self.checker is not None and self.approver is not None
@@ -72,6 +85,8 @@ class Smoke:
 
     def run(self) -> bool:
         try:
+            if not self._is_throwaway():
+                return False
             return self._run()
         except httpx.HTTPError as exc:
             return self.step("network", False, f"{type(exc).__name__}: {exc}")
@@ -149,6 +164,8 @@ def main() -> int:
     ap.add_argument("--checker-token", default=os.environ.get("SMOKE_CHECKER_TOKEN", ""))
     ap.add_argument("--approver-token", default=os.environ.get("SMOKE_APPROVER_TOKEN", ""))
     ap.add_argument("--registration", default=os.environ.get("SMOKE_REGISTRATION", ""), help="the approver's registered number, as stored")
+    ap.add_argument("--i-confirm-this-revision-is-throwaway", default="", metavar="REVISION_ID",
+                    help="needed unless the revision's project is the SMOKE TEST one; repeat the revision id to confirm")
     ap.add_argument("--ifc", type=Path, default=DEFAULT_IFC, help="the fixture IFC to upload")
     ap.add_argument("--json", action="store_true", help="print the step results as JSON at the end")
     args = ap.parse_args()
@@ -158,7 +175,8 @@ def main() -> int:
     if not args.ifc.is_file():
         print(f"fixture not found: {args.ifc}", file=sys.stderr)
         return 64
-    smoke = Smoke(args.api, args.designer_token, args.revision, args.ifc, args.checker_token, args.approver_token, args.registration)
+    smoke = Smoke(args.api, args.designer_token, args.revision, args.ifc, args.checker_token, args.approver_token, args.registration,
+                  args.i_confirm_this_revision_is_throwaway)
     ok = smoke.run()
     if args.json:
         print(json.dumps(smoke.results, indent=2))

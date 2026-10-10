@@ -15,7 +15,7 @@ ARG NEXT_PUBLIC_API_URL=http://localhost:8000
 ARG NEXT_PUBLIC_SUPABASE_URL=http://localhost:54321
 ARG NEXT_PUBLIC_SUPABASE_ANON_KEY=
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY
-RUN pnpm --filter @mep/web exec next build
+RUN pnpm --filter @mep/web exec next build && mkdir -p apps/web/.next/cache && chown -R node:node apps/web/.next
 
 USER node
 ENV NODE_ENV=production PORT=3000

@@ -24,8 +24,8 @@ from mep.engine.loader import RulePack
 
 
 class PgAgentBackend:
-    def __init__(self, dsn: str, user: CurrentUser, revision_id: UUID, pack: RulePack | None = None) -> None:
-        self._dsn, self._user, self._rev, self._pack = dsn, user, revision_id, pack
+    def __init__(self, dsn: str, user: CurrentUser, revision_id: UUID, pack: RulePack | None = None, skill_executor: str | None = None) -> None:
+        self._dsn, self._user, self._rev, self._pack, self._skill_executor = dsn, user, revision_id, pack, skill_executor
 
     @contextmanager
     def _as_user(self) -> Iterator[psycopg.Connection[dict[str, Any]]]:
@@ -117,17 +117,17 @@ class PgAgentBackend:
 
     # ---- the two doors that refuse for people exactly as they refuse for an agent ---------------------------------------
     def card_digest(self, skill: str, spec: dict[str, Any]) -> str:
-        svc = PgSkills(self._dsn, self._user)
+        svc = PgSkills(self._dsn, self._user, self._skill_executor)
         try:
             return card_digest(effective_spec(svc, skill, spec)[0])
         except Exception:  # noqa: BLE001 - an unknown skill or a card that cannot be completed has no version
             return card_digest(spec)
 
     def card_confirmed(self, skill: str, digest: str) -> bool:
-        return PgSkills(self._dsn, self._user).card_confirmed(self._rev, skill, digest)
+        return PgSkills(self._dsn, self._user, self._skill_executor).card_confirmed(self._rev, skill, digest)
 
     def run_skill(self, skill: str, spec: dict[str, Any], expected_digest: str | None = None) -> dict[str, Any]:
-        svc = PgSkills(self._dsn, self._user)
+        svc = PgSkills(self._dsn, self._user, self._skill_executor)
         try:
             result, recorded, filled = perform_run(svc, self._user, self._rev, skill, spec, via="agent", expected_digest=expected_digest)
         except SkillsRefused as exc:

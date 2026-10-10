@@ -12,3 +12,7 @@ tests
 evals
 graphify-out
 *.log
+.env
+.env.*
+**/.env
+**/.env.*

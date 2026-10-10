@@ -29,7 +29,7 @@ def free_port() -> int:
 def live_api():
     port = free_port()
     env = {**os.environ, "MEP_DB_URL": DB_URL, "MEP_JWT_SECRET": h.SECRET, "MEP_ALLOW_DEMO_JWT_SECRET": "1", "MEP_SUPABASE_URL": lin.SUPABASE_URL,
-           "MEP_SUPABASE_ANON_KEY": lin.ANON, "MEP_COOKIE_SECURE": "0", "MEP_VISION_WORKER": "0", "MEP_RULES_DIR": str(ROOT / "rules")}
+           "MEP_SUPABASE_ANON_KEY": lin.ANON, "MEP_COOKIE_SECURE": "0", "MEP_ALLOW_LOCAL_SKILLS": "1", "MEP_VISION_WORKER": "0", "MEP_RULES_DIR": str(ROOT / "rules")}
     proc = subprocess.Popen([sys.executable, "-m", "uvicorn", "--factory", "mep.api.server:app_from_env", "--port", str(port), "--log-level", "warning"],
                             env=env, cwd=ROOT)
     url = f"http://127.0.0.1:{port}"
@@ -48,9 +48,10 @@ def live_api():
         proc.wait(timeout=20)
 
 
-def smoke(url, token, revision, *extra):
+def smoke(url, token, revision, *extra, confirmed=True):
+    flag = ["--i-confirm-this-revision-is-throwaway", str(revision)] if confirmed else []
     return subprocess.run([sys.executable, str(ROOT / "scripts" / "staging_smoke.py"), "--api", url, "--revision", str(revision),
-                           "--designer-token", token, *extra], capture_output=True, text=True, timeout=300, check=False)
+                           "--designer-token", token, *flag, *extra], capture_output=True, text=True, timeout=300, check=False)
 
 
 def prepared(admin):
@@ -101,3 +102,13 @@ def test_the_smoke_test_fails_loudly_with_a_bad_token_a_bad_revision_or_no_serve
     down = smoke("http://127.0.0.1:9", token, f["revision"])
     assert down.returncode == 1 and "FAIL" in down.stdout
     assert smoke(live_api, "", f["revision"]).returncode == 64
+
+
+def test_the_smoke_test_refuses_a_revision_that_is_not_marked_throwaway(admin, live_api):
+    f = prepared(admin)
+    token = mint_token(h.SECRET, f["designer"], ttl_seconds=600)
+    r = smoke(live_api, token, f["revision"], confirmed=False)
+    assert r.returncode == 1 and "refused" in r.stdout and "Gate 1" not in r.stdout
+    assert admin.execute("select count(*) from ingest_run where revision_id = %s", (f["revision"],)).fetchone()[0] == 0       # nothing was touched
+    admin.execute("update project set address = 'SMOKE TEST (throwaway, synthetic)' where id = (select project_id from revision where id = %s)", (f["revision"],))
+    assert smoke(live_api, token, f["revision"], confirmed=False).returncode == 0                                        # the marked project is accepted

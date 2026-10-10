@@ -14,7 +14,7 @@ from psycopg.rows import dict_row
 
 from mep.skills_runner.runner import RunFile, SkillRunResult, SkillUnavailable
 
-WAIT_SECONDS = 330                 # a little more than the dispatcher's own wall limit for build + re-check
+WAIT_SECONDS = 600                 # more than the dispatcher's worst case: build (255 s) + re-check (255 s) + start-up
 PICKUP_SECONDS = 60                # how long a job may sit queued before we say no worker is running
 POLL_SECONDS = 0.5
 

@@ -160,3 +160,15 @@ def test_a_use_default_is_not_applied_to_a_plant_room():
     spec = {"rooms": [{"name": "A", "kind": "room"}, {"name": "P", "kind": "plant_room"}]}
     out, _ = skill_form.apply_defaults(schema, spec, {"rooms[].use": "Office"})
     assert out["rooms"][0]["use"] == "Office" and "use" not in out["rooms"][1]
+
+
+def test_a_deployment_without_the_worker_runs_no_build_at_all_and_a_typo_does_not_fall_back_to_local():
+    from uuid import uuid4
+
+    from mep.api.schedule import CurrentUser
+    from mep.api.skills_pg import PgSkills
+    from mep.skills_runner.runner import SkillUnavailable
+    user = CurrentUser(user_id=uuid4(), firm_id=uuid4(), role="designer")
+    for mode, why in (("disabled", "switched off"), ("qeue", "not understood")):
+        with pytest.raises(SkillUnavailable, match=why):
+            PgSkills("postgresql://unused", user, mode).execute(uuid4(), "space-envelope", {})

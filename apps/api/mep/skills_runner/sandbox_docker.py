@@ -45,10 +45,11 @@ class DockerExecutor:
     def __init__(self, image: str, file_bytes: int = 50 * 1024 * 1024, docker: str = "docker") -> None:
         self.image, self.file_bytes, self.docker = image, file_bytes, docker
 
-    def _run(self, work: Path, command: list[str], *, out_writable: bool, wall: int, cpu: int, memory: int) -> subprocess.CompletedProcess[str] | None:
+    def _run(self, work: Path, command: list[str], *, out_writable: bool, wall: int, cpu: int, memory: int,
+             entrypoint: str | None = None) -> subprocess.CompletedProcess[str] | None:
         name = f"mep-job-{uuid.uuid4().hex[:12]}"
         args = docker_run_args(self.image, name, work / "in", work / "out", out_writable=out_writable, cpu_seconds=cpu, memory_bytes=memory,
-                               file_bytes=self.file_bytes, command=command, docker=self.docker)
+                               file_bytes=self.file_bytes, command=command, entrypoint=entrypoint, docker=self.docker)
         try:
             proc = subprocess.run(args, capture_output=True, timeout=wall + 15, check=False)
         except subprocess.TimeoutExpired:

@@ -190,3 +190,34 @@ def test_another_firm_cannot_see_the_job_and_a_client_cannot_write_or_read_the_b
     with pytest.raises(psycopg.errors.InsufficientPrivilege), psycopg.connect(DB_URL, autocommit=True) as c:
         c.execute("set role authenticated")
         c.execute("update vision_job set status = 'done'")
+
+
+def test_a_job_left_running_by_a_stopped_server_is_taken_again_then_failed_so_the_file_can_be_uploaded_again(admin, tmp_path):
+    from mep.api.vision_jobs import housekeeping
+    vision = FakeVision()
+    client, f = app(vision), h.seed(admin)
+    body = up_raw(client, f, pdf_bytes(tmp_path, "Stale")).json()
+    admin.execute("update vision_job set status = 'running', attempts = 1, started_at = now() - interval '1 hour' where id = %s", (body["job_id"],))
+    housekeeping(DB_URL)
+    assert jobs(client, f)[0]["status"] == "queued"                                       # taken again
+    admin.execute("update vision_job set status = 'running', attempts = 3, started_at = now() - interval '1 hour' where id = %s", (body["job_id"],))
+    housekeeping(DB_URL)
+    assert jobs(client, f)[0]["status"] == "failed"
+    assert up_raw(client, f, pdf_bytes(tmp_path, "Stale")).status_code == 200            # the failed job does not block a new upload
+
+
+def test_a_busy_reader_pool_delays_the_job_without_using_up_its_attempts(admin, tmp_path, monkeypatch):
+    from mep.api import vision_jobs
+    from mep.api.uploads import UploadRefused
+    vision = FakeVision()
+    client, f = app(vision), h.seed(admin)
+    body = up_raw(client, f, pdf_bytes(tmp_path, "Busy")).json()
+
+    def busy(*a, **k):
+        raise UploadRefused(503, "busy", "several files are being read right now")
+    monkeypatch.setattr(vision_jobs, "read_pdf", busy)
+    read(client)
+    row = admin.execute("select status, attempts, not_before > now() from vision_job where id = %s", (body["job_id"],)).fetchone()
+    assert row == ("queued", 0, True)
+    read(client)                                                                          # not taken again until its delay passes
+    assert admin.execute("select status, attempts from vision_job where id = %s", (body["job_id"],)).fetchone() == ("queued", 0)

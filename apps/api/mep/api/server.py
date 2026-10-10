@@ -53,7 +53,8 @@ DEMO_JWT_SECRET = "super-secret-jwt-token-with-at-least-32-characters-long"   # 
 
 
 def create_pg_app(dsn: str, jwt_secret: str, pack: RulePack, cors_origins: list[str] | None = None,
-                  supabase_url: str | None = None, anon_key: str | None = None, vision: Any = None, vision_worker: bool = False) -> FastAPI:
+                  supabase_url: str | None = None, anon_key: str | None = None, vision: Any = None, vision_worker: bool = False,
+                  skill_executor: str | None = None) -> FastAPI:
     jwks_url = f"{supabase_url.rstrip('/')}/auth/v1/.well-known/jwks.json" if supabase_url else None
     logging.getLogger("uvicorn.access").addFilter(_RedactShareTokens())
     current_user = make_current_user(dsn, jwt_secret, jwks_url)
@@ -79,7 +80,7 @@ def create_pg_app(dsn: str, jwt_secret: str, pack: RulePack, cors_origins: list[
     app.dependency_overrides[review_api.get_share] = lambda: share
     app.include_router(skills_api.router)
     app.dependency_overrides[skills_api.current_user] = current_user
-    app.dependency_overrides[skills_api.get_service] = lambda user=Depends(current_user): PgSkills(dsn, user)  # noqa: B008
+    app.dependency_overrides[skills_api.get_service] = lambda user=Depends(current_user): PgSkills(dsn, user, skill_executor)  # noqa: B008
     app.include_router(vision_jobs_api.router)
     app.dependency_overrides[vision_jobs_api.current_user] = current_user
     app.dependency_overrides[vision_jobs_api.get_dsn] = lambda: dsn
@@ -88,7 +89,7 @@ def create_pg_app(dsn: str, jwt_secret: str, pack: RulePack, cors_origins: list[
     app.dependency_overrides[evidence_api.get_dsn] = lambda: dsn
     app.include_router(agents_api.router)
     app.dependency_overrides[agents_api.current_user] = current_user
-    app.dependency_overrides[agents_api.get_backend_factory] = lambda: (lambda user, rev: PgAgentBackend(dsn, user, rev, pack))
+    app.dependency_overrides[agents_api.get_backend_factory] = lambda: (lambda user, rev: PgAgentBackend(dsn, user, rev, pack, skill_executor))
     app.dependency_overrides[me_api.current_user] = current_user
     app.dependency_overrides[me_api.get_repository] = repository
     app.dependency_overrides[uploads.current_user] = current_user
@@ -114,7 +115,10 @@ def app_from_env() -> FastAPI:
     if secret == DEMO_JWT_SECRET and os.environ.get("MEP_ALLOW_DEMO_JWT_SECRET") != "1":
         # the local Supabase's published secret: anyone could sign a token for any user id
         raise RuntimeError("MEP_JWT_SECRET is the public demo secret; set MEP_ALLOW_DEMO_JWT_SECRET=1 for local runs only")
+    # a deployment never runs a drafting build inside the API process (no isolation): without the worker, drafting is off
+    skill_executor = "queue" if os.environ.get("MEP_SKILL_EXECUTOR") == "queue" else ("local" if os.environ.get("MEP_ALLOW_LOCAL_SKILLS") == "1" else "disabled")
     origins = [o.strip() for o in os.environ.get("MEP_CORS_ORIGINS", "").split(",") if o.strip()]
     rules = Path(os.environ.get("MEP_RULES_DIR") or REPO_ROOT / "rules")
     return create_pg_app(dsn, secret, load_pack(rules), origins, os.environ.get("MEP_SUPABASE_URL"),
-                         os.environ.get("MEP_SUPABASE_ANON_KEY"), vision_worker=os.environ.get("MEP_VISION_WORKER", "1") != "0")
+                         os.environ.get("MEP_SUPABASE_ANON_KEY"), vision_worker=os.environ.get("MEP_VISION_WORKER", "1") != "0",
+                         skill_executor=skill_executor)

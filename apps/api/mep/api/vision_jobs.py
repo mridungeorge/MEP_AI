@@ -68,7 +68,8 @@ def enqueue(svc: psycopg.Connection[Any], *, user: CurrentUser, revision_id: UUI
 def claim(conn: psycopg.Connection[dict[str, Any]]) -> dict[str, Any] | None:
     return conn.execute(
         "update vision_job set status = 'running', started_at = now(), attempts = attempts + 1 where id = ("
-        " select id from vision_job where status = 'queued' order by created_at for update skip locked limit 1)"
+        " select id from vision_job where status = 'queued' and (not_before is null or not_before <= now())"
+        " order by created_at for update skip locked limit 1)"
         " returning id, firm_id, revision_id, name, sha256, storage_path, pdf, attempts").fetchone()
 
 
@@ -79,6 +80,14 @@ def _finish(conn: psycopg.Connection[dict[str, Any]], job_id: UUID, status: str,
 
 
 def process(conn: psycopg.Connection[dict[str, Any]], job: dict[str, Any], vision: Any) -> None:
+    try:
+        _process(conn, job, vision)
+    except Exception as exc:  # noqa: BLE001 - whatever went wrong, the job must not stay "running" holding the file
+        with contextlib.suppress(Exception):
+            _finish(conn, job["id"], "failed", error=f"the reading could not be completed ({type(exc).__name__})")
+
+
+def _process(conn: psycopg.Connection[dict[str, Any]], job: dict[str, Any], vision: Any) -> None:
     data = bytes(job["pdf"] or b"")
     if hashlib.sha256(data).hexdigest() != job["sha256"]:
         _finish(conn, job["id"], "failed", error="the stored file does not match its checksum")
@@ -86,9 +95,9 @@ def process(conn: psycopg.Connection[dict[str, Any]], job: dict[str, Any], visio
     try:
         result = read_pdf(job["name"], data, vision)
     except UploadRefused as exc:
-        if exc.code == "busy" and job["attempts"] < MAX_ATTEMPTS:
-            conn.execute("update vision_job set status = 'queued' where id = %s", (job["id"],))      # try again shortly
-            time.sleep(2)
+        if exc.code == "busy":                   # the readers are all in use: wait a little and do not count it as an attempt
+            conn.execute("update vision_job set status = 'queued', attempts = greatest(attempts - 1, 0), not_before = now() + interval '15 seconds'"
+                         " where id = %s", (job["id"],))
             return
         _finish(conn, job["id"], "failed", error=str(exc.message)[:300])
         return
@@ -120,6 +129,9 @@ def process_pending(dsn: str, vision: Any, limit: int = 20) -> int:
 
 def housekeeping(dsn: str) -> None:
     with psycopg.connect(dsn, autocommit=True) as conn:
+        # a job that was running when its server stopped is taken again (up to MAX_ATTEMPTS), then failed so the file can be uploaded again
+        conn.execute("update vision_job set status = 'queued', not_before = null where status = 'running' and attempts < %s"
+                     " and started_at < now() - make_interval(secs => %s)", (MAX_ATTEMPTS, STALE_RUNNING_SECONDS))
         conn.execute("update vision_job set status = 'failed', error = 'the server stopped while reading this file', finished_at = now(), pdf = null"
                      " where status = 'running' and started_at < now() - make_interval(secs => %s)", (STALE_RUNNING_SECONDS,))
 
@@ -140,9 +152,12 @@ class VisionRunner:
         self._thread.join(timeout=30)
 
     def _loop(self) -> None:
-        with contextlib.suppress(Exception):
-            housekeeping(self._dsn)
+        last_clean = 0.0
         while not self._stop.is_set():
+            if time.monotonic() - last_clean > 120:
+                with contextlib.suppress(Exception):
+                    housekeeping(self._dsn)
+                last_clean = time.monotonic()
             taken = 0
             with contextlib.suppress(Exception):
                 taken = process_pending(self._dsn, self._vision, limit=5)

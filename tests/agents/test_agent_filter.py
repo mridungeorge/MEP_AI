@@ -110,3 +110,15 @@ def test_underscored_ids_and_lowercase_clauses_are_matched():
 def test_ordinary_engineering_words_are_not_damaged():
     t = "a passive chilled beam with a pass-through, a complete and complex layout"
     assert filter_free_text(t, {RID}).text == t
+
+
+@pytest.mark.parametrize("text", ["it adheres to the requirement and is in conformity", "it is within the limit", "P.A.S.S", "that is sufficient",
+                                  "this is a success", "every other rule is resolved"])
+def test_more_ways_of_saying_it_is_fine_are_removed_from_the_models_reply(text):
+    f = filter_free_text(text, {RID})
+    assert "[removed]" in f.text or "?" in f.text
+
+
+@pytest.mark.parametrize("text", ["clears the limit, rendering it a success", "this will be sufficient and within the limit"])
+def test_a_hypothesis_cannot_say_it_will_be_fine(text):
+    assert check_hypothesis(text, RID)[1] is not None

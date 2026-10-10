@@ -12,7 +12,7 @@ type AgentChoice = { id: "designer" | "adversarial_checker" | "compliance_risk";
 
 /** Ask a runtime agent about this revision and read the notes agents have left. An agent can only READ and leave notes (flags, risks, questions,
  *  hypotheses, explanations): it cannot approve, confirm, sign or set any outcome, and nothing it writes is a result. People close the notes. */
-export function AgentPanel({ revisionId, agents, kinds, title }: { revisionId: string; agents: AgentChoice[]; kinds: string[]; title: string }) {
+export function AgentPanel({ revisionId, agents, kinds, title, onChanged }: { revisionId: string; agents: AgentChoice[]; kinds: string[]; title: string; onChanged?: () => void }) {
   const [configured, setConfigured] = useState<{ configured: boolean; reason: string } | null>(null);
   const [notes, setNotes] = useState<AgentNote[]>([]);
   const [text, setText] = useState("");
@@ -35,6 +35,7 @@ export function AgentPanel({ revisionId, agents, kinds, title }: { revisionId: s
       setReply(r.reply || "(no reply)");
       if (r.calls.some((c) => c.denied)) setMessage(`${r.calls.filter((c) => c.denied).length} request(s) by the agent were refused by the server.`);
       await load();
+      onChanged?.();
     } catch (e) { setMessage(refusal(e)); } finally { setBusy(false); }
   };
   const close = async (id: string, status: "answered" | "dismissed") => {
