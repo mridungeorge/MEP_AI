@@ -8,7 +8,8 @@
     "@supabase/supabase-js": "^2.117.3",
     "next": "^14.2.35",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "web-ifc": "0.0.66"
   },
   "devDependencies": {
     "@playwright/test": "^1.64.0",
@@ -19,8 +20,8 @@
     "vitest": "^5.0.3"
   },
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "dev": "node scripts/copy-wasm.mjs && next dev",
+    "build": "node scripts/copy-wasm.mjs && next build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "e2e": "playwright test"

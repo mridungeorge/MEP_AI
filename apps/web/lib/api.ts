@@ -2,7 +2,7 @@
 import { supabase } from "./supabase";
 import type {
   ApiErrorBody, BuildingPart, ConfirmResponse, Gate1State, ImportResponse, RowRef,
-  AdminOverview, BillingOverview, SizingView, ClashView, Quantities, ServiceItem, VoidView, PerfOverview, FixesResponse, NewProject, NotificationPrefs, ProjectHistory, ProjectRow, PendingRegistration, MyInvitation, AgentNote, AgentReply, VisionJob, CardPreview, EvidenceResponse, Lineage, Me, ShortcutResult, SkillCard, SkillRunRow, SkillRunSummary, SkillSummary, Package, ShareLinkView, Worksheet, RevisionDiff, RevisionResults, RevisionSummary, RunRulesResponse, SpaceInput, SpaceRow, SystemInputInput, SystemInputRow, UploadResponse,
+  AdminOverview, BaseModelRow, BillingOverview, SizingView, ClashView, Quantities, ServiceItem, VoidView, PerfOverview, FixesResponse, NewProject, NotificationPrefs, ProjectHistory, ProjectRow, PendingRegistration, MyInvitation, AgentNote, AgentReply, VisionJob, CardPreview, EvidenceResponse, Lineage, Me, ShortcutResult, SkillCard, SkillRunRow, SkillRunSummary, SkillSummary, Package, ShareLinkView, Worksheet, RevisionDiff, RevisionResults, RevisionSummary, RunRulesResponse, SpaceInput, SpaceRow, SystemInputInput, SystemInputRow, UploadResponse,
 } from "./types";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -219,6 +219,18 @@ export const api = {
     return apiFetch<{ elements: number }>(`${rev(r)}/clash/models`, { method: "POST", body: fd });
   },
   sizing: (r: string) => apiFetch<SizingView>(`${rev(r)}/sizing`),
+  baseModels: (r: string) => apiFetch<{ models: BaseModelRow[] }>(`${rev(r)}/base-models`),
+  uploadBaseModel: (r: string, file: File) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return apiFetch<{ id: string }>(`${rev(r)}/base-model`, { method: "POST", body: fd });
+  },
+  baseModelBytes: async (id: string): Promise<ArrayBuffer> => {
+    const token = await getToken();
+    const res = await fetch(`${BASE_URL}/base-models/${encodeURIComponent(id)}/file`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+    if (!res.ok) throw new ApiError(res.status, null, "That model is not available.");
+    return res.arrayBuffer();
+  },
   askAgent: (r: string, agent: string, message: string) => apiFetch<AgentReply>(`${rev(r)}/agents/${agent}/message`, json("POST", { message })),
   agentNotes: (r: string, kind?: string) => apiFetch<AgentNote[]>(`${rev(r)}/agent-notes${kind ? `?kind=${kind}` : ""}`),
   resolveAgentNote: (r: string, id: string, status: "answered" | "dismissed") =>

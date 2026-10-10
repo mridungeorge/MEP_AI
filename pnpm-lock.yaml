@@ -187,6 +187,9 @@ importers:
       react-dom:
         specifier: ^18.3.1
         version: 18.3.1(react@18.3.1)
+      web-ifc:
+        specifier: 0.0.66
+        version: 0.0.66
     devDependencies:
       '@playwright/test':
         specifier: ^1.64.0
@@ -903,6 +906,9 @@ packages:
       jsdom:
         optional: true
 
+  web-ifc@0.0.66:
+    resolution: {integrity: sha512-IhZKWALbhiq7LKfx4jZIcOPX2VZ+3PDZcPICHhX7Y8ilvofXg4qhPHncCMQibEsgHA25g4bn5o3pQbbhluiZHw==}
+
   web-vitals@6.2.3:
     resolution: {integrity: sha512-Dmy+vdO1UPMqXiAtZSNayhl4f794Bxfd94W4HIj2HlYtczEQfEOon969memlcpcHrTuOKLa5baFjX7WbgmOq+A==}
 
@@ -1410,6 +1416,8 @@ snapshots:
       '@types/node': 26.6.4
     transitivePeerDependencies:
       - msw
+
+  web-ifc@0.0.66: {}
 
   web-vitals@6.2.3: {}
 

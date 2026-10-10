@@ -413,3 +413,6 @@ export interface SizingView { note: string; settings: Record<string, number | nu
     recommended: { shape: string; width_mm: number | null; depth_mm: number | null; diameter_mm: number | null; velocity_ms: number; friction_actual_pa_m: number; notes: string[] } | null }[];
   balance: { system_tag: string; trunk_ls: number; terminals_ls: number; difference_pct: number | null; status: string }[];
   spec_card_drafts: { mark: string; from_duct: string; to_duct: string; missing_engineer_inputs: string[]; note: string }[] }
+
+/** GET /revisions/{id}/base-models */
+export interface BaseModelRow { id: string; file_name: string; file_sha256: string; schema_name: string; storeys: { name: string; elevation_mm: number }[]; created_at: string }
