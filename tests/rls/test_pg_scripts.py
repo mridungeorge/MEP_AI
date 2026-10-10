@@ -68,9 +68,9 @@ def test_strict_mode_refuses_one_address_for_three_roles():
 def test_registering_an_approver_needs_evidence_and_is_ledgered(admin, demo):
     emails, _ = demo
     e = emails["approver"]
-    run("admin_users.py", "register-approver", "--email", e, "--number", "bad", "--register", "NER", "--verified-by", "x", "--evidence", "x", ok=False, says="--evidence must say")
+    run("admin_users.py", "register-approver", "--email", e, "--number", "bad", "--register", "NER", "--verified-by", "x", "--evidence", "x", "--reason", "test fixture, no platform admin here", ok=False, says="--evidence must say")
     run("admin_users.py", "register-approver", "--email", e, "--number", "RPEQ 20480", "--register", "RPEQ", "--verified-by", "A. Admin",
-        "--evidence", "RPEQ register search 12 Oct 2026: name and number match, status current", ok=True)
+        "--evidence", "RPEQ register search 12 Oct 2026: name and number match, status current", "--reason", "test fixture, no platform admin here", ok=True)
     assert admin.execute("select registration_no from app_user u join auth.users a on a.id = u.id where a.email = %s", (e,)).fetchone()[0] == "RPEQ 20480"
     kinds = admin.execute("select kind, payload from ledger_event where kind in ('approver_registration_verified', 'app_user_changed')"
                           " and payload ->> 'registration_no' = 'RPEQ 20480' order by seq").fetchall()
@@ -78,7 +78,7 @@ def test_registering_an_approver_needs_evidence_and_is_ledgered(admin, demo):
     verified = next(p for k, p in kinds if k == "approver_registration_verified")
     assert verified["register"] == "RPEQ" and verified["previous"] == "DEMO-0001" and "name and number match" in verified["evidence"]
     run("admin_users.py", "register-approver", "--email", emails["designer"], "--number", "RPEQ 1111", "--register", "RPEQ",
-        "--verified-by", "A. Admin", "--evidence", "a designer is not an approver, so this must be refused", ok=False, says="only an approver")
+        "--verified-by", "A. Admin", "--evidence", "a designer is not an approver, so this must be refused", "--reason", "test fixture, no platform admin here", ok=False, says="only an approver")
 
 
 def test_signer_mode_and_extra_roles_through_the_script(admin, demo):
@@ -125,7 +125,7 @@ def test_onboarding_a_real_firm_is_scripted_and_ledgered(admin):
     run("admin_users.py", "add-user", "--firm", firm, "--email", e, "--role", "checker", ok=False, says="already belongs to a firm")
     run("admin_users.py", "set-role", "--email", e, "--role", "approver")
     run("admin_users.py", "register-approver", "--email", e, "--number", "NER 4455667", "--register", "NER", "--verified-by", "A. Admin",
-        "--evidence", "NER search 12 Oct 2026: name and number match, current, mechanical")
+        "--evidence", "NER search 12 Oct 2026: name and number match, current, mechanical", "--reason", "test fixture, no platform admin here")
     out = run("admin_users.py", "show", "--firm", firm).stdout
     assert e in out and "approver" in out and "NER 4455667" in out
     kinds = {r[0] for r in admin.execute("select e.kind from ledger_event e join firm f on f.id = e.firm_id where f.name = %s", (firm,))}
@@ -140,7 +140,7 @@ def test_changing_a_role_clears_the_registration_and_extra_roles_and_voids_an_op
     run("admin_users.py", "add-firm", "--name", firm)
     run("admin_users.py", "add-user", "--firm", firm, "--email", e, "--role", "approver")
     run("admin_users.py", "register-approver", "--email", e, "--number", "RPEQ 777001", "--register", "RPEQ", "--verified-by", "A. Admin",
-        "--evidence", "RPEQ register search 12 Oct 2026: name and number match, current, mechanical")
+        "--evidence", "RPEQ register search 12 Oct 2026: name and number match, current, mechanical", "--reason", "test fixture, no platform admin here")
     run("admin_users.py", "set-role", "--email", e, "--role", "checker")
     row = admin.execute("select u.role::text, u.registration_no, u.also_roles::text, u.id, u.firm_id from app_user u join auth.users a on a.id = u.id"
                         " where a.email = %s", (e,)).fetchone()

@@ -4,7 +4,8 @@ Every change lands in the hash-chained ledger (the database triggers write `app_
 adds the verification evidence as its own entry). Run with the SERVICE connection (MEP_DB_URL), from a machine you trust.
 
     uv run python scripts/admin_users.py register-approver --email jo@firm.example --number "RPEQ 12345" --register RPEQ \\
-        --verified-by "A. Admin" --evidence "RPEQ register search 2026-10-12, name and number match, status current"
+        --verified-by "A. Admin" --evidence "RPEQ register search 2026-10-12, name and number match, status current" \
+        --reason "no platform administrator available for this pilot firm"   # BREAK-GLASS: normally done in the app
     uv run python scripts/admin_users.py grant-roles --email jo@firm.example --roles designer,checker      # small_firm only
     uv run python scripts/admin_users.py set-signer-mode --firm "Firm Pty Ltd" --mode small_firm
     uv run python scripts/admin_users.py show --firm "Firm Pty Ltd"
@@ -57,15 +58,19 @@ def register_approver(a: argparse.Namespace) -> None:
         sys.exit("the registration number looks wrong (3 to 40 letters, digits, space . / -)")
     if len(a.evidence.strip()) < 15:
         sys.exit("--evidence must say what you checked on the register, where and when (at least 15 characters)")
+    if len(a.reason.strip()) < 15:
+        sys.exit("--reason must say why the normal route (firm submits, platform administrator verifies, in the app) cannot be used (at least 15 characters)")
     with connect() as conn:
         uid, firm, role, old, _mode = user_row(conn, a.email)
         if role != "approver":
             sys.exit(f"{a.email} is a {role}; only an approver carries a registration number (set the role first)")
+        conn.execute("select set_config('mep.reg_path', 'break_glass', true)")
         conn.execute("update app_user set registration_no = %s where id = %s", (a.number.strip(), uid))
         conn.execute("insert into ledger_event (firm_id, kind, payload) values (%s, 'approver_registration_verified', %s::jsonb)",
-                     (firm, json.dumps({"user_id": str(uid), "registration_no": a.number.strip(), "previous": old,
-                                        "register": a.register, "verified_by": a.verified_by, "evidence": a.evidence})))
-    print(f"registered {a.email} as {a.number.strip()} ({a.register}); ledgered with your evidence")
+                     (firm, json.dumps({"user_id": str(uid), "registration_no": a.number.strip(), "previous": old, "path": "break_glass",
+                                        "reason": a.reason.strip(), "register": a.register, "verified_by": a.verified_by, "evidence": a.evidence})))
+    print(f"BREAK-GLASS: registered {a.email} as {a.number.strip()} ({a.register}); ledgered with your evidence and reason."
+          " The normal route is the app: the firm submits, a platform administrator verifies.")
 
 
 def grant_roles(a: argparse.Namespace) -> None:
@@ -172,6 +177,7 @@ def main() -> None:
     p.add_argument("--register", choices=REGISTERS, required=True)
     p.add_argument("--verified-by", required=True)
     p.add_argument("--evidence", required=True)
+    p.add_argument("--reason", required=True, help="BREAK-GLASS: why the app route (firm submits, platform admin verifies) cannot be used")
     p.set_defaults(fn=register_approver)
     p = sub.add_parser("grant-roles")
     p.add_argument("--email", required=True)

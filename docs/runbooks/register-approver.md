@@ -1,3 +1,8 @@
+> **Normal route (Phase 6): in the app.** A firm administrator opens Admin > Approver registrations and submits the number, the register and what they
+> saw on it. A platform administrator opens Registrations, checks the public register themselves and verifies (or rejects) with a note. Every step is a
+> ledger entry (`registration_submitted`, `registration_verified`/`registration_rejected`). The script below is **break-glass**: it needs `--reason`, and
+> its ledger entry says `registration_path: break_glass`. Use it only when no platform administrator exists (for example the very first pilot firm).
+
 # Register an approver
 
 The Gate 3 approver signs with a **registration number**. A person cannot type their own number into the app: it is set by the

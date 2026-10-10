@@ -92,12 +92,34 @@ def overview(user: User, dsn: Dsn) -> dict[str, Any]:
                                " and status = 'pending' order by created_at desc", (user.firm_id,)).fetchall()
         templates = conn.execute("select id, kind, name, media_type, sha256, created_at from firm_template where firm_id = %s"
                                  " order by kind, created_at desc", (user.firm_id,)).fetchall()
+        regs = conn.execute("select r.id, r.user_id, u.email, r.number, r.register, r.state_scheme, r.status, r.submitted_at, r.decided_at, r.decision_note"
+                            " from registration r join app_user u on u.id = r.user_id where r.firm_id = %s order by r.submitted_at desc limit 100",
+                            (user.firm_id,)).fetchall()
     return {
         "firm": {**firm, "id": str(firm["id"]), "near_miss_default": None if firm["near_miss_default"] is None else float(firm["near_miss_default"])},
         "users": [{**u, "id": str(u["id"])} for u in users],
         "invitations": [{**i, "id": str(i["id"]), "expires_at": i["expires_at"].isoformat(), "created_at": i["created_at"].isoformat()} for i in invites],
         "templates": [{**t, "id": str(t["id"]), "created_at": t["created_at"].isoformat()} for t in templates],
+        "registrations": [{**r, "id": str(r["id"]), "user_id": str(r["user_id"]), "submitted_at": r["submitted_at"].isoformat(),
+                           "decided_at": None if r["decided_at"] is None else r["decided_at"].isoformat()} for r in regs],
     }
+
+
+class RegistrationBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    user_id: UUID
+    number: str = Field(min_length=3, max_length=40)
+    register: Literal["NER", "RPEQ", "STATE"]
+    state_scheme: str | None = Field(default=None, max_length=80)
+    evidence: str = Field(min_length=15, max_length=1000)
+
+
+@router.post("/admin/registrations")
+def submit_registration(body: RegistrationBody, user: User, dsn: Dsn) -> dict[str, Any]:
+    """The firm submits an approver's registration number; a platform administrator verifies it. Nothing changes the number until then."""
+    rid = _call(dsn, user, "select registration_submit(%s, %s, %s, %s, %s) as id", (body.user_id, body.number, body.register, body.state_scheme, body.evidence))
+    return {"registration_id": str(rid), "status": "submitted"}
 
 
 # ------------------------------------------------------------------------------------------------------------------------ people

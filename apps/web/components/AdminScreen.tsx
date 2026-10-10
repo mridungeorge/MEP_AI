@@ -64,6 +64,8 @@ export function AdminScreen() {
         <p>The person signs in with this address (a link is e-mailed) and then joins the firm in the role above. Registration numbers are verified separately (see Registrations).</p>
       </section>
 
+      <RegistrationSection data={data} onSubmit={(b) => void act(() => api.adminSubmitRegistration(b), "Submitted. A platform administrator will verify it against the register.")} />
+
       <FirmSettings key={f.id + f.sample_size + f.signer_mode} firm={f} onSave={(v) => void act(() => api.adminSaveFirm(v), "Settings saved.")} />
 
       <section aria-label="Templates">
@@ -73,6 +75,33 @@ export function AdminScreen() {
         <ul data-testid="admin-templates">{data.templates.map((t) => <li key={t.id}>{t.kind.replace("_", " ")}: {t.name} ({t.sha256.slice(0, 10)}…) {t.created_at.slice(0, 10)}</li>)}</ul>
       </section>
     </main>
+  );
+}
+
+function RegistrationSection({ data, onSubmit }: { data: AdminOverview; onSubmit: (b: { user_id: string; number: string; register: string; state_scheme?: string; evidence: string }) => void }) {
+  const approvers = data.users.filter((u) => u.role === "approver" && u.active);
+  const [userId, setUserId] = useState("");
+  const [number, setNumber] = useState("");
+  const [register, setRegister] = useState("RPEQ");
+  const [scheme, setScheme] = useState("");
+  const [evidence, setEvidence] = useState("");
+  return (
+    <section aria-label="Registrations">
+      <h2>Approver registrations</h2>
+      <p>An approver signs Gate 3 under a registration number. Submit it here with the register it is on; a platform administrator checks the public register and verifies it. Until then the approver cannot sign.</p>
+      <select aria-label="Approver" value={userId} onChange={(e) => setUserId(e.target.value)}>
+        <option value="">choose an approver…</option>{approvers.map((u) => <option key={u.id} value={u.id}>{u.email ?? u.id}</option>)}
+      </select>{" "}
+      <input aria-label="Registration number" placeholder="number" value={number} onChange={(e) => setNumber(e.target.value)} />{" "}
+      <select aria-label="Register" value={register} onChange={(e) => setRegister(e.target.value)}>
+        <option value="RPEQ">RPEQ (Queensland)</option><option value="NER">NER (Engineers Australia)</option><option value="STATE">a state scheme</option>
+      </select>{" "}
+      {register === "STATE" && <input aria-label="State scheme" placeholder="e.g. NSW Registered Design Practitioner" value={scheme} onChange={(e) => setScheme(e.target.value)} />}
+      <br /><textarea aria-label="Evidence" rows={2} cols={70} placeholder="What you saw on the register, where and when (at least 15 characters)" value={evidence} onChange={(e) => setEvidence(e.target.value)} /><br />
+      <button type="button" disabled={!userId || number.trim().length < 3 || evidence.trim().length < 15}
+              onClick={() => onSubmit({ user_id: userId, number: number.trim(), register, ...(register === "STATE" ? { state_scheme: scheme.trim() } : {}), evidence: evidence.trim() })}>Submit for verification</button>
+      <ul data-testid="admin-registrations">{data.registrations.map((r) => <li key={r.id}>{r.email}: {r.number} ({r.register}) <strong>{r.status}</strong>{r.decision_note ? ` — ${r.decision_note}` : ""}</li>)}</ul>
+    </section>
   );
 }
 

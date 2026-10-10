@@ -21,6 +21,7 @@ function Header({ email }: { email: string | undefined }) {
       <a href="/" style={{ fontWeight: 600, textDecoration: "none", color: "inherit" }}>MEP Co-pilot</a>
       <a href="/projects">Projects</a>
       {me?.is_admin && <a href="/admin">Admin</a>}
+      {me?.platform_admin && <a href="/platform">Registrations</a>}
       <span style={{ flex: 1 }} />
       <span data-testid="user-email">{email}</span>
       {me && me.independence_notice && <strong style={{ color: "#7f1d1d" }}>{me.independence_notice}</strong>}
