@@ -324,9 +324,15 @@ export interface SkillRunRow {
 
 /** Runtime agents: they only leave notes (flags, risks, questions, hypotheses, explanations). People read and close them. */
 export interface AgentNote {
-  id: string; agent: string; kind: string; severity: string | null; body: string; status: string; rule_result_id: string | null; created_at: string;
+  id: string; agent: string; kind: string; skill?: string | null; severity: string | null; body: string; status: string; rule_result_id: string | null;
+  created_at: string;
+  /** Written after the revision was frozen: an annotation, never part of the signed package. */
+  post_freeze?: boolean;
+  /** For a draft card note: the draft spec (as the agent proposed it). */
+  spec?: Record<string, unknown> | null;
 }
-export interface AgentReply { agent: string; reply: string; calls: { tool: string; ok: boolean; denied: boolean; error: string | null }[] }
+export interface CardPreview { effective_spec: Record<string, unknown>; spec_sha256: string; firm_defaults_applied: string[]; confirmed: boolean }
+export interface AgentReply { agent: string; reply: string; reply_is?: string; redactions?: number; calls: { tool: string; ok: boolean; denied: boolean; error: string | null }[] }
 
 export interface EvidenceCandidate { key: string; confidence: number | null; [field: string]: string | number | null }
 export interface EvidenceSource { name: string; kind: string; sha256: string; problems: string[]; provenance: "extracted"; candidates: EvidenceCandidate[] }

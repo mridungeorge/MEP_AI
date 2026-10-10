@@ -1,4 +1,6 @@
 """An in-memory backend for the tool layer: no database. Records what the layer asked of it so tests can prove what did NOT happen."""
+import hashlib
+import json
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -16,6 +18,7 @@ class FakeBackend:
         self.rule_runs = 0
         self.drafts: dict[str, dict[str, Any]] = {}
         self.minute_calls = 0
+        self.confirmed: set[str] = set()
         self._results = {
             RESULT_ID: {"id": str(RESULT_ID), "subject_id": "ahu-1", "rule_id": "NCC2025-J6D3-econ-cycle", "outcome": "FAIL", "review_class": "fail",
                         "stale": False, "citation": {"document": "NCC 2025 Volume One", "clause": "J6D3", "rule_status": "draft"},
@@ -61,7 +64,13 @@ class FakeBackend:
     def record_call(self, agent: str, tool: str, allowed: bool, detail: str, args: dict[str, Any]) -> None:
         self.calls.append((tool, allowed, detail))
 
-    def run_skill(self, skill: str, spec: dict[str, Any]) -> dict[str, Any]:
+    def card_digest(self, skill: str, spec: dict[str, Any]) -> str:
+        return hashlib.sha256(json.dumps([skill, spec], sort_keys=True).encode()).hexdigest()
+
+    def card_confirmed(self, skill: str, digest: str) -> bool:
+        return digest in self.confirmed
+
+    def run_skill(self, skill: str, spec: dict[str, Any], expected_digest: str | None = None) -> dict[str, Any]:
         self.skill_runs.append((skill, spec))
         return {"status": "ok", "released": True, "files": []}
 

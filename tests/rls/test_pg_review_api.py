@@ -116,6 +116,19 @@ def test_the_whole_chain_designer_checker_approver_package_and_share_link(admin,
     text = " ".join("\n".join(p.extract_text() or "" for p in PdfReader(io.BytesIO(pdf.content)).pages).split())
     assert "SIGNED: Gate 1" in text and "DRAFT RULES: NOT ENGINEER-APPROVED" in text and "RPEQ 12345" in text
     assert client.get(f"/revisions/{rev}/package.pdf", headers=de).content == pdf.content                      # deterministic
+
+    # an agent note written after the freeze is a labelled post-freeze annotation and is not in the signed package or its PDF
+    admin.execute("insert into agent_note (firm_id, revision_id, agent, kind, severity, body, created_by) values (%s, %s, 'adversarial_checker', 'flag',"
+                  " 'high', 'POSTFREEZE-ANNOTATION-MARKER the damper looks undersized', %s)", (f["firm"], rev, f["checker"]))
+    notes = client.get(f"/revisions/{rev}/agent-notes", headers=de).json()
+    assert [n["post_freeze"] for n in notes if "POSTFREEZE-ANNOTATION-MARKER" in n["body"]] == [True]
+    pkg2 = client.get(f"/revisions/{rev}/package", headers=de)
+    assert "POSTFREEZE-ANNOTATION-MARKER" not in pkg2.text
+    live = {"events", "head_seq", "head_hash"}                      # the live ledger position moves with any activity; everything signed does not
+    strip = lambda p: {**p, "ledger": {k: v for k, v in p["ledger"].items() if k not in live}}
+    assert strip(pkg2.json()) == strip(pkg)
+    pdf2 = client.get(f"/revisions/{rev}/package.pdf", headers=de)
+    assert pdf2.content == pdf.content and "POSTFREEZE" not in " ".join((p.extract_text() or "") for p in PdfReader(io.BytesIO(pdf2.content)).pages)
     art = admin.execute("select released, validator ->> 'passed' from artifact where revision_id = %s and kind = 'compliance_report_pdf'",
                         (rev,)).fetchall()
     assert art == [(True, "true")]

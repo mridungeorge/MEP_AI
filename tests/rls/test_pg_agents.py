@@ -130,12 +130,29 @@ def test_the_designer_agent_fills_a_card_and_builds_through_the_validated_door(a
                          ("run_skill", {"skill": "space-envelope", "use_draft": True})])
     r = ask(client, f, "designer")
     assert r.status_code == 200 and [c["ok"] for c in r.json()["calls"]] == [True, True]
+    # not built: the card version is unconfirmed, and the agent was told so with a note for the human
+    assert admin.execute("select count(*) from skill_run where revision_id = %s", (f["revision"],)).fetchone()[0] == 0
+    asked = admin.execute("select body, data ->> 'needs' from agent_note where revision_id = %s and kind = 'clarifying_question'", (f["revision"],)).fetchone()
+    assert asked[1] == "card_confirmation" and "confirm" in asked[0]
+    # a checker cannot confirm; the designer reads the exact effective card and confirms that version
+    url = f"/revisions/{f['revision']}/skills/space-envelope"
+    assert client.post(f"{url}/confirm-card", headers=h.auth(f["checker"]), json={"spec": SPEC_FIELDS}).status_code == 403
+    preview = client.post(f"{url}/card-preview", headers=h.auth(f["designer"]), json={"spec": SPEC_FIELDS}).json()
+    assert preview["confirmed"] is False and preview["effective_spec"]["mark"] == "AGENT-L1"
+    stale = client.post(f"{url}/confirm-card", headers=h.auth(f["designer"]), json={"spec": SPEC_FIELDS, "spec_sha256": "0" * 64})
+    assert stale.status_code == 409
+    ok = client.post(f"{url}/confirm-card", headers=h.auth(f["designer"]), json={"spec": SPEC_FIELDS, "spec_sha256": preview["spec_sha256"]})
+    assert ok.status_code == 200
+    use_runtime(client, [("run_skill", {"skill": "space-envelope", "use_draft": True})])
+    r = ask(client, f, "designer")
+    assert r.status_code == 200
     run = admin.execute("select status, requested_via, spec ->> 'mark' from skill_run where revision_id = %s", (f["revision"],)).fetchone()
     assert run == ("ok", "agent", "AGENT-L1")
     assert admin.execute("select count(*) from artifact where revision_id = %s and released", (f["revision"],)).fetchone()[0] == 3
     # an invalid draft: the validator door still refuses, and nothing is released
     f2 = h.seed(admin)
     bad = {**SPEC_FIELDS, "rooms": [{**SPEC_FIELDS["rooms"][0], "height_mm": 99999}]}
+    client.post(f"/revisions/{f2['revision']}/skills/space-envelope/confirm-card", headers=h.auth(f2["designer"]), json={"spec": bad})
     use_runtime(client, [("run_skill", {"skill": "space-envelope", "spec": bad})])
     out = ask(client, f2, "designer").json()["calls"][0]
     assert out["ok"] is True                                                          # the call was allowed ...
@@ -262,3 +279,15 @@ def test_the_models_reply_is_filtered_and_labelled(admin, client):
     r = ask(client, f, "designer")
     assert r.status_code == 200 and "PASSES" not in r.json()["reply"] and "[removed]" in r.json()["reply"]
     assert r.json()["reply_is"].startswith("an assistant's note") and r.json()["redactions"] >= 2
+
+
+def test_a_note_written_after_the_freeze_is_marked_post_freeze_by_the_database(admin, client, pack):
+    open_rev, frozen_rev = h.seed(admin), h.seed(admin)
+    admin.execute("update revision set frozen_at = now(), status = 'frozen' where id = %s", (frozen_rev["revision"],))
+    for f in (open_rev, frozen_rev):
+        layer_for(f, Agent.ADVERSARIAL_CHECKER, role="checker", pack=pack).call("raise_flag", {"severity": "low", "text": "A thing worth a second look."})
+    marks = {str(f["revision"]): admin.execute("select post_freeze from agent_note where revision_id = %s", (f["revision"],)).fetchone()[0]
+             for f in (open_rev, frozen_rev)}
+    assert marks == {str(open_rev["revision"]): False, str(frozen_rev["revision"]): True}
+    with pytest.raises(psycopg.errors.Error):                     # the flag cannot be moved or unmarked afterwards
+        admin.execute("update agent_note set post_freeze = false where revision_id = %s", (frozen_rev["revision"],))

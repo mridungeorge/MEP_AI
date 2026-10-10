@@ -18,7 +18,7 @@ from psycopg.rows import dict_row
 from mep.api import gate1
 from mep.api.pg import PgLedger, PgRepository
 from mep.api.schedule import CurrentUser
-from mep.api.skills import perform_run
+from mep.api.skills import card_digest, effective_spec, perform_run
 from mep.api.skills_pg import PgSkills, SkillsRefused
 from mep.engine.loader import RulePack
 
@@ -70,7 +70,8 @@ class PgAgentBackend:
 
     def notes(self, kind: str | None) -> list[dict[str, Any]]:
         with self._as_user() as conn:
-            rows = conn.execute("select id, agent, kind, severity, body, status, rule_result_id, created_at from agent_note where revision_id = %s"
+            rows = conn.execute("select id, agent, kind, skill, severity, body, status, rule_result_id, created_at, post_freeze,"
+                                " case when kind = 'spec_card_draft' then data -> 'spec' end as spec from agent_note where revision_id = %s"
                                 " and firm_id = %s and (%s::text is null or kind = %s) order by created_at desc limit 100",
                                 (self._rev, self._user.firm_id, kind, kind)).fetchall()
         return [{**r, "id": str(r["id"]), "rule_result_id": None if r["rule_result_id"] is None else str(r["rule_result_id"]),
@@ -115,10 +116,20 @@ class PgAgentBackend:
                          (self._user.firm_id, self._rev, agent, tool, allowed, detail, json.dumps(args, default=str), self._user.user_id))
 
     # ---- the two doors that refuse for people exactly as they refuse for an agent ---------------------------------------
-    def run_skill(self, skill: str, spec: dict[str, Any]) -> dict[str, Any]:
+    def card_digest(self, skill: str, spec: dict[str, Any]) -> str:
         svc = PgSkills(self._dsn, self._user)
         try:
-            result, recorded, filled = perform_run(svc, self._user, self._rev, skill, spec, via="agent")
+            return card_digest(effective_spec(svc, skill, spec)[0])
+        except Exception:  # noqa: BLE001 - an unknown skill or a card that cannot be completed has no version
+            return card_digest(spec)
+
+    def card_confirmed(self, skill: str, digest: str) -> bool:
+        return PgSkills(self._dsn, self._user).card_confirmed(self._rev, skill, digest)
+
+    def run_skill(self, skill: str, spec: dict[str, Any], expected_digest: str | None = None) -> dict[str, Any]:
+        svc = PgSkills(self._dsn, self._user)
+        try:
+            result, recorded, filled = perform_run(svc, self._user, self._rev, skill, spec, via="agent", expected_digest=expected_digest)
         except SkillsRefused as exc:
             return {"status": "refused", "code": exc.code, "message": exc.message, "released": False}
         return {"run_id": recorded["run_id"], "status": result.status, "released": result.released, "message": result.message,

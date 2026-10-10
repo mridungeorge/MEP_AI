@@ -41,6 +41,19 @@ class PgSkills:
     def _service(self) -> psycopg.Connection[dict[str, Any]]:
         return psycopg.connect(self._dsn, autocommit=False, row_factory=dict_row)
 
+    # ---- confirmed card versions ---------------------------------------------------------------------------------------
+    def confirm_card(self, revision_id: UUID, skill: str, digest: str, note_id: UUID | None) -> None:
+        try:
+            with self._as_user() as conn:
+                conn.execute("select spec_card_confirm(%s, %s, %s, %s)", (revision_id, skill, digest, note_id))
+        except psycopg.errors.InsufficientPrivilege as exc:
+            raise SkillsRefused(403, "forbidden", str(exc).splitlines()[0]) from None
+
+    def card_confirmed(self, revision_id: UUID, skill: str, digest: str) -> bool:
+        with self._as_user() as conn:
+            return conn.execute("select 1 from spec_confirmation where revision_id = %s and firm_id = %s and skill = %s and spec_sha256 = %s",
+                                (revision_id, self._user.firm_id, skill, digest)).fetchone() is not None
+
     # ---- firm defaults ----------------------------------------------------------------------------------------------
     def firm_defaults(self, skill: str) -> dict[str, Any]:
         with self._as_user() as conn:

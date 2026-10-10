@@ -4,6 +4,7 @@ revision, downloads of released files, and feeding a built IFC/DXF into the revi
 A file is returned to anybody only if its artifact is `released`, which happens only when the skill's validator AND the runner's second,
 separate re-check both passed. Nothing here decides compliance.
 """
+import hashlib
 import json
 from typing import Annotated, Any, Literal, Protocol
 from uuid import UUID
@@ -28,6 +29,8 @@ class SkillsService(Protocol):
     def firm_defaults(self, skill: str) -> dict[str, Any]: ...
     def set_firm_defaults(self, skill: str, defaults: dict[str, Any]) -> None: ...
     def revision_frozen(self, revision_id: UUID) -> bool | None: ...
+    def confirm_card(self, revision_id: UUID, skill: str, digest: str, note_id: UUID | None) -> None: ...
+    def card_confirmed(self, revision_id: UUID, skill: str, digest: str) -> bool: ...
     def record(self, revision_id: UUID, skill: str, spec: dict[str, Any], result: SkillRunResult, via: str = "user") -> dict[str, Any]: ...
     def runs(self, revision_id: UUID) -> list[dict[str, Any]]: ...
     def spec_of(self, revision_id: UUID, run_id: UUID) -> tuple[str, dict[str, Any]] | None: ...
@@ -139,14 +142,26 @@ def _summary(result: SkillRunResult, recorded: dict[str, Any], filled: list[str]
             "validation": result.validation, "files": recorded["artifacts"], "firm_defaults_applied": filled}
 
 
+def card_digest(spec: dict[str, Any]) -> str:
+    """The version of a spec card: a hash of the EFFECTIVE card (firm defaults and constants applied) as it will be built."""
+    return hashlib.sha256(json.dumps(spec, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+def effective_spec(svc: SkillsService, name: str, spec_in: dict[str, Any], use_firm_defaults: bool = True) -> tuple[dict[str, Any], list[str]]:
+    s = get_skill(name)
+    spec, filled = (skill_form.apply_defaults(s.schema, spec_in, svc.firm_defaults(name)) if use_firm_defaults else (spec_in, []))
+    return skill_form.apply_constants(s.schema, spec), filled
+
+
 def perform_run(svc: SkillsService, user: CurrentUser, revision_id: UUID, name: str, spec_in: dict[str, Any], *,
-                use_firm_defaults: bool = True, via: str = "user") -> tuple[SkillRunResult, dict[str, Any], list[str]]:
+                use_firm_defaults: bool = True, via: str = "user",
+                expected_digest: str | None = None) -> tuple[SkillRunResult, dict[str, Any], list[str]]:
     """Run a skill for a designer on an open revision of their firm and record it: the one door used by the API and by the designer agent.
     Raises SkillsRefused (404 unknown skill / revision, 403 not a designer, 409 frozen, 503 unavailable)."""
     if user.role not in DESIGNER_ROLES:
         raise SkillsRefused(403, "forbidden", "only a designer runs a drafting skill")
     try:
-        s = get_skill(name)
+        get_skill(name)
     except UnknownSkill:
         raise SkillsRefused(404, "unknown_skill", f"no skill named {name!r}") from None
     frozen = svc.revision_frozen(revision_id)
@@ -154,13 +169,47 @@ def perform_run(svc: SkillsService, user: CurrentUser, revision_id: UUID, name: 
         raise SkillsRefused(404, "not_found", "revision not found")
     if frozen:
         raise SkillsRefused(409, "revision_frozen", "revision is frozen")
-    spec, filled = (skill_form.apply_defaults(s.schema, spec_in, svc.firm_defaults(name)) if use_firm_defaults else (spec_in, []))
-    spec = skill_form.apply_constants(s.schema, spec)
+    spec, filled = effective_spec(svc, name, spec_in, use_firm_defaults)
+    if expected_digest is not None and card_digest(spec) != expected_digest:
+        raise SkillsRefused(409, "card_changed", "the card (or the firm defaults) changed since it was confirmed: confirm the new version")
     try:
         result = run_skill(name, spec)
     except SkillUnavailable as exc:
         raise SkillsRefused(503, "skill_unavailable", str(exc)) from None
     return result, svc.record(revision_id, name, spec, result, via), filled
+
+
+class CardBody(BaseModel):
+    spec: dict[str, Any]
+    use_firm_defaults: bool = True
+    spec_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    note_id: UUID | None = None
+
+
+@router.post("/revisions/{revision_id}/skills/{name}/card-preview")
+def card_preview(revision_id: UUID, name: str, body: CardBody, user: User, svc: Service) -> dict[str, Any]:
+    """The exact card that would be built (defaults and constants applied) and its version hash: what a designer reads before confirming."""
+    _designer(user)
+    _skill(name)
+    spec, filled = effective_spec(svc, name, body.spec, body.use_firm_defaults)
+    return {"effective_spec": spec, "spec_sha256": card_digest(spec), "firm_defaults_applied": filled,
+            "confirmed": svc.card_confirmed(revision_id, name, card_digest(spec))}
+
+
+@router.post("/revisions/{revision_id}/skills/{name}/confirm-card")
+def confirm_card(revision_id: UUID, name: str, body: CardBody, user: User, svc: Service) -> dict[str, Any]:
+    """A designer confirms ONE version of a card. An agent may build only a card version confirmed here."""
+    _designer(user)
+    _skill(name)
+    spec, _ = effective_spec(svc, name, body.spec, body.use_firm_defaults)
+    digest = card_digest(spec)
+    if body.spec_sha256 is not None and body.spec_sha256 != digest:
+        raise _err(409, "card_changed", "the card changed since you were shown it: review the new version")
+    try:
+        svc.confirm_card(revision_id, name, digest, body.note_id)
+    except SkillsRefused as exc:
+        raise _err(exc.status, exc.code, exc.message) from None
+    return {"confirmed": True, "spec_sha256": digest}
 
 
 @router.post("/revisions/{revision_id}/skills/{name}/run")

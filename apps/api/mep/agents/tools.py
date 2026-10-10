@@ -179,7 +179,9 @@ class Backend(Protocol):
     def open_note_count(self, agent: str) -> int: ...
     def calls_in_last_minute(self, agent: str) -> int: ...
     def record_call(self, agent: str, tool: str, allowed: bool, detail: str, args: dict[str, Any]) -> None: ...
-    def run_skill(self, skill: str, spec: dict[str, Any]) -> dict[str, Any]: ...
+    def card_digest(self, skill: str, spec: dict[str, Any]) -> str: ...                 # the version of the card as it would be built
+    def card_confirmed(self, skill: str, digest: str) -> bool: ...                      # a designer confirmed exactly this version
+    def run_skill(self, skill: str, spec: dict[str, Any], expected_digest: str | None = None) -> dict[str, Any]: ...
     def request_rule_run(self) -> dict[str, Any]: ...
 
 
@@ -309,7 +311,13 @@ class ToolLayer:
         spec = a.spec if a.spec is not None else self.backend.latest_draft(skill)
         if not spec:
             raise Refused("there is no draft card for this skill yet: fill_spec_card first")
-        return self.backend.run_skill(skill, spec)
+        digest = self.backend.card_digest(skill, spec)
+        if not self.backend.card_confirmed(skill, digest):
+            note = self._note("clarifying_question", f"Please review and confirm the {skill} card (version {digest[:12]}) before it is built.",
+                              skill=skill, data={"needs": "card_confirmation", "spec_sha256": digest})
+            return {"status": "needs_confirmation", "spec_sha256": digest, "note_id": note,
+                    "message": "a designer must confirm this exact card version in the app before it can be built; nothing was built"}
+        return self.backend.run_skill(skill, spec, digest)
 
     def _request_rule_run(self, _: NoArgs) -> Any:
         return self.backend.request_rule_run()

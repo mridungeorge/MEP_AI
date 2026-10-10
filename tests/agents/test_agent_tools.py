@@ -189,8 +189,25 @@ def test_run_skill_goes_through_the_validated_door_and_only_from_a_draft_or_a_fu
     L, b = layer(Agent.DESIGNER)
     assert not L.call("run_skill", {"skill": "space-envelope", "use_draft": True}).ok            # no draft yet
     L.call("fill_spec_card", {"skill": "space-envelope", "fields": {"mark": "L1"}})
+    b.confirmed.add(b.card_digest("space-envelope", {"mark": "L1"}))
+    b.confirmed.add(b.card_digest("duct-fab", {"mark": "x"}))
     assert L.call("run_skill", {"skill": "space-envelope", "use_draft": True}).ok and b.skill_runs == [("space-envelope", {"mark": "L1"})]
     assert L.call("run_skill", {"skill": "duct-fab", "spec": {"mark": "x"}}).ok and len(b.skill_runs) == 2
+
+
+def test_run_skill_needs_a_designers_confirmation_of_the_exact_card_version():
+    L, b = layer(Agent.DESIGNER)
+    first = L.call("run_skill", {"skill": "duct-fab", "spec": {"mark": "x"}})
+    assert first.ok and first.data["status"] == "needs_confirmation" and b.skill_runs == []
+    assert any(n["kind"] == "clarifying_question" and n["data"]["needs"] == "card_confirmation" for n in b.notes_added)
+    b.confirmed.add(first.data["spec_sha256"])
+    assert L.call("run_skill", {"skill": "duct-fab", "spec": {"mark": "x"}}).data.get("status") == "ok"
+    # any change to the card is a new version that nobody confirmed
+    changed = L.call("run_skill", {"skill": "duct-fab", "spec": {"mark": "x", "extra": 1}})
+    assert changed.data["status"] == "needs_confirmation" and len(b.skill_runs) == 1
+    # the confirmation is for this skill's card only
+    other = L.call("run_skill", {"skill": "space-envelope", "spec": {"mark": "x"}})
+    assert other.data["status"] == "needs_confirmation" and len(b.skill_runs) == 1
 
 
 def test_request_rule_run_only_asks_and_returns_the_engines_own_refusal():

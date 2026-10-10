@@ -2,7 +2,7 @@
 import { supabase } from "./supabase";
 import type {
   ApiErrorBody, BuildingPart, ConfirmResponse, Gate1State, ImportResponse, RowRef,
-  AgentNote, AgentReply, EvidenceResponse, Lineage, Me, ShortcutResult, SkillCard, SkillRunRow, SkillRunSummary, SkillSummary, Package, ShareLinkView, Worksheet, RevisionDiff, RevisionResults, RevisionSummary, RunRulesResponse, SpaceInput, SpaceRow, SystemInputInput, SystemInputRow, UploadResponse,
+  AgentNote, AgentReply, CardPreview, EvidenceResponse, Lineage, Me, ShortcutResult, SkillCard, SkillRunRow, SkillRunSummary, SkillSummary, Package, ShareLinkView, Worksheet, RevisionDiff, RevisionResults, RevisionSummary, RunRulesResponse, SpaceInput, SpaceRow, SystemInputInput, SystemInputRow, UploadResponse,
 } from "./types";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -159,6 +159,10 @@ export const api = {
     return res.blob();
   },
   agentsStatus: () => apiFetch<{ configured: boolean; reason: string }>("/agents/status"),
+  cardPreview: (r: string, skill: string, spec: Record<string, unknown>) =>
+    apiFetch<CardPreview>(`${rev(r)}/skills/${skill}/card-preview`, json("POST", { spec })),
+  confirmCard: (r: string, skill: string, spec: Record<string, unknown>, sha: string, noteId?: string) =>
+    apiFetch<{ confirmed: boolean }>(`${rev(r)}/skills/${skill}/confirm-card`, json("POST", { spec, spec_sha256: sha, note_id: noteId })),
   askAgent: (r: string, agent: string, message: string) => apiFetch<AgentReply>(`${rev(r)}/agents/${agent}/message`, json("POST", { message })),
   agentNotes: (r: string, kind?: string) => apiFetch<AgentNote[]>(`${rev(r)}/agent-notes${kind ? `?kind=${kind}` : ""}`),
   resolveAgentNote: (r: string, id: string, status: "answered" | "dismissed") =>

@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ApiError, api } from "@/lib/api";
 import { prune, setPath } from "@/lib/specpath";
-import type { ShortcutResult, SkillCard, SkillRunRow, SkillRunSummary, SkillSummary } from "@/lib/types";
+import type { AgentNote, CardPreview, ShortcutResult, SkillCard, SkillRunRow, SkillRunSummary, SkillSummary } from "@/lib/types";
 import { AgentPanel } from "./AgentPanel";
 import { SpecForm } from "./SpecForm";
 
@@ -39,6 +39,12 @@ export function DraftingScreen({ projectId, revisionId }: { projectId: string; r
   const [runs, setRuns] = useState<SkillRunRow[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [drafts, setDrafts] = useState<AgentNote[]>([]);
+  const [review, setReview] = useState<{ note: AgentNote; preview: CardPreview } | null>(null);
+  const loadDrafts = useCallback(async () => {
+    try { setDrafts((await api.agentNotes(revisionId, "spec_card_draft")).filter((n) => n.status === "open" && n.spec)); } catch { /* the panel shows its own errors */ }
+  }, [revisionId]);
+  useEffect(() => { void loadDrafts(); }, [loadDrafts]);
 
   const loadRuns = useCallback(async () => { try { setRuns(await api.skillRuns(revisionId)); } catch (e) { setMessage(refusal(e)); } }, [revisionId]);
   useEffect(() => { void api.skills().then(setSkills).catch((e: unknown) => setMessage(refusal(e))); void loadRuns(); }, [loadRuns]);
@@ -165,6 +171,31 @@ export function DraftingScreen({ projectId, revisionId }: { projectId: string; r
                 </li>
               ))}
             </ul>
+          )}
+        </section>
+      )}
+
+      {drafts.length > 0 && (
+        <section aria-label="Cards drafted by the assistant" data-testid="draft-cards">
+          <h2>Cards drafted by the assistant</h2>
+          <p>The assistant can build only a card version you confirm here.</p>
+          <ul>{drafts.map((n) => (
+            <li key={n.id}>{n.skill}: {n.body}{" "}
+              <button type="button" onClick={() => act(async () => { setReview({ note: n, preview: await api.cardPreview(revisionId, n.skill ?? "", n.spec ?? {}) }); })}>Review this card</button>
+            </li>
+          ))}</ul>
+          {review && (
+            <div data-testid="card-review">
+              <h3>The exact card that would be built (version {review.preview.spec_sha256.slice(0, 12)})</h3>
+              <pre>{JSON.stringify(review.preview.effective_spec, null, 2)}</pre>
+              {review.preview.firm_defaults_applied.length > 0 && <p>Firm defaults filled in: {review.preview.firm_defaults_applied.join(", ")}</p>}
+              {review.preview.confirmed ? <p>This version is already confirmed.</p> : (
+                <button type="button" disabled={busy} onClick={() => act(async () => {
+                  await api.confirmCard(revisionId, review.note.skill ?? "", review.note.spec ?? {}, review.preview.spec_sha256, review.note.id);
+                  setMessage("Confirmed. The assistant can now build exactly this version."); setReview(null);
+                })}>Confirm exactly this version</button>
+              )}
+            </div>
           )}
         </section>
       )}

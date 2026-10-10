@@ -66,7 +66,7 @@ export function AgentPanel({ revisionId, agents, kinds, title }: { revisionId: s
         <ul data-testid="agent-notes">
           {open.map((n) => (
             <li key={n.id} data-kind={n.kind}>
-              <strong>{n.kind.replaceAll("_", " ")}{n.severity ? ` (${n.severity})` : ""}</strong> from the {n.agent.replaceAll("_", " ")} agent: {n.body}{" "}
+              <strong>{n.kind.replaceAll("_", " ")}{n.severity ? ` (${n.severity})` : ""}</strong>{n.post_freeze ? <em> [post-freeze annotation: not part of the signed package]</em> : null} from the {n.agent.replaceAll("_", " ")} agent: {n.body}{" "}
               <button type="button" onClick={() => void close(n.id, n.kind === "clarifying_question" ? "answered" : "dismissed")}>
                 {n.kind === "clarifying_question" ? "Mark answered" : "Dismiss"}
               </button>
