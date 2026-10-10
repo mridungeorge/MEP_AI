@@ -133,3 +133,15 @@ def test_a_purge_leaves_every_guard_trigger_switched_on(admin, tmp_path):
     other, _ = seeded_firm(admin)                                           # and the guards still bite
     with pytest.raises(psycopg.errors.Error):
         admin.execute("update signoff set gate = 'gate3' where firm_id = %s", (other["firm"],))
+
+
+def test_retiring_a_firm_ends_its_share_links_and_erases_free_text(admin, tmp_path):
+    f, name = seeded_firm(admin)
+    tok = "b2" * 32
+    admin.execute("insert into ledger_link (token, firm_id, revision_id, expires_at, created_by) values (%s, %s, %s, now() + interval '30 days', %s)",
+                  (tok, f["firm"], f["revision"], f["designer"]))
+    out = tmp_path / "ex"
+    dataops.cmd_export(ns(dsn=DB_URL, firm=name, out=str(out)))
+    dataops.cmd_retire(ns(dsn=DB_URL, firm=name, export=str(out), confirm=name))
+    row = admin.execute("select expires_at <= now(), revoked_at is not null from ledger_link where token = %s", (tok,)).fetchone()
+    assert row == (True, True)

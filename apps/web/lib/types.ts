@@ -359,7 +359,7 @@ export interface AdminFirm { id: string; name: string; signer_mode: "strict" | "
 export interface AdminRegistration { id: string; user_id: string; email: string | null; number: string; register: string; state_scheme: string | null; status: string; submitted_at: string; decided_at: string | null; decision_note: string | null }
 export interface AdminOverview { firm: AdminFirm; users: AdminUser[]; invitations: AdminInvitation[]; templates: AdminTemplate[]; registrations: AdminRegistration[] }
 export interface PendingRegistration { id: string; firm: string; user_email: string | null; number: string; register: string; state_scheme: string | null; evidence: string; submitted_at: string; submitted_by_email: string | null }
-export interface MyInvitation { member: boolean; invitation: { role: string; firm: string } | null }
+export interface MyInvitation { member: boolean; invitation: { id: string; role: string; firm: string } | null; invitations: { id: string; role: string; firm: string }[] }
 
 /** GET /projects and /projects/{id}/history */
 export interface ProjectRow {

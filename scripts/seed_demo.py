@@ -114,6 +114,8 @@ def main() -> None:
             if not pf:
                 conn.execute("insert into firm (id, name) values (%s, 'Platform operator (synthetic)')", (pfid,))
             puid = ensure_user(conn, supabase_url, service_key, args.platform_admin)
+            if conn.execute("select 1 from app_user where id = %s and firm_id <> %s", (puid, pfid)).fetchone():
+                sys.exit("the platform administrator must be a separate person: that address already belongs to a firm")
             conn.execute("insert into app_user (id, firm_id, role, is_admin) values (%s, %s, 'checker', true) on conflict (id) do nothing", (puid, pfid))
             conn.execute("insert into platform_admin (user_id, firm_id) values (%s, %s) on conflict do nothing", (puid, pfid))
             print(f"platform administrator: {args.platform_admin}")

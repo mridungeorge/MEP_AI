@@ -149,3 +149,47 @@ def test_title_block_and_layer_standard_uploads(admin, client):
     with pytest.raises(psycopg.errors.InsufficientPrivilege), psycopg.connect(DB_URL, autocommit=True) as c:
         c.execute("set role authenticated")
         c.execute("select content from firm_template")
+
+
+def test_nobody_administers_their_own_role_and_the_oracle_about_other_firms_is_closed(admin, client):
+    f = firm_with_admin(admin)
+    d = hdr(f["designer"])
+    assert client.put(f"/admin/users/{f['designer']}", headers=d, json={"role": "approver"}).status_code == 422
+    other = firm_with_admin(admin)
+    theirs = admin.execute("select email from app_user where id = %s", (other["checker"],)).fetchone()[0]
+    mine = admin.execute("select email from app_user where id = %s", (f["checker"],)).fetchone()[0]
+    a = client.post("/admin/invitations", headers=d, json={"email": theirs, "role": "checker"})
+    b = client.post("/admin/invitations", headers=d, json={"email": mine, "role": "checker"})
+    assert a.status_code == b.status_code == 422 and a.json() == b.json()                      # the same answer for "another firm" and "your own"
+
+
+def test_several_invitations_for_one_address_need_a_choice(admin, client):
+    a, b = firm_with_admin(admin), firm_with_admin(admin)
+    mail = f"two-{uid()}@test.invalid"
+    for f, role in ((a, "checker"), (b, "approver")):
+        assert client.post("/admin/invitations", headers=hdr(f["designer"]), json={"email": mail, "role": role}).status_code == 200
+    me = uid()
+    admin.execute("insert into auth.users (id, email, email_confirmed_at) values (%s, %s, now())", (me, mail))
+    mine = client.get("/invitations/mine", headers=hdr(me)).json()
+    assert len(mine["invitations"]) == 2 and mine["invitation"] is None
+    assert client.post("/invitations/accept", headers=hdr(me)).status_code == 422               # no guessing
+    pick = next(i["id"] for i in mine["invitations"] if i["role"] == "approver")
+    assert client.post("/invitations/accept", headers=hdr(me), json={"invitation_id": pick}).status_code == 200
+    assert admin.execute("select firm_id::text, role::text from app_user where id = %s", (me,)).fetchone() == (str(b["firm"]), "approver")
+
+
+def test_two_administrators_cannot_leave_the_firm_without_one(admin, client):
+    import threading
+    f = firm_with_admin(admin)
+    admin.execute("update app_user set is_admin = true where id = %s", (f["checker"],))
+    results: list[int] = []
+
+    def drop(me, other):
+        results.append(client.put(f"/admin/users/{me}", headers=hdr(other), json={"is_admin": False}).status_code)
+
+    ts = [threading.Thread(target=drop, args=(f["designer"], f["checker"])), threading.Thread(target=drop, args=(f["checker"], f["designer"]))]
+    for t in ts:
+        t.start()
+    for t in ts:
+        t.join()
+    assert admin.execute("select count(*) from app_user where firm_id = %s and is_admin and active", (f["firm"],)).fetchone()[0] >= 1

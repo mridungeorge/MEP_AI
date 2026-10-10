@@ -11,7 +11,7 @@ from tests.rls.conftest import DB_URL
 def test_ready_when_the_database_answers():
     c = TestClient(create_pg_app(DB_URL, h.SECRET, load_pack(lin.ROOT / "rules")))
     r = c.get("/readyz")
-    assert r.status_code == 200 and r.json()["status"] == "ready" and r.json()["checks"]["database"] is True and r.json()["checks"]["schema"] is True
+    assert r.status_code == 200 and r.json() == {"status": "ready"}
     assert c.get("/healthz").json() == {"status": "ok"}
 
 

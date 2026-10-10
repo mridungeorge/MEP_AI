@@ -60,11 +60,12 @@ export function Shell({ children }: { children: ReactNode }) {
 
 /** A signed-in person with no firm sees the join screen; everyone else gets the app. */
 function Gate({ email, children }: { email: string | undefined; children: ReactNode }) {
-  const [state, setState] = useState<"checking" | "member" | "nomember">("checking");
+  const [state, setState] = useState<"checking" | "member" | "nomember" | "deactivated">("checking");
   useEffect(() => {
-    api.me().then(() => setState("member")).catch((e: unknown) => setState(e instanceof Error && /no such user/i.test(e.message) ? "nomember" : "member"));
+    api.me().then(() => setState("member")).catch((e: unknown) => setState(e instanceof Error && /no such user/i.test(e.message) ? "nomember" : e instanceof Error && /deactivated/i.test(e.message) ? "deactivated" : "member"));
   }, []);
   if (state === "checking") return <p>Checking your account…</p>;
   if (state === "nomember") return <JoinFirm />;
+  if (state === "deactivated") return <main><h1>Account deactivated</h1><p>Your firm&apos;s administrator has deactivated this account. Contact them if this is a mistake.</p></main>;
   return (<><Header email={email} />{children}</>);
 }

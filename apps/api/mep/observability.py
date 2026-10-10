@@ -62,7 +62,7 @@ def init_sentry(service: str) -> bool:
         import sentry_sdk
     except ImportError:
         return False
-    sentry_sdk.init(dsn=dsn, send_default_pii=False, attach_stacktrace=True, max_request_body_size="never", before_send=scrub_event,
+    sentry_sdk.init(dsn=dsn, send_default_pii=False, attach_stacktrace=True, include_local_variables=False, max_request_body_size="never", before_send=scrub_event,
                     before_breadcrumb=lambda crumb, hint: scrub(crumb), traces_sample_rate=float(os.environ.get("SENTRY_TRACES_RATE", "0")),
                     release=os.environ.get("MEP_RELEASE") or None, environment=os.environ.get("MEP_ENV", "development"),
                     server_name="")
@@ -83,6 +83,14 @@ class JsonFormatter(logging.Formatter):
 
 
 def configure_logging(service: str) -> None:
+    for name in ("uvicorn", "uvicorn.error"):       # uvicorn's own loggers use plain-text handlers: route them through ours
+        lg = logging.getLogger(name)
+        lg.handlers[:] = []
+        lg.propagate = True
+    access = logging.getLogger("uvicorn.access")    # the request line (with its query string) is logged by RequestLogMiddleware without it
+    access.handlers[:] = []
+    access.propagate = False
+    access.disabled = True
     root = logging.getLogger()
     handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(JsonFormatter())

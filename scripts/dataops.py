@@ -233,10 +233,12 @@ def cmd_retire(a: argparse.Namespace) -> int:
         conn.execute("update app_user set email = null, notify_prefs = '{}' where firm_id = %s", (fid,))
         for t in ("notification", "invitation", "vision_job", "skill_job", "registration"):
             if t == "registration":
-                conn.execute("update registration set evidence = 'erased on retirement' where firm_id = %s", (fid,))
+                conn.execute("update registration set evidence = 'erased on retirement', decision_note = null where firm_id = %s", (fid,))
             else:
                 conn.execute(f"delete from {t} where firm_id = %s", (fid,))
         conn.execute("delete from firm_template where firm_id = %s", (fid,))
+        conn.execute("delete from share_session where firm_id = %s", (fid,))                              # certifier links stop working at once
+        conn.execute("update ledger_link set expires_at = least(expires_at, now()), revoked_at = coalesce(revoked_at, now()) where firm_id = %s", (fid,))
         conn.execute("alter table artifact_blob disable trigger artifact_blob_append_only")        # break-glass for the one erase the product allows
         conn.execute("delete from artifact_blob where firm_id = %s", (fid,))
         conn.execute("alter table artifact_blob enable trigger artifact_blob_append_only")

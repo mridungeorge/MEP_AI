@@ -92,7 +92,7 @@ def test_changes_requested_reaches_the_designer_who_froze_it(admin, client):
 
 def test_the_share_link_creator_hears_when_it_is_opened_at_most_hourly(admin):
     f = firm(admin)
-    tok = "a1" * 32
+    tok = uid().replace("-", "") * 2
     admin.execute("insert into ledger_link (token, firm_id, revision_id, expires_at, created_by) values (%s, %s, %s, now() + interval '1 day', %s)",
                   (tok, f["firm"], f["revision"], f["designer"]))
     admin.execute("update ledger_link set views = views + 1, last_viewed_at = now() where token = %s", (tok,))
@@ -127,3 +127,13 @@ def test_a_person_sees_only_their_own_outbox(admin):
         c.execute("select set_config('request.jwt.claims', %s, false)", (json.dumps({"sub": str(f["checker"])}),))
         rows = c.execute("select user_id from notification").fetchall()
     assert rows and {str(r[0]) for r in rows} == {str(f["checker"])}
+
+
+def test_a_person_deactivated_after_the_row_was_queued_is_not_written_to(admin):
+    f = firm(admin)
+    sign(admin, f, f["revision"], "gate1", f["designer"])
+    admin.execute("update app_user set active = false where id = %s", (f["checker"],))
+    sent: list[dict] = []
+    process_outbox(DB_URL, fake_mailer(sent))
+    assert not [m for m in sent if str(f["checker"]) in json.dumps(m.get("to"))]
+    assert admin.execute("select status from notification n join app_user u on u.id = n.user_id where u.id = %s", (f["checker"],)).fetchone()[0] == "skipped"

@@ -4,7 +4,7 @@
 - **Errors (Sentry)** for the API (`SENTRY_DSN`), the drafting dispatcher (`SENTRY_DSN`, same variable on its host) and the web app (`NEXT_PUBLIC_SENTRY_DSN`).
   Off unless the variable is set. Before anything is sent the event is scrubbed (`mep.observability.scrub_event`, `apps/web/lib/sentry.ts`): no request body,
   headers, cookies, query string or URL fragment (the share-link token lives in the fragment), no user e-mail/IP, no e-mail addresses or token-shaped
-  strings in messages, no local variables. Tests: `tests/api/test_observability.py`, `apps/web/lib/sentry.test.ts`.
+  strings in messages, no local variables (the SDK is started with `include_local_variables=False`, and a test sends a real event through it). Tests: `tests/api/test_observability.py`, `apps/web/lib/sentry.test.ts`.
 - **Logs** are one JSON object per line on stdout (Railway keeps them): time, level, logger, message, and for requests `request_id`, method, path (no
   query), status, milliseconds. An exception is logged by type only. Every response carries `X-Request-Id`; quote it when reporting a problem.
 - The skill containers have no network and report nothing; the dispatcher reports for them.
@@ -13,7 +13,7 @@
 | Endpoint | Meaning | Use it for |
 |---|---|---|
 | `GET /healthz` | the process is up (never touches the database) | Railway's health check / restarts |
-| `GET /readyz` | the database answers and the schema is present; 503 otherwise, with no detail | the uptime monitor and deploy verification |
+| `GET /readyz` | the database answers and the schema is present (cached 5 s); 503 otherwise; the body says only `ready` / `not_ready` | the uptime monitor and deploy verification |
 
 ## Uptime check (5 minutes to set up)
 Use any external monitor (UptimeRobot free tier, Better Stack, Pingdom):

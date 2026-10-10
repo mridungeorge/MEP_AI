@@ -175,7 +175,7 @@ export const api = {
     return apiFetch<{ template_id: string }>("/admin/templates", { method: "POST", body: fd });
   },
   myInvitation: () => apiFetch<MyInvitation>("/invitations/mine"),
-  acceptInvitation: () => apiFetch<{ joined: boolean }>("/invitations/accept", { method: "POST" }),
+  acceptInvitation: (invitation_id?: string) => apiFetch<{ joined: boolean }>("/invitations/accept", json("POST", { invitation_id: invitation_id ?? null })),
   adminSubmitRegistration: (b: { user_id: string; number: string; register: string; state_scheme?: string; evidence: string }) =>
     apiFetch<{ registration_id: string }>("/admin/registrations", json("POST", b)),
   platformRegistrations: () => apiFetch<PendingRegistration[]>("/platform/registrations"),

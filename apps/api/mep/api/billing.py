@@ -124,31 +124,43 @@ def _ts(value: Any) -> datetime | None:
     return None if not isinstance(value, int) else datetime.fromtimestamp(value, UTC)
 
 
+def _sub_of_invoice(obj: dict[str, Any]) -> str | None:
+    """The subscription an invoice belongs to (older API versions: `subscription`; newer: `parent.subscription_details.subscription`)."""
+    sub = obj.get("subscription") or (((obj.get("parent") or {}).get("subscription_details")) or {}).get("subscription")
+    return sub if isinstance(sub, str) else None
+
+
 def apply_event(conn: psycopg.Connection[Any], event: dict[str, Any]) -> str:
-    """Update the firm's subscription from a verified event. Returns what was done."""
+    """Update the firm's subscription from a verified event. Returns what was done. Events older than the newest one applied to a firm are ignored."""
     kind, obj = str(event.get("type")), (event.get("data") or {}).get("object") or {}
     firm = (obj.get("metadata") or {}).get("firm_id") or obj.get("client_reference_id")
+    created = event.get("created") if isinstance(event.get("created"), int) else 0
     if kind == "checkout.session.completed":
         if firm and obj.get("customer") and obj.get("subscription"):
-            conn.execute("update subscription set stripe_customer_id = %s, stripe_subscription_id = %s, updated_at = now() where firm_id = %s",
-                         (obj["customer"], obj["subscription"], firm))
-            return "linked"
+            row = conn.execute("update subscription set stripe_customer_id = %s, stripe_subscription_id = %s, updated_at = now()"
+                               " where firm_id = %s and (stripe_subscription_id is null or stripe_subscription_id = %s or status in ('canceled')) returning firm_id",
+                               (obj["customer"], obj["subscription"], firm, obj["subscription"])).fetchone()
+            return "linked" if row else "ignored"
         return "ignored"
     if kind in ("customer.subscription.created", "customer.subscription.updated", "customer.subscription.deleted"):
         status = "canceled" if kind.endswith("deleted") else STATUS_MAP.get(str(obj.get("status")), "past_due")
         seats = next((int(i.get("quantity") or 0) for i in (obj.get("items") or {}).get("data", []) if i.get("quantity")), None)
+        # keyed on the subscription id; a firm with no subscription yet adopts the first one its own metadata names (events can arrive out of order)
         row = conn.execute(
             "update subscription set status = %s, plan_id = coalesce(%s, plan_id), seats = coalesce(%s, seats), max_projects = case when %s then %s else max_projects end,"
             " current_period_end = %s, stripe_customer_id = coalesce(stripe_customer_id, %s), stripe_subscription_id = coalesce(stripe_subscription_id, %s),"
-            " updated_at = now() where stripe_subscription_id = %s or (%s::uuid is not null and firm_id = %s::uuid) returning firm_id",
+            " stripe_last_event_at = greatest(stripe_last_event_at, %s), updated_at = now()"
+            " where stripe_last_event_at <= %s and (stripe_subscription_id = %s or (stripe_subscription_id is null and %s::uuid is not null and firm_id = %s::uuid))"
+            " returning firm_id",
             (status, (obj.get("metadata") or {}).get("plan_id"), seats, "plan_id" in (obj.get("metadata") or {}), _plan_max((obj.get("metadata") or {}).get("plan_id")),
-             _ts(obj.get("current_period_end")), obj.get("customer"), obj.get("id"), obj.get("id"), firm, firm)).fetchone()
+             _ts(obj.get("current_period_end")), obj.get("customer"), obj.get("id"), created, created, obj.get("id"), firm, firm)).fetchone()
         return "updated" if row else "ignored"
     if kind in ("invoice.payment_failed", "invoice.paid"):
-        sub = obj.get("subscription")
+        sub = _sub_of_invoice(obj)
         if sub:
-            row = conn.execute("update subscription set status = %s, updated_at = now() where stripe_subscription_id = %s returning firm_id",
-                               ("past_due" if kind.endswith("failed") else "active", sub)).fetchone()
+            row = conn.execute("update subscription set status = %s, stripe_last_event_at = greatest(stripe_last_event_at, %s), updated_at = now()"
+                               " where stripe_subscription_id = %s and stripe_last_event_at <= %s returning firm_id",
+                               ("past_due" if kind.endswith("failed") else "active", created, sub, created)).fetchone()
             return "updated" if row else "ignored"
     return "ignored"
 
@@ -164,14 +176,22 @@ def _plan_max(plan_id: Any) -> int | None:
 async def webhook(request: Request, dsn: Dsn, stripe: Annotated[Any, Depends(get_stripe)]) -> dict[str, Any]:
     if stripe is None or not stripe.webhook_secret:
         raise _err(503, "billing_off", "billing is not configured")
-    payload = await request.body()
-    if len(payload) > 1_000_000 or not verify_signature(payload, request.headers.get("stripe-signature", ""), stripe.webhook_secret):
+    if int(request.headers.get("content-length") or 0) > 1_000_000:
+        raise _err(413, "too_large", "the event is too large")
+    payload = b""
+    async for chunk in request.stream():                       # never buffer more than the cap, whatever the client says about its length
+        payload += chunk
+        if len(payload) > 1_000_000:
+            raise _err(413, "too_large", "the event is too large")
+    if not verify_signature(payload, request.headers.get("stripe-signature", ""), stripe.webhook_secret):
         raise _err(400, "bad_signature", "the signature does not verify")
     try:
         event = json.loads(payload)
         eid = str(event["id"])
     except (ValueError, KeyError, TypeError):
         raise _err(400, "bad_event", "unreadable event") from None
+    if event.get("livemode") is True:
+        raise _err(400, "live_event", "this build accepts Stripe TEST events only")
     with psycopg.connect(dsn, autocommit=False) as conn:
         try:
             conn.execute("insert into stripe_event (id, type) values (%s, %s)", (eid, str(event.get("type"))[:80]))
@@ -217,6 +237,11 @@ def checkout(body: CheckoutBody, user: User, dsn: Dsn, stripe: Annotated[Any, De
     _admin(dsn, user)
     if stripe is None:
         raise _err(503, "billing_off", "billing is not configured on this server")
+    with _as_user(dsn, user) as conn:
+        live = conn.execute("select 1 from subscription where firm_id = %s and stripe_subscription_id is not null and status in ('active', 'trialing', 'past_due')",
+                            (user.firm_id,)).fetchone()
+    if live:
+        raise _err(409, "already_subscribed", "this firm already has a subscription: use Manage subscription to change it")
     plan = next((p for p in load_plans()["plans"] if p["id"] == body.plan_id), None)
     if plan is None:
         raise _err(422, "unknown_plan", "no such plan")
@@ -265,12 +290,10 @@ def create_project(body: ProjectBody, user: User, dsn: Dsn) -> dict[str, Any]:
                                (body.address, body.state, body.ncc_edition, body.climate_zone, body.approval_date)).fetchone()
     except psycopg.errors.InsufficientPrivilege as exc:
         raise _err(403, "forbidden", str(exc).splitlines()[0]) from None
-    except psycopg.errors.DataError as exc:
-        raise _err(422, "invalid", str(exc).splitlines()[0]) from None
+    except (psycopg.errors.DataError, psycopg.errors.CheckViolation) as exc:
+        raise _err(422, "invalid", "the project details are not valid") from None
     except psycopg.Error as exc:
         if getattr(exc, "sqlstate", None) == "P0402":
             raise _err(402, "payment_required", str(exc).splitlines()[0]) from None
         raise _err(422, "refused", str(exc).splitlines()[0]) from None
-    except psycopg.errors.CheckViolation as exc:
-        raise _err(422, "invalid", str(exc).splitlines()[0]) from None
     return dict(row["r"])      # type: ignore[index]

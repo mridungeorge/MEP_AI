@@ -39,6 +39,10 @@ firms (daily backups, no pausing, custom SMTP limits). Railway Hobby (about US$5
    `https://<your-app>.vercel.app/**` to Redirect URLs.
 7. Leave "JWT signing keys" on the default (asymmetric): the API verifies tokens against the project's JWKS.
 
+> **Sign-in settings that matter (Authentication > Providers > Email in the Supabase dashboard).** People join a firm only through an invitation addressed to their
+> *confirmed* e-mail. So: **Enable sign-ups: ON** (an invitee has no account until they sign in the first time), **Confirm e-mail: ON** (otherwise a stranger could
+> register someone else's address and take their invitation), magic link/OTP sign-in ON. A person who signs in without an invitation sees "there is no open invitation".
+
 ## Step 2. Database migrations (once, then on every release)
 
 Follow `docs/runbooks/migrate.md`. First time:

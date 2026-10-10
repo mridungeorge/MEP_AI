@@ -249,21 +249,28 @@ def download_template(template_id: UUID, user: User, dsn: Dsn) -> Response:
 def my_invitations(subject: Annotated[Any, Depends(token_subject)], dsn: Dsn) -> dict[str, Any]:
     """For a person who has signed in but belongs to no firm yet: is there an invitation for the address they signed in with?"""
     with psycopg.connect(dsn, autocommit=True, row_factory=dict_row) as conn:
-        row = conn.execute(
-            "select i.role::text as role, f.name as firm from invitation i join firm f on f.id = i.firm_id join auth.users a on lower(a.email) = i.email"
-            " where a.id = %s and a.email_confirmed_at is not null and i.status = 'pending' and i.expires_at > now() order by i.created_at desc limit 1",
-            (subject,)).fetchone()
+        rows = conn.execute(
+            "select i.id::text as id, i.role::text as role, f.name as firm from invitation i join firm f on f.id = i.firm_id join auth.users a on lower(a.email) = i.email"
+            " where a.id = %s and a.email_confirmed_at is not null and i.status = 'pending' and i.expires_at > now() order by i.created_at desc",
+            (subject,)).fetchall()
+        row = rows[0] if len(rows) == 1 else None
         member = conn.execute("select 1 from app_user where id = %s", (subject,)).fetchone()
-    return {"member": member is not None, "invitation": row}
+    return {"member": member is not None, "invitation": row, "invitations": rows}
+
+
+class AcceptBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    invitation_id: UUID | None = None
 
 
 @router.post("/invitations/accept")
-def accept(subject: Annotated[Any, Depends(token_subject)], dsn: Dsn) -> dict[str, Any]:
+def accept(subject: Annotated[Any, Depends(token_subject)], dsn: Dsn, body: AcceptBody | None = None) -> dict[str, Any]:
     try:
         with psycopg.connect(dsn, autocommit=False, row_factory=dict_row) as conn:
             conn.execute("set local role authenticated")
             conn.execute("select set_config('request.jwt.claims', %s, true)", (json.dumps({"sub": str(subject), "role": "authenticated"}),))
-            firm = conn.execute("select accept_invitation() as f").fetchone()
+            firm = conn.execute("select accept_invitation(%s) as f", (body.invitation_id if body else None,)).fetchone()
     except psycopg.errors.RaiseException as exc:
         raise _err(422, "refused", str(exc).splitlines()[0]) from None
     except psycopg.errors.InsufficientPrivilege as exc:

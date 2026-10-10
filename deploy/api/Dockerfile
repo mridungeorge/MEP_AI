@@ -20,4 +20,4 @@ ENV PATH="/srv/app/.venv/bin:$PATH" MEP_RULES_DIR=/srv/app/rules
 EXPOSE 8000
 # Railway sets $PORT. One worker per container: scale by adding replicas. (No --proxy-headers: the app reads the rightmost
 # X-Forwarded-For hop itself where it needs a client key, and MEP_COOKIE_SECURE=1 decides cookie flags.)
-CMD ["sh", "-c", "exec uvicorn --factory mep.api.server:app_from_env --host 0.0.0.0 --port ${PORT:-8000}"]
+CMD ["sh", "-c", "exec uvicorn --factory mep.api.server:app_from_env --host 0.0.0.0 --port ${PORT:-8000} --no-access-log"]

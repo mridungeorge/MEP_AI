@@ -12,11 +12,14 @@ export function JoinFirm() {
   return (
     <main>
       <h1>Join your firm</h1>
-      {inv.invitation ? (
+      {inv.invitations.length > 0 ? (
         <>
-          <p>{inv.invitation.firm} has invited you as a {inv.invitation.role}.</p>
-          <button type="button" onClick={() => void api.acceptInvitation().then(() => window.location.assign("/")).catch((e: unknown) =>
-            setMessage(e instanceof ApiError ? e.message : String(e)))}>Join {inv.invitation.firm}</button>
+          <p>{inv.invitations.length > 1 ? "Several firms have invited you. Choose the one you want to join:" : "You have been invited:"}</p>
+          <ul>{inv.invitations.map((i) => (
+            <li key={i.id}>{i.firm} as a {i.role}{" "}
+              <button type="button" onClick={() => void api.acceptInvitation(i.id).then(() => window.location.assign("/")).catch((e: unknown) =>
+                setMessage(e instanceof ApiError ? e.message : String(e)))}>Join {i.firm}</button></li>
+          ))}</ul>
         </>
       ) : <p>There is no open invitation for the address you signed in with. Ask your firm&apos;s administrator to invite that address.</p>}
       {message && <p role="alert">{message}</p>}

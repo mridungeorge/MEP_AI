@@ -178,3 +178,47 @@ def test_only_a_designer_starts_projects_and_existing_work_stays_reachable_when_
     assert client.get("/projects", headers=hdr(f["designer"])).status_code == 200
     for bad in ({**NEW, "state": "XX"}, {**NEW, "address": "x"}, {**NEW, "ncc_edition": "NCC1999"}, {**NEW, "extra": 1}):
         assert client.post("/projects", headers=hdr(f["designer"]), json=bad).status_code == 422
+
+
+def test_a_client_cannot_create_a_project_or_revision_around_the_billing_gate(admin):
+    import psycopg
+    f = firm(admin)
+    admin.execute("update subscription set status = 'canceled' where firm_id = %s", (f["firm"],))
+    with psycopg.connect(DB_URL, autocommit=True) as c:
+        c.execute("set role authenticated")
+        c.execute("select set_config('request.jwt.claims', %s, false)", (json.dumps({"sub": str(f["designer"])}),))
+        for sql in ("insert into project (firm_id, address, state, ncc_edition) values (%s, 'sneaky', 'VIC', 'NCC2025')",
+                    "insert into revision (firm_id, project_id, architect_rev) select %s, id, 'Z' from project where firm_id = %s limit 1"):
+            with pytest.raises(psycopg.errors.InsufficientPrivilege):
+                c.execute(sql, (f["firm"], f["firm"])[: sql.count("%s")])
+
+
+def test_events_apply_in_order_one_subscription_at_a_time_and_never_live(admin, client):
+    f = firm(admin)
+    fid = str(f["firm"])
+    s1, s2 = "sub_a" + fid[:8], "sub_b" + fid[:8]
+    ev = lambda t, obj, created, live=False: {"id": f"evt_{uid().replace('-', '')}", "type": t, "created": created, "livemode": live, "data": {"object": obj}}
+    assert post_event(client, ev("customer.subscription.created", {"id": s1, "customer": "cus_9", "status": "active", "metadata": {"firm_id": fid}}, 1000)).json()["result"] == "updated"
+    # an older event arriving late cannot undo a newer one
+    assert post_event(client, ev("customer.subscription.updated", {"id": s1, "status": "past_due", "metadata": {"firm_id": fid}}, 900)).json()["result"] == "ignored"
+    assert sub(admin, f)[0] == "active"
+    # a second subscription id for the same firm is not adopted
+    assert post_event(client, ev("customer.subscription.created", {"id": s2, "customer": "cus_9", "status": "canceled", "metadata": {"firm_id": fid}}, 1100)).json()["result"] == "ignored"
+    assert sub(admin, f)[0] == "active" and sub(admin, f)[5] == s1
+    # the newer API shape of an invoice still reaches the right subscription
+    inv = {"parent": {"subscription_details": {"subscription": s1}}}
+    assert post_event(client, ev("invoice.payment_failed", inv, 1200)).json()["result"] == "updated" and sub(admin, f)[0] == "past_due"
+    # a live-mode event is refused outright
+    body = json.dumps(ev("invoice.paid", {"subscription": s1}, 1300, live=True)).encode()
+    assert client.post("/billing/webhook", content=body, headers=sign(body)).status_code == 400
+    # an oversized body is refused before it is read in full
+    big = b"x" * 1_000_001
+    assert client.post("/billing/webhook", content=big, headers=sign(big)).status_code == 413
+
+
+def test_a_firm_with_a_live_subscription_cannot_start_a_second_checkout(admin, client, monkeypatch):
+    f = firm(admin)
+    monkeypatch.setenv("STRIPE_PRICE_STARTER_SEAT", "price_test_seat")
+    admin.execute("update subscription set stripe_subscription_id = 'sub_live1', status = 'active' where firm_id = %s", (f["firm"],))
+    r = client.post("/billing/checkout", headers=hdr(f["designer"]), json={"plan_id": "starter"})
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "already_subscribed"

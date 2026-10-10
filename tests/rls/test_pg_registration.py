@@ -106,3 +106,18 @@ def test_a_direct_change_to_a_registration_number_is_marked_direct_in_the_ledger
     p = admin.execute("select payload from ledger_event where firm_id = %s and kind = 'app_user_changed' and payload ->> 'registration_no' = 'RPEQ 9999'", (f["firm"],)).fetchone()[0]
     assert p["registration_path"] == "direct"
     assert uid()
+
+
+def test_an_administrator_cannot_submit_their_own_number_and_the_decider_is_from_another_firm(admin, client):
+    f, pa = firm_with_approver(admin), platform_admin(admin)
+    admin.execute("update app_user set is_admin = true where id = %s", (f["approver"],))
+    assert submit(client, f, who=f["approver"], user=f["approver"]).status_code == 422          # not for yourself
+    rid = submit(client, f).json()["registration_id"]
+    # a platform administrator who belongs to the SAME firm may not decide it
+    admin.execute("insert into platform_admin (user_id, firm_id) values (%s, %s) on conflict do nothing", (f["checker"], f["firm"]))
+    r = client.post(f"/platform/registrations/{rid}", headers=hdr(f["checker"]), json={"verify": True, "note": "my own firm's approver, I checked"})
+    assert r.status_code == 422
+    ok = client.post(f"/platform/registrations/{rid}", headers=hdr(pa), json={"verify": True, "note": "RPEQ register 12 Oct 2026, name matches, current"})
+    assert ok.status_code == 200
+    payload = admin.execute("select payload from ledger_event where firm_id = %s and kind = 'registration_verified'", (f["firm"],)).fetchone()[0]
+    assert "note" not in payload and len(payload["note_sha256"]) == 64                          # the permanent ledger holds a hash, not the free text

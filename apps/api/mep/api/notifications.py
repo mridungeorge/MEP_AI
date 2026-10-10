@@ -61,10 +61,13 @@ def process_outbox(dsn: str, mailer: ResendMailer, limit: int = 50) -> int:
         for _ in range(limit):
             with conn.transaction():
                 row = conn.execute(
-                    "select n.id, n.subject, n.body, n.link_path, n.attempts, u.email from notification n join app_user u on u.id = n.user_id"
+                    "select n.id, n.subject, n.body, n.link_path, n.attempts, u.email, u.active from notification n join app_user u on u.id = n.user_id"
                     " where n.status = 'pending' and n.attempts < %s order by n.created_at for update of n skip locked limit 1", (MAX_ATTEMPTS,)).fetchone()
                 if row is None:
                     break
+                if not row["active"]:                           # deactivated after it was queued: nothing is sent
+                    conn.execute("update notification set status = 'skipped', error = 'the person is no longer active' where id = %s", (row["id"],))
+                    continue
                 text = row["body"] + (f"\n\nOpen: {mailer.app_url}{row['link_path']}" if row["link_path"] else "") + \
                     "\n\nYou can change which e-mails you get in the app under Notifications."
                 ok = bool(row["email"]) and mailer.send(row["email"], row["subject"], text)

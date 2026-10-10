@@ -12,6 +12,8 @@ Run:  uvicorn --factory mep.api.server:app_from_env --port 8000
 import logging
 import os
 import re
+import threading
+import time
 from pathlib import Path
 from typing import Any
 
@@ -67,21 +69,24 @@ def create_pg_app(dsn: str, jwt_secret: str, pack: RulePack, cors_origins: list[
     current_user, token_subject = make_auth(dsn, jwt_secret, jwks_url)
     app = create_app(None, current_user, pack, ledger=PgLedger(dsn))
 
+    ready_cache: dict[str, Any] = {"at": -1e9, "ok": False}
+    ready_lock = threading.Lock()
+
     @app.get("/readyz")
     def readyz() -> Any:
-        """Ready when the database answers and the schema is migrated. Reports which checks failed (never why: no connection strings, no row data)."""
+        """Ready when the database answers and the schema is migrated. The answer is cached for 5 seconds (an unauthenticated route must not be able to use up
+        the database's connections) and says only ready / not ready: no checks, no versions, nothing about why."""
         from fastapi.responses import JSONResponse
-        checks: dict[str, bool | str | None] = {}
-        try:
-            with psycopg.connect(dsn, connect_timeout=3, autocommit=True) as conn:
-                checks["database"] = conn.execute("select 1").fetchone() == (1,)
-                checks["schema"] = conn.execute("select to_regclass('public.notification') is not null and to_regclass('public.firm') is not null").fetchone()[0]
-                latest = conn.execute("select to_regclass('supabase_migrations.schema_migrations')").fetchone()[0]
-                checks["migration"] = None if latest is None else conn.execute("select max(version) from supabase_migrations.schema_migrations").fetchone()[0]
-        except psycopg.Error:
-            checks["database"] = False
-        ok = checks.get("database") is True and checks.get("schema") is True
-        return JSONResponse(status_code=200 if ok else 503, content={"status": "ready" if ok else "not_ready", "checks": checks})
+        with ready_lock:
+            if time.monotonic() - ready_cache["at"] > 5:
+                try:
+                    with psycopg.connect(dsn, connect_timeout=3, autocommit=True) as conn:
+                        ready_cache["ok"] = bool(conn.execute("select to_regclass('public.firm') is not null and to_regclass('public.notification') is not null").fetchone()[0])
+                except psycopg.Error:
+                    ready_cache["ok"] = False
+                ready_cache["at"] = time.monotonic()
+            ok = bool(ready_cache["ok"])
+        return JSONResponse(status_code=200 if ok else 503, content={"status": "ready" if ok else "not_ready"})
 
     def repository(user: CurrentUser = Depends(current_user)) -> PgRepository:  # noqa: B008
         return PgRepository(dsn, user, pack)
@@ -143,7 +148,7 @@ def create_pg_app(dsn: str, jwt_secret: str, pack: RulePack, cors_origins: list[
         runner = vision_jobs_api.VisionRunner(dsn, vision if vision is not None else vision_from_env())
         app.router.on_startup.append(runner.start)
         app.router.on_shutdown.append(runner.stop)
-    if vision_worker and mailer is not None:          # e-mail is delivered by a background thread; without a provider the outbox simply waits
+    if mailer is not None and (vision_worker or os.environ.get("MEP_MAIL_WORKER") == "1"):      # e-mail is delivered by a background thread; without a provider the outbox waits
         mail_runner = notifications_api.NotificationRunner(dsn, mailer)
         app.router.on_startup.append(mail_runner.start)
         app.router.on_shutdown.append(mail_runner.stop)
@@ -163,6 +168,11 @@ def app_from_env() -> FastAPI:
     # a deployment never runs a drafting build inside the API process (no isolation): without the worker, drafting is off
     configure_logging("api")
     init_sentry("api")
+    stripe_on, mail_on = bool(os.environ.get("STRIPE_SECRET_KEY")), bool(os.environ.get("RESEND_API_KEY"))
+    if stripe_on and not (os.environ.get("STRIPE_WEBHOOK_SECRET") and os.environ.get("MEP_APP_URL")):
+        raise RuntimeError("STRIPE_SECRET_KEY is set: STRIPE_WEBHOOK_SECRET and MEP_APP_URL must be set too (otherwise a payment would never reach the subscription)")
+    if mail_on and not (os.environ.get("MEP_APP_URL") and os.environ.get("MEP_MAIL_FROM")):
+        raise RuntimeError("RESEND_API_KEY is set: MEP_APP_URL and MEP_MAIL_FROM must be set too (links in e-mails would point nowhere)")
     skill_executor = "queue" if os.environ.get("MEP_SKILL_EXECUTOR") == "queue" else ("local" if os.environ.get("MEP_ALLOW_LOCAL_SKILLS") == "1" else "disabled")
     origins = [o.strip() for o in os.environ.get("MEP_CORS_ORIGINS", "").split(",") if o.strip()]
     rules = Path(os.environ.get("MEP_RULES_DIR") or REPO_ROOT / "rules")
