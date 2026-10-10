@@ -87,6 +87,9 @@ def serve(dsn: str, executor: Executor, *, poll: float = 1.0, once: bool = False
 
 
 def main() -> int:
+    from mep.observability import configure_logging, init_sentry
+    configure_logging("worker")
+    init_sentry("worker")
     dsn, image = os.environ.get("MEP_DB_URL"), os.environ.get("MEP_WORKER_IMAGE")
     if not dsn or not image:
         print("MEP_DB_URL and MEP_WORKER_IMAGE are required", file=sys.stderr)

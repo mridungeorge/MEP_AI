@@ -2,6 +2,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { api, getActingRole, setActingRole } from "@/lib/api";
+import { initSentry } from "@/lib/sentry";
 import { JoinFirm } from "./JoinFirm";
 import { useSession } from "@/lib/session";
 import { supabase } from "@/lib/supabase";
@@ -43,6 +44,7 @@ function Header({ email }: { email: string | undefined }) {
 
 /** Signed-out visitors are sent to /login; nothing of a protected page renders (or loads data) before there is a session. */
 export function Shell({ children }: { children: ReactNode }) {
+  useEffect(() => { initSentry(); }, []);
   const { session, loading } = useSession();
   const path = usePathname();
   const router = useRouter();

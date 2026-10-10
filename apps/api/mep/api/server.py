@@ -15,6 +15,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+import psycopg
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -41,6 +42,7 @@ from mep.api.uploads_pg import PgUploads
 from mep.diff.graph import build_graph
 from mep.engine.loader import RulePack, load_pack
 from mep.ingest.vision_anthropic import vision_from_env
+from mep.observability import RequestLogMiddleware, configure_logging, init_sentry
 
 
 class _RedactShareTokens(logging.Filter):
@@ -63,6 +65,22 @@ def create_pg_app(dsn: str, jwt_secret: str, pack: RulePack, cors_origins: list[
     logging.getLogger("uvicorn.access").addFilter(_RedactShareTokens())
     current_user, token_subject = make_auth(dsn, jwt_secret, jwks_url)
     app = create_app(None, current_user, pack, ledger=PgLedger(dsn))
+
+    @app.get("/readyz")
+    def readyz() -> Any:
+        """Ready when the database answers and the schema is migrated. Reports which checks failed (never why: no connection strings, no row data)."""
+        from fastapi.responses import JSONResponse
+        checks: dict[str, bool | str | None] = {}
+        try:
+            with psycopg.connect(dsn, connect_timeout=3, autocommit=True) as conn:
+                checks["database"] = conn.execute("select 1").fetchone() == (1,)
+                checks["schema"] = conn.execute("select to_regclass('public.notification') is not null and to_regclass('public.firm') is not null").fetchone()[0]
+                latest = conn.execute("select to_regclass('supabase_migrations.schema_migrations')").fetchone()[0]
+                checks["migration"] = None if latest is None else conn.execute("select max(version) from supabase_migrations.schema_migrations").fetchone()[0]
+        except psycopg.Error:
+            checks["database"] = False
+        ok = checks.get("database") is True and checks.get("schema") is True
+        return JSONResponse(status_code=200 if ok else 503, content={"status": "ready" if ok else "not_ready", "checks": checks})
 
     def repository(user: CurrentUser = Depends(current_user)) -> PgRepository:  # noqa: B008
         return PgRepository(dsn, user, pack)
@@ -138,9 +156,13 @@ def app_from_env() -> FastAPI:
         # the local Supabase's published secret: anyone could sign a token for any user id
         raise RuntimeError("MEP_JWT_SECRET is the public demo secret; set MEP_ALLOW_DEMO_JWT_SECRET=1 for local runs only")
     # a deployment never runs a drafting build inside the API process (no isolation): without the worker, drafting is off
+    configure_logging("api")
+    init_sentry("api")
     skill_executor = "queue" if os.environ.get("MEP_SKILL_EXECUTOR") == "queue" else ("local" if os.environ.get("MEP_ALLOW_LOCAL_SKILLS") == "1" else "disabled")
     origins = [o.strip() for o in os.environ.get("MEP_CORS_ORIGINS", "").split(",") if o.strip()]
     rules = Path(os.environ.get("MEP_RULES_DIR") or REPO_ROOT / "rules")
-    return create_pg_app(dsn, secret, load_pack(rules), origins, os.environ.get("MEP_SUPABASE_URL"),
+    app = create_pg_app(dsn, secret, load_pack(rules), origins, os.environ.get("MEP_SUPABASE_URL"),
                          os.environ.get("MEP_SUPABASE_ANON_KEY"), vision_worker=os.environ.get("MEP_VISION_WORKER", "1") != "0",
                          skill_executor=skill_executor, mailer=notifications_api.mailer_from_env())
+    app.add_middleware(RequestLogMiddleware)
+    return app

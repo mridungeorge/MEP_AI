@@ -4,6 +4,7 @@
   "version": "0.0.0",
   "description": "Next.js 14 app, scaffolded in a later sprint",
   "dependencies": {
+    "@sentry/browser": "^11.6.0",
     "@supabase/supabase-js": "^2.117.3",
     "next": "^14.2.35",
     "react": "^18.3.1",

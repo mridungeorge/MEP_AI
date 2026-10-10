@@ -8,12 +8,12 @@ WORKDIR /srv/app
 
 # dependencies first (cached), then the code and the rule packs the API serves
 COPY pyproject.toml uv.lock .python-version ./
-RUN uv sync --frozen --no-dev --extra agents --no-install-project
+RUN uv sync --frozen --no-dev --extra agents --extra observability --no-install-project
 COPY apps/api ./apps/api
 COPY rules ./rules
 COPY skills ./skills
 COPY docs/templates ./docs/templates
-RUN uv sync --frozen --no-dev --extra agents
+RUN uv sync --frozen --no-dev --extra agents --extra observability
 
 USER app
 ENV PATH="/srv/app/.venv/bin:$PATH" MEP_RULES_DIR=/srv/app/rules
