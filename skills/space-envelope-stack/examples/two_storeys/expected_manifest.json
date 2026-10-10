@@ -1,0 +1,187 @@
+{
+  "files": [
+    {
+      "bytes": 9322,
+      "name": "TOWER-A.ifc",
+      "role": "ifc",
+      "sha256": "91322eef45fc8e485d456e77f87934e8a29395785a7f081ab68f8ff8275253e9"
+    },
+    {
+      "bytes": 36648,
+      "name": "TOWER-A-S01.dxf",
+      "role": "dxf",
+      "sha256": "d88ad5bdc24c0623ad680a2fb273ef9e37dfb1d0c3cbf3554cfa257318095076"
+    },
+    {
+      "bytes": 36686,
+      "name": "TOWER-A-S02.dxf",
+      "role": "dxf",
+      "sha256": "252e0e32fe7d125ae2504a82e9fa84eca2d4fb15b2ab0b1d7651317644e82532"
+    }
+  ],
+  "inputs": {
+    "mark": "TOWER-A",
+    "spec_version": "1",
+    "storeys": [
+      {
+        "elevation_mm": 0.0,
+        "floor_to_floor_mm": 3600.0,
+        "name": "Level 1",
+        "rooms": [
+          {
+            "ceiling_void_mm": 600.0,
+            "height_mm": 2700.0,
+            "kind": "room",
+            "name": "Open office L1",
+            "outline": [
+              [
+                0.0,
+                0.0
+              ],
+              [
+                12000.0,
+                0.0
+              ],
+              [
+                12000.0,
+                8000.0
+              ],
+              [
+                0.0,
+                8000.0
+              ]
+            ],
+            "use": "Office"
+          },
+          {
+            "ceiling_void_mm": 600.0,
+            "height_mm": 2700.0,
+            "kind": "room",
+            "name": "Meeting room L1",
+            "outline": [
+              [
+                12000.0,
+                0.0
+              ],
+              [
+                16000.0,
+                0.0
+              ],
+              [
+                16000.0,
+                4000.0
+              ],
+              [
+                12000.0,
+                4000.0
+              ]
+            ],
+            "use": "Meeting"
+          }
+        ]
+      },
+      {
+        "elevation_mm": 3600.0,
+        "floor_to_floor_mm": 3600.0,
+        "name": "Level 2",
+        "rooms": [
+          {
+            "ceiling_void_mm": 600.0,
+            "height_mm": 2700.0,
+            "kind": "room",
+            "name": "Open office L2",
+            "outline": [
+              [
+                0.0,
+                0.0
+              ],
+              [
+                12000.0,
+                0.0
+              ],
+              [
+                12000.0,
+                8000.0
+              ],
+              [
+                0.0,
+                8000.0
+              ]
+            ],
+            "use": "Office"
+          },
+          {
+            "height_mm": 3000.0,
+            "kind": "plant_room",
+            "name": "Plant L2",
+            "outline": [
+              [
+                12000.0,
+                0.0
+              ],
+              [
+                16000.0,
+                0.0
+              ],
+              [
+                16000.0,
+                6000.0
+              ],
+              [
+                14000.0,
+                6000.0
+              ],
+              [
+                14000.0,
+                3000.0
+              ],
+              [
+                12000.0,
+                3000.0
+              ]
+            ],
+            "use": null
+          }
+        ]
+      }
+    ],
+    "units": "mm"
+  },
+  "measures": {
+    "rooms": 4,
+    "storeys": 2,
+    "storeys_detail": [
+      {
+        "elevation_mm": 0.0,
+        "name": "Level 1",
+        "rooms": 2
+      },
+      {
+        "elevation_mm": 3600.0,
+        "name": "Level 2",
+        "rooms": 2
+      }
+    ],
+    "total_area_m2": 226.0
+  },
+  "skill": "space-envelope-stack",
+  "skill_version": "1.0.0",
+  "spec_sha256": "76db3ddb7e39b8f1d4edd9bb96525025207717862b8222e702e7e747a23dea54",
+  "toolchain": {
+    "ezdxf": "1.4.4",
+    "ifcopenshell": "0.9.0"
+  },
+  "validation": {
+    "checks": [
+      "input_files",
+      "ifc_schema",
+      "ifc_project",
+      "ifc_units",
+      "ifc_storeys",
+      "ifc_spaces",
+      "dxf_storey_01",
+      "dxf_storey_02"
+    ],
+    "passed": true
+  }
+}

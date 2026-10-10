@@ -1,0 +1,94 @@
+{
+  "spec_version": "1",
+  "mark": "TOWER-A",
+  "units": "mm",
+  "storeys": [
+    {
+      "name": "Level 1",
+      "elevation_mm": 0,
+      "floor_to_floor_mm": 3600,
+      "rooms": [
+        {
+          "name": "Open office L1",
+          "use": "Office",
+          "outline": {
+            "type": "rectangle",
+            "x_mm": 0,
+            "y_mm": 0,
+            "width_mm": 12000,
+            "depth_mm": 8000
+          },
+          "height_mm": 2700,
+          "ceiling_void_mm": 600
+        },
+        {
+          "name": "Meeting room L1",
+          "use": "Meeting",
+          "outline": {
+            "type": "rectangle",
+            "x_mm": 12000,
+            "y_mm": 0,
+            "width_mm": 4000,
+            "depth_mm": 4000
+          },
+          "height_mm": 2700,
+          "ceiling_void_mm": 600
+        }
+      ]
+    },
+    {
+      "name": "Level 2",
+      "elevation_mm": 3600,
+      "floor_to_floor_mm": 3600,
+      "rooms": [
+        {
+          "name": "Open office L2",
+          "use": "Office",
+          "outline": {
+            "type": "rectangle",
+            "x_mm": 0,
+            "y_mm": 0,
+            "width_mm": 12000,
+            "depth_mm": 8000
+          },
+          "height_mm": 2700,
+          "ceiling_void_mm": 600
+        },
+        {
+          "name": "Plant L2",
+          "kind": "plant_room",
+          "outline": {
+            "type": "polygon",
+            "points_mm": [
+              [
+                12000,
+                0
+              ],
+              [
+                16000,
+                0
+              ],
+              [
+                16000,
+                6000
+              ],
+              [
+                14000,
+                6000
+              ],
+              [
+                14000,
+                3000
+              ],
+              [
+                12000,
+                3000
+              ]
+            ]
+          },
+          "height_mm": 3000
+        }
+      ]
+    }
+  ]
+}

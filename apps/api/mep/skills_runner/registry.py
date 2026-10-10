@@ -13,9 +13,9 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 SKILLS_DIR = REPO_ROOT / "skills"
-ENABLED = ("duct-fab", "space-envelope", "hvac-dxf", "ifc-mep")
+ENABLED = ("duct-fab", "space-envelope", "hvac-dxf", "ifc-mep", "space-envelope-stack")
 REQUIRES = {"duct-fab": ("cadquery", "ezdxf", "jsonschema"), "space-envelope": ("ifcopenshell", "ezdxf", "jsonschema"),
-            "hvac-dxf": ("ezdxf", "jsonschema"), "ifc-mep": ("ifcopenshell", "numpy", "jsonschema")}
+            "hvac-dxf": ("ezdxf", "jsonschema"), "ifc-mep": ("ifcopenshell", "numpy", "jsonschema"), "space-envelope-stack": ("ifcopenshell", "ezdxf", "jsonschema")}
 MEDIA_TYPES = {"ifc": "application/x-step", "step": "model/step", "dxf": "image/vnd.dxf", "json": "application/json"}
 
 

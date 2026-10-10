@@ -1,0 +1,197 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mep-copilot.local/skills/space-envelope-stack/spec_card.json",
+  "title": "space-envelope-stack spec card",
+  "description": "Inputs for the room envelopes of SEVERAL storeys in one IFC4 file (plus a plan DXF per storey). Same room rules as space-envelope; storeys must stack (each storey's elevation is the one below plus its floor-to-floor height). Lengths in millimetres. Geometry only.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "spec_version",
+    "mark",
+    "units",
+    "storeys"
+  ],
+  "properties": {
+    "spec_version": {
+      "const": "1"
+    },
+    "mark": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,23}$",
+      "description": "Drawing mark: the combined IFC file stem and the project name; plan files are <mark>-S01.dxf and so on."
+    },
+    "units": {
+      "const": "mm"
+    },
+    "storeys": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 40,
+      "description": "Lowest storey first.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "elevation_mm",
+          "floor_to_floor_mm",
+          "rooms"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9 _./&()+-]{0,39}$",
+            "description": "Storey name, for example Level 1."
+          },
+          "elevation_mm": {
+            "type": "number",
+            "minimum": -5000,
+            "maximum": 200000,
+            "x-unit": "mm",
+            "description": "Floor level of this storey."
+          },
+          "floor_to_floor_mm": {
+            "type": "number",
+            "minimum": 2000,
+            "maximum": 20000,
+            "x-unit": "mm",
+            "description": "Engineer input: storey height, floor to floor. A room's clear height plus its ceiling void cannot exceed it."
+          },
+          "rooms": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 200,
+            "items": {
+              "$ref": "#/$defs/room"
+            },
+            "description": "Room names are unique across the whole drawing (case-insensitive)."
+          }
+        }
+      }
+    },
+    "notes": {
+      "type": "string",
+      "maxLength": 200,
+      "x-firm-default": true,
+      "pattern": "^[^\\u0000-\\u001f\\u007f\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2069\\ufeff]*$"
+    }
+  },
+  "$defs": {
+    "length": {
+      "type": "number",
+      "minimum": 500,
+      "maximum": 200000,
+      "x-unit": "mm"
+    },
+    "coord": {
+      "type": "number",
+      "minimum": -1000000,
+      "maximum": 1000000,
+      "x-unit": "mm"
+    },
+    "room": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "outline",
+        "height_mm"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9 _./&()+-]{0,59}$",
+          "description": "Room name; the label on the plan and the IfcSpace name."
+        },
+        "kind": {
+          "enum": [
+            "room",
+            "plant_room"
+          ],
+          "default": "room",
+          "description": "A plant room is marked as such in the IFC and drawn on its own layer."
+        },
+        "use": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9 _./&()+-]{0,39}$",
+          "x-firm-default": true,
+          "description": "Occupancy or use label (free text, for example Office). Not interpreted."
+        },
+        "outline": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "type",
+                "x_mm",
+                "y_mm",
+                "width_mm",
+                "depth_mm"
+              ],
+              "properties": {
+                "type": {
+                  "const": "rectangle"
+                },
+                "x_mm": {
+                  "$ref": "#/$defs/coord"
+                },
+                "y_mm": {
+                  "$ref": "#/$defs/coord"
+                },
+                "width_mm": {
+                  "$ref": "#/$defs/length"
+                },
+                "depth_mm": {
+                  "$ref": "#/$defs/length"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "type",
+                "points_mm"
+              ],
+              "properties": {
+                "type": {
+                  "const": "polygon"
+                },
+                "points_mm": {
+                  "type": "array",
+                  "minItems": 3,
+                  "maxItems": 64,
+                  "items": {
+                    "type": "array",
+                    "minItems": 2,
+                    "maxItems": 2,
+                    "items": {
+                      "$ref": "#/$defs/coord"
+                    }
+                  },
+                  "description": "Corner points in order; a simple polygon (no crossing edges), at least 0.25 m2."
+                }
+              }
+            }
+          ]
+        },
+        "height_mm": {
+          "type": "number",
+          "minimum": 1800,
+          "maximum": 20000,
+          "x-unit": "mm",
+          "description": "Engineer input: clear height of the room."
+        },
+        "ceiling_void_mm": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 5000,
+          "x-unit": "mm",
+          "x-firm-default": true,
+          "description": "Ceiling void above the room (zero or absent when there is none)."
+        }
+      }
+    }
+  }
+}

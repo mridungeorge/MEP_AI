@@ -8,7 +8,7 @@ from mep.skills_runner.shortcut import missing_fields, parse_shortcut
 
 
 def test_only_the_enabled_skills_can_be_looked_up():
-    assert ENABLED == ("duct-fab", "space-envelope", "hvac-dxf", "ifc-mep")
+    assert ENABLED == ("duct-fab", "space-envelope", "hvac-dxf", "ifc-mep", "space-envelope-stack")
     for bad in ("../duct-fab", "duct-fab/../x", "", "Duct-Fab", "x" * 500, "duct-fab\x00"):
         with pytest.raises(UnknownSkill):
             get_skill(bad)
