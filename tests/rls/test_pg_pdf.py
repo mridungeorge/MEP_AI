@@ -16,8 +16,8 @@ from tests.rls.conftest import DB_URL
 class FakeVision:
     def __init__(self, payload=None, boom=False):
         self.payload = payload if payload is not None else {"spaces": [
-            {"name": "Open office", "area_m2": 108, "use": "Office", "storey": "Level 1", "confidence": 0.8},
-            {"name": "Plant", "area_m2": 24, "ceiling_void_mm": 500}]}
+            {"name": "Open office", "area": 108, "use": "Office", "storey": "Level 1", "confidence": 0.8},
+            {"name": "Plant", "area": 24, "ceiling_void": 500}]}
         self.boom, self.calls = boom, 0
 
     def __call__(self, image, prompt):
@@ -71,7 +71,7 @@ def test_the_evidence_table_lists_candidates_with_their_provenance(admin, tmp_pa
     src = ev["sources"][0]
     assert src["kind"] == "pdf" and src["provenance"] == "extracted" and len(src["candidates"]) == 2
     office = next(c for c in src["candidates"] if c["name"] == "Open office")
-    assert office["area_m2"] == 108 and office["confidence"] == 0.8 and office["storey"] == "Level 1"
+    assert office["area"] == 108 and office["confidence"] == 0.8 and office["storey"] == "Level 1"
     other = h.seed(admin)
     assert client.get(f"/revisions/{f['revision']}/evidence", headers=h.auth(other["designer"])).status_code == 404
     assert client.get(f"/revisions/{f['revision']}/evidence").status_code == 401
@@ -88,12 +88,12 @@ def test_a_failing_model_is_a_problem_not_a_crash_and_junk_output_is_dropped(adm
     client, f = app(FakeVision(boom=True)), h.seed(admin)
     r = up(client, f, pdf_bytes(tmp_path, "Boom"))
     assert r.status_code == 200 and r.json()["extractions"] == 0 and any("vision call failed" in p for p in r.json()["problems"])
-    client2, f2 = app(FakeVision(payload={"spaces": [{"name": "X", "area_m2": "99999999"}, {"name": "<script>alert(1)</script>", "area_m2": 5}]})), h.seed(admin)
+    client2, f2 = app(FakeVision(payload={"spaces": [{"name": "X", "area": "99999999"}, {"name": "<script>alert(1)</script>", "area": 5}]})), h.seed(admin)
     r2 = up(client2, f2, pdf_bytes(tmp_path, "Junk"))
     assert r2.status_code == 200
     stored = admin.execute("select field, value_text, value_number from extraction where revision_id = %s order by field", (f2["revision"],)).fetchall()
     assert ("name", "<script>alert(1)</script>", None) in stored                        # stored as plain text; React renders it escaped
-    assert not any(row[0] == "area_m2" and row[2] == 99999999 for row in stored)
+    assert not any(row[0] == "area" and row[2] == 99999999 for row in stored)
 
 
 def test_who_may_upload_a_pdf_and_what_is_refused(admin, tmp_path):

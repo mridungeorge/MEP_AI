@@ -21,13 +21,14 @@ from mep.ingest.records import ExtractionRecord, IngestResult
 
 PROMPT = (
     "List the rooms or spaces visible on this drawing page as JSON "
-    '{"spaces": [{"name": str, "area_m2": number, "use": str, "storey": str, '
-    '"ceiling_void_mm": number, "confidence": number 0..1}]}. '
-    "Report only what is printed on the page; omit unknown fields. "
+    '{"spaces": [{"name": str, "area": number, "area_unit_shown": str, "use": str, "storey": str, '
+    '"ceiling_void": number, "ceiling_void_unit_shown": str, "confidence": number 0..1}]}. '
+    "Report only what is printed on the page, in the unit printed there; omit unknown fields. "
     "Do not judge compliance or suggest changes."
 )
-_TEXT_FIELDS = ("name", "use", "storey")
-_NUM_FIELDS = {"area_m2": "m^2", "ceiling_void_mm": "mm"}
+_TEXT_FIELDS = ("name", "use", "storey", "area_unit_shown", "ceiling_void_unit_shown")
+# no unit is assumed for a number read from a drawing: the designer declares it when the value is used
+_NUM_FIELDS = {"area": "unverified", "ceiling_void": "unverified"}
 _MAX_PROMPT_TEXT = 4000
 VISION_BUDGET_SECONDS = 150.0       # all pages of one file; each call also has its own timeout
 _MAX_TEXT_FIELD = 120

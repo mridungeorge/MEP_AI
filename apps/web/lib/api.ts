@@ -163,6 +163,8 @@ export const api = {
   agentNotes: (r: string, kind?: string) => apiFetch<AgentNote[]>(`${rev(r)}/agent-notes${kind ? `?kind=${kind}` : ""}`),
   resolveAgentNote: (r: string, id: string, status: "answered" | "dismissed") =>
     apiFetch<{ resolved: boolean }>(`${rev(r)}/agent-notes/${id}/resolve`, json("POST", { status })),
+  addEvidenceSpace: (r: string, b: { source_sha256: string; entity_key: string; area_unit: string; void_unit?: string }) =>
+    apiFetch<{ space_id: string }>(`${rev(r)}/evidence/spaces`, json("POST", b)),
   evidence: (r: string, source?: string) => apiFetch<EvidenceResponse>(`${rev(r)}/evidence${source ? `?source=${source}` : ""}`),
   runRules: (r: string) => apiFetch<RunRulesResponse>(`${rev(r)}/run-rules`, { method: "POST" }),
 };

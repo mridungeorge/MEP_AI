@@ -110,23 +110,23 @@ def rendered(tmp_path, pages=2, label="x"):
 
 
 def test_what_vision_reads_becomes_extractions_and_never_a_space(tmp_path):
-    v = Vision([{"spaces": [{"name": "Office", "area_m2": 108, "use": "Office", "storey": "Level 1", "ceiling_void_mm": 600, "confidence": 0.9}]},
-                {"spaces": [{"name": "Plant", "area_m2": 24}]}])
+    v = Vision([{"spaces": [{"name": "Office", "area": 108, "use": "Office", "storey": "Level 1", "ceiling_void": 600, "confidence": 0.9}]},
+                {"spaces": [{"name": "Plant", "area": 24}]}])
     res = extract_rendered("v.pdf", "a" * 64, rendered(tmp_path), v)
     assert res.spaces == [] and res.source_kind == "pdf"
     fields = {(e.entity_key, e.field): (e.value, e.unit) for e in res.extractions}
-    assert fields[("p1-1", "name")] == ("Office", None) and fields[("p1-1", "area_m2")] == (108.0, "m^2") and fields[("p2-1", "area_m2")] == (24.0, "m^2")
+    assert fields[("p1-1", "name")] == ("Office", None) and fields[("p1-1", "area")] == (108.0, "unverified") and fields[("p2-1", "area")] == (24.0, "unverified")
     assert all(e.source_kind == "pdf" for e in res.extractions) and res.metadata["vision_used"] is True and res.metadata["candidates"] == 2
     assert all(i[:8] == b"\x89PNG\r\n\x1a\n" for i in v.images)                          # the model was shown rendered pages
 
 
 def test_bad_vision_output_is_dropped_with_a_reason(tmp_path):
-    v = Vision([{"spaces": [{"name": "A", "area_m2": -5}, {"name": "B", "area_m2": float("inf")}, "junk", {"name": "C", "confidence": 7}]},
+    v = Vision([{"spaces": [{"name": "A", "area": -5}, {"name": "B", "area": float("inf")}, "junk", {"name": "C", "confidence": 7}]},
                 RuntimeError("boom")])
     res = extract_rendered("v.pdf", "b" * 64, rendered(tmp_path), v)
     assert res.spaces == []
     assert any("not a finite positive number" in p for p in res.problems) and any("vision call failed (RuntimeError)" in p for p in res.problems)
-    assert not any(e.field == "area_m2" for e in res.extractions)
+    assert not any(e.field == "area" for e in res.extractions)
 
 
 def test_page_text_is_passed_as_quoted_data_and_instructions_in_it_change_nothing(tmp_path):
@@ -149,11 +149,11 @@ def test_the_anthropic_client_sends_the_page_and_parses_only_a_json_object(monke
     def handler(request: httpx.Request) -> httpx.Response:
         seen["body"] = request.read()
         seen["key"] = request.headers["x-api-key"]
-        return httpx.Response(200, json={"content": [{"type": "text", "text": 'Here you go: {"spaces": [{"name": "A", "area_m2": 12}]} done'}]})
+        return httpx.Response(200, json={"content": [{"type": "text", "text": 'Here you go: {"spaces": [{"name": "A", "area": 12}]} done'}]})
 
     v = AnthropicVision("sk-test", client=httpx.Client(transport=httpx.MockTransport(handler)))
     out = v(b"\x89PNG\r\n\x1a\nabc", "prompt")
-    assert out == {"spaces": [{"name": "A", "area_m2": 12}]} and seen["key"] == "sk-test"
+    assert out == {"spaces": [{"name": "A", "area": 12}]} and seen["key"] == "sk-test"
     body = __import__("json").loads(seen["body"])
     assert base64.b64decode(body["messages"][0]["content"][0]["source"]["data"]).startswith(b"\x89PNG") and "DATA" in body["system"]
     for bad in (httpx.Response(500, text="no"), httpx.Response(200, json={"content": [{"type": "text", "text": "no json here"}]})):

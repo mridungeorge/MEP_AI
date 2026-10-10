@@ -22,7 +22,7 @@ from uuid import UUID
 import psycopg
 from psycopg.rows import dict_row
 
-from mep.api.gate1 import ConfirmRefused, InvalidInputError, UnknownSystemError
+from mep.api.gate1 import ConfirmRefused, EvidenceLockedError, InvalidInputError, UnknownSystemError
 from mep.api.pg_revisions import RevisionMethods
 from mep.api.schedule import CurrentUser, RevisionFrozenError, SystemModel
 from mep.engine.assignment import rules_for_system_type
@@ -115,7 +115,10 @@ class PgRepository(RevisionMethods):
                 "use": r["use"], "storey": r["storey"], "ceiling_void_mm": _num(r["ceiling_void_mm_value"]),
                 "provenance": _row_provenance(r["confirmed_by"], r["area_m2_provenance"],
                                               r["ceiling_void_mm_provenance"]),
-                "manual_trace": r["ifc_guid"] is None, "etag": r["etag"]}
+                "manual_trace": r["ifc_guid"] is None and r["evidence_area_id"] is None, "etag": r["etag"],
+                "evidence": None if r["evidence_area_id"] is None and r["evidence_void_id"] is None else {
+                    "source_sha256": r["evidence_source_sha256"], "page": r["evidence_page"], "area_unit": r["evidence_area_unit"],
+                    "void_unit": r["evidence_void_unit"], "area_extraction": str(r["evidence_area_id"]) if r["evidence_area_id"] else None}}
 
     @staticmethod
     def _input(r: dict[str, Any]) -> dict[str, Any]:
@@ -131,7 +134,8 @@ class PgRepository(RevisionMethods):
     _SPACE_ETAG = ("md5(jsonb_build_array(ifc_guid, name, use, storey, area_m2_value, area_m2_unit,"
                    " ceiling_void_mm_value, ceiling_void_mm_unit)::text)")
     _SPACE_SQL = ("select id, ifc_guid, name, use, storey, area_m2_value, area_m2_provenance, ceiling_void_mm_value,"
-                  f" ceiling_void_mm_provenance, confirmed_by, {_SPACE_ETAG} as etag from space")
+                  " ceiling_void_mm_provenance, confirmed_by, evidence_area_id, evidence_void_id, evidence_source_sha256, evidence_page,"
+                  f" evidence_area_unit, evidence_void_unit, {_SPACE_ETAG} as etag from space")
     _INPUT_ETAG = "md5(jsonb_build_array(i.name, i.value_number, i.value_text, i.value_bool, i.unit)::text)"
     _INPUT_SQL = ("select i.id, s.tag, i.name, i.value_number, i.value_text, i.value_bool, i.unit, i.provenance::text"
                   f" as provenance, i.confirmed_by, {_INPUT_ETAG} as etag"
@@ -227,8 +231,16 @@ class PgRepository(RevisionMethods):
                     # any edit resets EVERY provenance on the row to 'default' (a client may write nothing else), and
                     # the database trigger withdraws the confirmation
                     # an untouched value keeps 'extracted' (it was never looked at); anything else becomes 'default'
+                    linked = {"area_m2": "evidence_area_id", "ceiling_void_mm": "evidence_void_id"}
+                    if any(k in cols for k in ("area_m2_value", "ceiling_void_mm_value")) and conn.execute(
+                            "select 1 from space where id = %s and revision_id = %s and firm_id = %s and ("
+                            + " or ".join(f"({linked[f]} is not null and {f}_value is distinct from %s)"
+                                          for f in ("area_m2", "ceiling_void_mm") if f"{f}_value" in cols) + ")",
+                            (sid, revision_id, firm_id, *[cols[f"{f}_value"] for f in ("area_m2", "ceiling_void_mm") if f"{f}_value" in cols])).fetchone():
+                        raise EvidenceLockedError("this value was read from a drawing and cannot be edited or relabelled: delete the space and add it again")
+                    # a value that came from evidence keeps its provenance through an edit of anything else
                     resets = {
-                        f"{f}_provenance": (f"case when {f}_value is null then null when {f}_provenance = 'extracted'"
+                        f"{f}_provenance": (f"case when {f}_value is null then null when {f}_provenance = 'extracted' or {linked[f]} is not null"
                                             f" then {f}_provenance else 'default'::provenance end")
                         for f in ("area_m2", "ceiling_void_mm")}
                     sets = ", ".join([f"{c} = %s" for c in cols]

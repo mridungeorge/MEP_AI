@@ -48,6 +48,10 @@ class InvalidInputError(Exception):
     """A Gate 1 input is not one the project's edition declares, or its unit/value does not fit the declaration."""
 
 
+class EvidenceLockedError(Exception):
+    """A value read from a drawing cannot be edited or relabelled as hand-entered."""
+
+
 class ConfirmRefused(Exception):
     """The store refused a confirmation (for example the project facts are incomplete). The message is shown."""
 
@@ -233,6 +237,8 @@ def _write(repo: Gate1Repository, revision_id: UUID, user: CurrentUser, kind: st
         raise _err(422, "unknown_system", str(exc) or "name the schedule tag of an existing system") from None
     except InvalidInputError as exc:
         raise _err(422, "invalid_input", str(exc)) from None
+    except EvidenceLockedError as exc:
+        raise _err(409, "evidence_locked", str(exc)) from None
     if row is None:
         raise _err(404, "not_found", f"{kind} not found")
     return row

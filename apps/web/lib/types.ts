@@ -35,6 +35,8 @@ export interface SpaceRow {
   provenance: Provenance;
   /** True when the designer added this by hand because ingest health was low. */
   manual_trace: boolean;
+  /** Set when the space was made from a drawing (PDF) reading: its area/void cannot be edited, only confirmed. */
+  evidence?: { source_sha256: string; page: number | null; area_unit: string | null; void_unit: string | null; area_extraction: string | null } | null;
   etag?: string;
 }
 

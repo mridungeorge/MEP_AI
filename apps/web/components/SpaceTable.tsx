@@ -49,7 +49,7 @@ export function SpaceTable({
             // key includes provenance so uncontrolled inputs refresh after server round-trips
             <tr key={`${s.id}:${s.provenance}`} data-state={rowState(s)}>
               <td><input type="checkbox" checked={selected.has(s.id)} onChange={() => onToggle(s.id)} aria-label={`Select ${s.name ?? s.id}`} /></td>
-              <td>{s.manual_trace ? <em>manual trace</em> : s.ifc_guid}</td>
+              <td>{s.evidence ? <em>from drawing p.{s.evidence.page ?? "?"} ({s.evidence.area_unit})</em> : s.manual_trace ? <em>manual trace</em> : s.ifc_guid}</td>
               <td>{cell(s, "name")}</td>
               <td>{cell(s, "area_m2")}</td>
               <td>{cell(s, "use")}</td>

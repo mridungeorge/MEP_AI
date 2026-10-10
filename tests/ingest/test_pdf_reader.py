@@ -33,15 +33,15 @@ def pdf(tmp_path: Path) -> Path:
 
 def test_candidates_become_extractions_only(pdf):
     v = FakeVision({"spaces": [
-        {"name": "Office", "area_m2": 20.5, "confidence": 0.8, "use": "office", "bogus": 1}]})
+        {"name": "Office", "area": 20.5, "confidence": 0.8, "use": "office", "bogus": 1}]})
     res = extract_pdf(pdf, v)
     assert res.spaces == []
     assert res.source_kind == "pdf"
     assert len(v.calls) == 2  # one per page
     by_field = {e.field: e for e in res.extractions if e.entity_key.startswith("p1-")}
-    assert by_field["area_m2"].value == 20.5
-    assert by_field["area_m2"].unit == "m^2"
-    assert by_field["area_m2"].confidence == 0.8
+    assert by_field["area"].value == 20.5
+    assert by_field["area"].unit == "unverified"
+    assert by_field["area"].confidence == 0.8
     assert by_field["name"].value == "Office"
     assert "bogus" not in by_field
     assert all(e.source_kind == "pdf" and e.provenance == "extracted" for e in res.extractions)
@@ -50,13 +50,13 @@ def test_candidates_become_extractions_only(pdf):
 
 
 @pytest.mark.parametrize("payload", [
-    {"spaces": [{"name": "A", "area_m2": 12}]},
+    {"spaces": [{"name": "A", "area": 12}]},
     {"spaces": []},
     {},
     None,
     "garbage",
     {"spaces": "x"},
-    {"spaces": [1, None, {"area_m2": float("nan")}]},
+    {"spaces": [1, None, {"area": float("nan")}]},
 ])
 def test_spaces_always_empty(pdf, payload):
     assert extract_pdf(pdf, FakeVision(payload)).spaces == []
@@ -64,15 +64,15 @@ def test_spaces_always_empty(pdf, payload):
 
 @pytest.mark.parametrize("bad", [-5.0, float("nan"), float("inf"), 0, "12", True])
 def test_bad_areas_dropped_with_problem(pdf, bad):
-    res = extract_pdf(pdf, FakeVision({"spaces": [{"name": "A", "area_m2": bad}]}))
-    assert not [e for e in res.extractions if e.field == "area_m2"]
-    assert any("area_m2" in p for p in res.problems)
+    res = extract_pdf(pdf, FakeVision({"spaces": [{"name": "A", "area": bad}]}))
+    assert not [e for e in res.extractions if e.field == "area"]
+    assert any("area" in p for p in res.problems)
     assert all(not (isinstance(e.value, float) and math.isnan(e.value)) for e in res.extractions)
 
 
 def test_bad_confidence_dropped(pdf):
-    res = extract_pdf(pdf, FakeVision({"spaces": [{"name": "A", "area_m2": 5, "confidence": 7}]}))
-    area = next(e for e in res.extractions if e.field == "area_m2")
+    res = extract_pdf(pdf, FakeVision({"spaces": [{"name": "A", "area": 5, "confidence": 7}]}))
+    area = next(e for e in res.extractions if e.field == "area")
     assert area.confidence is None
     assert any("confidence" in p for p in res.problems)
 
