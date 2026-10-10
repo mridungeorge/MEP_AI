@@ -64,6 +64,17 @@ def revalidate(skill: str, outdir: Path, submitted: Path | None = None) -> dict[
             "failed": list(result.failed)}
 
 
+def _share_output(out: str) -> None:
+    """The job may run as another user than the one that collects its output: make every plain file in the output directory readable by it
+    (a build that writes through a temporary file leaves mode 0600)."""
+    try:
+        for entry in os.scandir(out):
+            if entry.is_file(follow_symlinks=False):
+                os.chmod(entry.path, 0o644)
+    except OSError:
+        pass
+
+
 def main(argv: list[str]) -> int:
     apply_limits()
     if len(argv) >= 4 and argv[0] == "build":
@@ -73,7 +84,9 @@ def main(argv: list[str]) -> int:
         try:
             runpy.run_path(str(info.build_script), run_name="__main__")
         except SystemExit as exc:
+            _share_output(argv[3])
             return int(exc.code or 0) if isinstance(exc.code, int | type(None)) else 4
+        _share_output(argv[3])
         return 0
     if len(argv) in (3, 4) and argv[0] == "validate":
         print(json.dumps(revalidate(argv[1], Path(argv[2]), Path(argv[3]) if len(argv) == 4 else None)))
