@@ -33,6 +33,32 @@ jobs:
       - run: uv run python scripts/review_db.py selftest
       - run: uv run pytest tests/golden || [ $? -eq 5 ]  # 5 = no golden projects yet
   # A release claim made any other way (a tag, a GitHub release created in the web UI) still shows up red here.
+  # The three deployable images are built from a clean checkout on every push: API, web, and the isolated drafting worker (cadquery lives there).
+  images:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          python-version: "3.12"
+      - run: docker build -f deploy/api/Dockerfile -t mep-api:ci .
+      - run: docker build -f deploy/worker/Dockerfile -t mep-skill-worker:ci .
+      - run: docker build -f deploy/web/Dockerfile -t mep-web:ci .
+      - name: the API image starts as a non-root user and imports the app
+        run: |
+          test "$(docker run --rm mep-api:ci id -u)" != "0"
+          docker run --rm mep-api:ci python -c "import mep.api.server, claude_agent_sdk, pypdfium2; print('api image ok')"
+      - name: the web image serves
+        run: |
+          docker run -d --name web -p 3000:3000 mep-web:ci
+          for i in $(seq 1 30); do code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/ || true); [ "$code" = "200" ] || [ "$code" = "307" ] && break; sleep 2; done
+          echo "web answered $code"; [ "$code" = "200" ] || [ "$code" = "307" ]
+          docker logs web | tail -5
+      - name: the worker image has the CAD kernel, runs non-root, builds both skills, and is isolated when run the way the dispatcher runs it
+        run: |
+          docker run --rm mep-skill-worker:ci python -c "import cadquery, ifcopenshell, ezdxf, jsonschema; print('worker image ok')"
+          uv sync --group dev --extra agents --locked
+          MEP_WORKER_IMAGE=mep-skill-worker:ci uv run pytest tests/skills/test_worker_isolation.py -v -rs
   release-gate:
     if: (startsWith(github.ref, 'refs/tags/') && !((startsWith(github.ref_name, 'sprint-') || startsWith(github.ref_name, 'restore-')) && !contains(github.ref_name, '.') && !contains(github.ref_name, '/'))) || github.event_name == 'release'
     runs-on: ubuntu-latest

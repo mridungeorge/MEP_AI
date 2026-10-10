@@ -73,9 +73,15 @@ The approver gets the placeholder registration `DEMO-0001`. It is not a real reg
 
 1. New Project > Deploy from GitHub repo > `MEP_AI`. Railway reads `railway.json` (Dockerfile build, health check `/healthz`).
 2. Service > Variables: add exactly these (values from Steps 1 and 3; never paste the service_role key here):
-   `MEP_DB_URL`, `MEP_JWT_SECRET`, `MEP_SUPABASE_URL`, `MEP_SUPABASE_ANON_KEY`, `MEP_CORS_ORIGINS` (set after Step 5). Do not set `MEP_COOKIE_SECURE` (the cookie is Secure unless it is `0`).
+   `MEP_DB_URL`, `MEP_JWT_SECRET`, `MEP_SUPABASE_URL`, `MEP_SUPABASE_ANON_KEY`, `MEP_CORS_ORIGINS` (set after Step 5), `MEP_SKILL_EXECUTOR=queue`, and
+   `ANTHROPIC_API_KEY` (for the drafting assistant and for reading PDF drawings; the app says so if it is missing). Do not set `MEP_COOKIE_SECURE` (the cookie is Secure unless it is `0`).
 3. Service > Settings > Networking > **Generate Domain**. Note `https://<name>.up.railway.app`.
 4. Check: `curl https://<name>.up.railway.app/healthz` returns `{"status":"ok"}`; `curl -i https://<name>.up.railway.app/me` returns 401.
+
+### Step 4b. The drafting worker (optional, needs a Docker host)
+
+Drafting builds run in an isolated container started by a small dispatcher, not on Railway: follow `docs/runbooks/skill-worker.md`.
+Skip it for a first look: everything except Drafting works without it.
 
 ## Step 5. Web on Vercel
 
@@ -88,6 +94,18 @@ The approver gets the placeholder registration `DEMO-0001`. It is not a real reg
    redirect URL to the Vercel address (Step 1.6).
 
 ## Step 6. Smoke test (10 minutes)
+
+Automatic first (about 1 minute). It needs a throwaway revision (the demo seed creates one; use it BEFORE the live demo, the script freezes it when
+you give it the checker and approver tokens) and a signed-in designer's access token (browser dev tools > Application > local storage > the
+Supabase `access_token`, or the tokens the seed's own API secret can mint):
+
+```
+uv run python scripts/staging_smoke.py --api https://<name>.up.railway.app --revision <revision id> --designer-token '<JWT>'
+```
+
+It signs in, uploads the fixture IFC, does Gate 1, runs the rules and checks the report; add `--checker-token`, `--approver-token` and
+`--registration DEMO-0001` and it also signs Gates 2 and 3 and makes, uses and revokes a share link. Then the manual steps:
+
 
 1. Open the Vercel URL; you are sent to Sign in. Enter the designer address; the link arrives; the header shows `role: designer`.
 2. Revisions lists "1 Demo Street, Melbourne VIC (synthetic office)". Open Gate 1; upload `docs/demo-assets/office-rev-a.dxf`; the ingest

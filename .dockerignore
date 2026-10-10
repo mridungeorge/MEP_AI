@@ -1,0 +1,14 @@
+.git
+**/node_modules
+**/.next
+.venv
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+**/.mypy_cache
+supabase/.temp
+supabase/.branches
+tests
+evals
+graphify-out
+*.log
