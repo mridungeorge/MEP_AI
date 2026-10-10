@@ -110,5 +110,9 @@ def test_the_smoke_test_refuses_a_revision_that_is_not_marked_throwaway(admin, l
     r = smoke(live_api, token, f["revision"], confirmed=False)
     assert r.returncode == 1 and "refused" in r.stdout and "Gate 1" not in r.stdout
     assert admin.execute("select count(*) from ingest_run where revision_id = %s", (f["revision"],)).fetchone()[0] == 0       # nothing was touched
-    admin.execute("update project set address = 'SMOKE TEST (throwaway, synthetic)' where id = (select project_id from revision where id = %s)", (f["revision"],))
+    admin.execute("alter table project disable trigger project_address_fixed")        # test fixture only: production never renames a project
+    try:
+        admin.execute("update project set address = 'SMOKE TEST (throwaway, synthetic)' where id = (select project_id from revision where id = %s)", (f["revision"],))
+    finally:
+        admin.execute("alter table project enable trigger project_address_fixed")
     assert smoke(live_api, token, f["revision"], confirmed=False).returncode == 0                                        # the marked project is accepted

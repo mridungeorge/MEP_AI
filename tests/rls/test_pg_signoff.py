@@ -463,7 +463,7 @@ def test_a_client_cannot_make_a_child_revision(admin):
     f = frozen(admin, results=1)
     for role in ("designer", "checker"):
         refused(f[role], "insert into revision (firm_id, project_id, architect_rev, parent_revision_id) values (%s, %s, 'B', %s)",
-                (f["firm"], f["project"], f["revision"]), "upload service")
+                (f["firm"], f["project"], f["revision"]), "permission denied")
 
 
 # ---- Phase 3 review round 2 (migration 0012) -----------------------------------------------------------------------
