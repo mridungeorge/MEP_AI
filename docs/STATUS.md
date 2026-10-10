@@ -5,16 +5,31 @@ local devcontainer gate is the reference (tag `sprint-2-gate`). GitHub CI has ne
 Updated: 2026-10-09 (recovery after a device change; see "Recovery 2026-10-09")
 
 ## Resume here (updated 2026-10-12)
-Done: 2.5, 3, 4a, **4a.1** (`sprint-4a1-gate`). User decision: continue straight into **Phase 4b** without stopping (`sprint-4b-gate`, then STOP
-and report): (1) space-envelope skill (started: `skills/space-envelope/`), (2) wire duct-fab and space-envelope into the app via
-skills_runner (validator before release; both in ci.sh and GitHub CI), (3) spec cards / wizards / clarifying questions in the UI, (4) runtime
-agents on the Claude Agent SDK with the tool layer as the safety boundary, (5) PDF page renderer + vision extraction into evidence only.
+Done: 2.5, 3, 4a, 4a.1, **4b** (`sprint-4b-gate`, once cut: see the 4b section). The user's standing instruction after 4b is STOP and report.
 Notes: the local Supabase signs tokens with ES256 (JWKS). Mail for magic links goes to Mailpit (`http://127.0.0.1:54324`). Run everything in
 the devcontainer; `~/ws` is a synced work copy (never `uv sync` there); clean gates run from `git clone` copies (`~/gate3`). On the Windows
 host put `AppData/Local/Python/bin` (under the user profile) first on PATH (the WindowsApps `python` stub fails). `.env.example` files cannot
 be written here (permission rule): the templates are `deploy/env.api.example` and `deploy/env.web.example`. DO NOT run `docker build` in the
 devcontainer: it hung Docker Desktop (restarted once); `deploy/api/Dockerfile` is unverified by a build (read-reviewed; uv image 0.12.24 matches the lock).
 Existing open revisions have results without an input fingerprint (`inputs_hash` NULL): re-run once before freezing.
+
+## Phase 4b drafting skills, agents, PDF evidence (2026-10-12)
+- Built: space-envelope skill (rooms/plant rooms -> IFC4 + plan DXF, 30-check independent validator, determinism, round-trip through the app readers);
+  skills_runner (sandboxed build, separate-process re-check of the manifest checksums AND of the submitted spec, release only when both pass; bytes
+  stored only for released artifacts; firm defaults only on `x-firm-default` fields, type-checked); drafting wizard (card as a form, sentence shortcut read back
+  with assumptions and unread text, confirmation before Build); runtime agents (designer / adversarial_checker / compliance_risk; the tool layer enforces
+  permissions, human role, open revision, argument shape, rate limits; every call logged and ledgered; model replies and explanations filtered; notes only);
+  PDF pages rendered in the worker sandbox (pdfium) and read by a vision model into the evidence table only (provenance `extracted`, never a space, never an input).
+  Docs: `docs/skills/space-envelope.md`, `docs/agents.md`. Migrations 0018-0021.
+- Review round 1 (two reviewers): 2 blockers (validator measured only local profiles so placement/rotation/extra-entity tampering passed; the model's own
+  chat reply was shown unfiltered) + ~15 should-fix, all fixed or listed below (c4811cf, migration 0021). Round 2: see below.
+- Needs on a server: `ANTHROPIC_API_KEY` for agents and vision (without it both say so and nothing breaks); `--extra agents` in the image (Dockerfile does);
+  duct-fab needs cadquery, which the API image does not carry (the card answers "not installed on this server"). CI pins cadquery 2.8.0 / ocp 7.9.3.1.1.
+- Known limits, not fixed: the worker sandbox is rlimits only (same uid, network allowed); vision runs in the request thread (150 s cap per file, no
+  per-firm quota); the message throttle is per process; "Add as a space" from evidence stores `default`/manual provenance (the UI says areas are assumed m2);
+  notes and clarifying questions can still be added to a frozen revision; `run_skill(use_draft)` by an agent builds without a human confirmation step (the
+  validator gate and designer role still apply); the explanation/reply filters remove outcome and compliance wording and foreign rule ids but cannot check
+  numbers or truth in prose; Dockerfile still never build-tested.
 
 ## Phase 4a.1 pilot readiness (2026-10-12): done, tag `sprint-4a1-gate`
 - Review: round 1 found 0 blockers + 9 should-fix (mode-switch laundering, own acknowledgements, acting-role lock-out, share leakage,
