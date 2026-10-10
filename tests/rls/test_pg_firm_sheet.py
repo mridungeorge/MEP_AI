@@ -138,7 +138,7 @@ def test_the_other_drafting_skills_dxf_files_take_the_firm_standard_too(tmp_path
     mod.build(card, tmp_path)
     src = next(tmp_path.glob("*.dxf")).read_bytes()
     layers = {layer.dxf.name for layer in ezdxf.read(io.StringIO(src.decode())).layers if layer.dxf.name not in ("0", "Defpoints")}
-    first = sorted(layers)[0]
+    first = min(layers)
     t = firm_sheet.FirmTemplates(title_block=title_block_dxf(), layer_standard={"layers": {"FIRM-ONE": {"color": 5}}, "map": {first: "FIRM-ONE"}})
     values = firm_sheet.values_for(skill, card)
     out = firm_sheet.stamp(src, t, values)
