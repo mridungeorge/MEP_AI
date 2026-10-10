@@ -291,7 +291,7 @@ def create_project(body: ProjectBody, user: User, dsn: Dsn) -> dict[str, Any]:
                                (body.address, body.state, body.ncc_edition, body.climate_zone, body.approval_date)).fetchone()
     except psycopg.errors.InsufficientPrivilege as exc:
         raise _err(403, "forbidden", str(exc).splitlines()[0]) from None
-    except (psycopg.errors.DataError, psycopg.errors.CheckViolation) as exc:
+    except (psycopg.errors.DataError, psycopg.errors.CheckViolation):
         raise _err(422, "invalid", "the project details are not valid") from None
     except psycopg.Error as exc:
         if getattr(exc, "sqlstate", None) == "P0402":

@@ -7,9 +7,8 @@ sentry_sdk = pytest.importorskip("sentry_sdk")
 
 
 def test_an_exception_event_carries_no_local_variables_and_no_secret(monkeypatch):
-    from sentry_sdk.transport import Transport
-
     from mep.observability import init_sentry
+    from sentry_sdk.transport import Transport
 
     sent: list[dict] = []
 
