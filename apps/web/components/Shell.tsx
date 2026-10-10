@@ -2,6 +2,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { api, getActingRole, setActingRole } from "@/lib/api";
+import { JoinFirm } from "./JoinFirm";
 import { useSession } from "@/lib/session";
 import { supabase } from "@/lib/supabase";
 import type { Me } from "@/lib/types";
@@ -18,6 +19,8 @@ function Header({ email }: { email: string | undefined }) {
   return (
     <header style={{ display: "flex", gap: 16, alignItems: "center", borderBottom: "1px solid #ddd", paddingBottom: 8, marginBottom: 16 }}>
       <a href="/" style={{ fontWeight: 600, textDecoration: "none", color: "inherit" }}>MEP Co-pilot</a>
+      <a href="/projects">Projects</a>
+      {me?.is_admin && <a href="/admin">Admin</a>}
       <span style={{ flex: 1 }} />
       <span data-testid="user-email">{email}</span>
       {me && me.independence_notice && <strong style={{ color: "#7f1d1d" }}>{me.independence_notice}</strong>}
@@ -47,10 +50,16 @@ export function Shell({ children }: { children: ReactNode }) {
   }, [loading, session, isPublic, router]);
   if (isPublic) return <>{children}</>;
   if (loading || !session) return <p>Checking your session…</p>;
-  return (
-    <>
-      <Header email={session.user.email} />
-      {children}
-    </>
-  );
+  return <Gate email={session.user.email}>{children}</Gate>;
+}
+
+/** A signed-in person with no firm sees the join screen; everyone else gets the app. */
+function Gate({ email, children }: { email: string | undefined; children: ReactNode }) {
+  const [state, setState] = useState<"checking" | "member" | "nomember">("checking");
+  useEffect(() => {
+    api.me().then(() => setState("member")).catch((e: unknown) => setState(e instanceof Error && /no such user/i.test(e.message) ? "nomember" : "member"));
+  }, []);
+  if (state === "checking") return <p>Checking your account…</p>;
+  if (state === "nomember") return <JoinFirm />;
+  return (<><Header email={email} />{children}</>);
 }

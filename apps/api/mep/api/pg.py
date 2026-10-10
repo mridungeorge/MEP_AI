@@ -470,13 +470,14 @@ class PgRepository(RevisionMethods):
     def me(self, user: CurrentUser) -> dict[str, Any]:
         with self._as_user() as conn:
             firm = conn.execute("select name, signer_mode from firm where id = %s", (user.firm_id,)).fetchone()
-            me = conn.execute("select role::text as role, also_roles::text[] as also from app_user where id = %s",
+            me = conn.execute("select role::text as role, also_roles::text[] as also, is_admin, email from app_user where id = %s",
                               (user.user_id,)).fetchone()
         small = firm is not None and firm["signer_mode"] == "small_firm"
         return {"user_id": str(user.user_id), "role": user.role, "firm_id": str(user.firm_id),
                 "firm_name": None if firm is None else firm["name"],
                 "signer_mode": None if firm is None else firm["signer_mode"],
                 "own_role": None if me is None else me["role"],
+                "is_admin": bool(me and me["is_admin"]), "email": None if me is None else me["email"],
                 "available_roles": [me["role"], *(me["also"] or [])] if (small and me is not None) else
                                    ([me["role"]] if me is not None else []),
                 "independence_notice": "NOT INDEPENDENTLY CHECKED" if small else None}

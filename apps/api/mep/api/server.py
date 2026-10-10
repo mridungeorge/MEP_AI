@@ -20,6 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from mep.api import agents as agents_api
 from mep.api import evidence as evidence_api
+from mep.api import admin as admin_api
 from mep.api import gate1, revisions, uploads
 from mep.api import me as me_api
 from mep.api import review as review_api
@@ -28,7 +29,7 @@ from mep.api import skills as skills_api
 from mep.api import vision_jobs as vision_jobs_api
 from mep.api.agents_pg import PgAgentBackend
 from mep.api.app import create_app
-from mep.api.auth import make_current_user
+from mep.api.auth import make_auth
 from mep.api.pg import PgLedger, PgRepository
 from mep.api.review_pg import PgReview, PgShare
 from mep.api.schedule import CurrentUser
@@ -57,7 +58,7 @@ def create_pg_app(dsn: str, jwt_secret: str, pack: RulePack, cors_origins: list[
                   skill_executor: str | None = None) -> FastAPI:
     jwks_url = f"{supabase_url.rstrip('/')}/auth/v1/.well-known/jwks.json" if supabase_url else None
     logging.getLogger("uvicorn.access").addFilter(_RedactShareTokens())
-    current_user = make_current_user(dsn, jwt_secret, jwks_url)
+    current_user, token_subject = make_auth(dsn, jwt_secret, jwks_url)
     app = create_app(None, current_user, pack, ledger=PgLedger(dsn))
 
     def repository(user: CurrentUser = Depends(current_user)) -> PgRepository:  # noqa: B008
@@ -84,6 +85,10 @@ def create_pg_app(dsn: str, jwt_secret: str, pack: RulePack, cors_origins: list[
     app.include_router(vision_jobs_api.router)
     app.dependency_overrides[vision_jobs_api.current_user] = current_user
     app.dependency_overrides[vision_jobs_api.get_dsn] = lambda: dsn
+    app.include_router(admin_api.router)
+    app.dependency_overrides[admin_api.current_user] = current_user
+    app.dependency_overrides[admin_api.token_subject] = token_subject
+    app.dependency_overrides[admin_api.get_dsn] = lambda: dsn
     app.include_router(evidence_api.router)
     app.dependency_overrides[evidence_api.current_user] = current_user
     app.dependency_overrides[evidence_api.get_dsn] = lambda: dsn

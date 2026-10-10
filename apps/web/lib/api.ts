@@ -2,7 +2,7 @@
 import { supabase } from "./supabase";
 import type {
   ApiErrorBody, BuildingPart, ConfirmResponse, Gate1State, ImportResponse, RowRef,
-  AgentNote, AgentReply, VisionJob, CardPreview, EvidenceResponse, Lineage, Me, ShortcutResult, SkillCard, SkillRunRow, SkillRunSummary, SkillSummary, Package, ShareLinkView, Worksheet, RevisionDiff, RevisionResults, RevisionSummary, RunRulesResponse, SpaceInput, SpaceRow, SystemInputInput, SystemInputRow, UploadResponse,
+  AdminOverview, MyInvitation, AgentNote, AgentReply, VisionJob, CardPreview, EvidenceResponse, Lineage, Me, ShortcutResult, SkillCard, SkillRunRow, SkillRunSummary, SkillSummary, Package, ShareLinkView, Worksheet, RevisionDiff, RevisionResults, RevisionSummary, RunRulesResponse, SpaceInput, SpaceRow, SystemInputInput, SystemInputRow, UploadResponse,
 } from "./types";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -164,6 +164,18 @@ export const api = {
   confirmCard: (r: string, skill: string, spec: Record<string, unknown>, sha: string, noteId?: string) =>
     apiFetch<{ confirmed: boolean }>(`${rev(r)}/skills/${skill}/confirm-card`, json("POST", { spec, spec_sha256: sha, note_id: noteId })),
   visionJobs: (r: string) => apiFetch<VisionJob[]>(`${rev(r)}/vision-jobs`),
+  adminOverview: () => apiFetch<AdminOverview>("/admin/overview"),
+  adminInvite: (email: string, role: string) => apiFetch<{ invitation_id: string; email_sent: boolean }>("/admin/invitations", json("POST", { email, role })),
+  adminRevokeInvite: (id: string) => apiFetch<{ revoked: boolean }>(`/admin/invitations/${id}`, { method: "DELETE" }),
+  adminPatchUser: (id: string, patch: { role?: string; is_admin?: boolean; active?: boolean }) => apiFetch<{ updated: boolean }>(`/admin/users/${id}`, json("PUT", patch)),
+  adminSaveFirm: (f: { name: string; signer_mode: string; sample_size: number; near_miss_default: number | null }) => apiFetch<{ saved: boolean }>("/admin/firm", json("PUT", f)),
+  adminAddTemplate: (kind: string, name: string, file: File) => {
+    const fd = new FormData();
+    fd.set("kind", kind); fd.set("name", name); fd.set("file", file);
+    return apiFetch<{ template_id: string }>("/admin/templates", { method: "POST", body: fd });
+  },
+  myInvitation: () => apiFetch<MyInvitation>("/invitations/mine"),
+  acceptInvitation: () => apiFetch<{ joined: boolean }>("/invitations/accept", { method: "POST" }),
   askAgent: (r: string, agent: string, message: string) => apiFetch<AgentReply>(`${rev(r)}/agents/${agent}/message`, json("POST", { message })),
   agentNotes: (r: string, kind?: string) => apiFetch<AgentNote[]>(`${rev(r)}/agent-notes${kind ? `?kind=${kind}` : ""}`),
   resolveAgentNote: (r: string, id: string, status: "answered" | "dismissed") =>

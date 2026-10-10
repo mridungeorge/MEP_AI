@@ -56,6 +56,12 @@ def _unauthenticated(message: str) -> HTTPException:
 
 
 def make_current_user(dsn: str, jwt_secret: str, jwks_url: str | None = None) -> Callable[..., CurrentUser]:
+    current_user, _ = make_auth(dsn, jwt_secret, jwks_url)
+    return current_user
+
+
+def make_auth(dsn: str, jwt_secret: str, jwks_url: str | None = None) -> tuple[Callable[..., CurrentUser], Callable[..., uuid.UUID]]:
+    """(current_user, token_subject). The second only proves WHO signed in (no firm needed): used to join a firm by invitation."""
     if len(jwt_secret.encode()) < MIN_SECRET_BYTES:
         raise ValueError("the JWT secret must be at least 32 bytes")
     jwks = _RateLimitedJWKS(jwks_url, cache_keys=True, lifespan=600, timeout=5) if jwks_url else None
@@ -74,6 +80,15 @@ def make_current_user(dsn: str, jwt_secret: str, jwks_url: str | None = None) ->
             return jwt.decode(token, key, algorithms=[alg], audience=AUDIENCE, options=options)
         raise jwt.InvalidAlgorithmError("unsupported token algorithm")
 
+    def token_subject(authorization: Annotated[str | None, Header()] = None) -> uuid.UUID:
+        scheme, _, token = (authorization or "").partition(" ")
+        if scheme.lower() != "bearer" or not token.strip():
+            raise _unauthenticated("a bearer token is required")
+        try:
+            return uuid.UUID(str(decode(token.strip())["sub"]))
+        except (jwt.PyJWTError, ValueError, TypeError, KeyError):
+            raise _unauthenticated("the token is invalid or expired") from None
+
     def current_user(authorization: Annotated[str | None, Header()] = None,
                      x_acting_role: Annotated[str | None, Header()] = None) -> CurrentUser:
         scheme, _, token = (authorization or "").partition(" ")
@@ -86,10 +101,12 @@ def make_current_user(dsn: str, jwt_secret: str, jwks_url: str | None = None) ->
             raise _unauthenticated("the token is invalid or expired") from None
         with psycopg.connect(dsn, autocommit=True) as conn:
             row = conn.execute(
-                "select u.firm_id, u.role::text, u.also_roles::text[], f.signer_mode from app_user u join firm f on f.id = u.firm_id"
+                "select u.firm_id, u.role::text, u.also_roles::text[], f.signer_mode, u.active from app_user u join firm f on f.id = u.firm_id"
                 " where u.id = %s", (user_id,)).fetchone()
         if row is None:
             raise _unauthenticated("no such user")
+        if not row[4]:
+            raise HTTPException(status_code=403, detail={"code": "deactivated", "message": "this account has been deactivated by your firm's administrator"})
         if x_acting_role and x_acting_role != row[1]:
             # acting in another role is only for a small firm, and only in a role the person has been given; the database checks too
             if row[3] != "small_firm" or x_acting_role not in (row[2] or []):
@@ -98,7 +115,7 @@ def make_current_user(dsn: str, jwt_secret: str, jwks_url: str | None = None) ->
             return CurrentUser(user_id=user_id, firm_id=row[0], role=x_acting_role, acting_role=x_acting_role)
         return CurrentUser(user_id=user_id, firm_id=row[0], role=row[1])
 
-    return current_user
+    return current_user, token_subject
 
 
 def mint_token(jwt_secret: str, user_id: uuid.UUID | str, *, ttl_seconds: int = 3600) -> str:

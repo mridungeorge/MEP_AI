@@ -152,6 +152,8 @@ export type SystemInputInput = Partial<Omit<SystemInputRow, "id" | "provenance">
 
 /** GET /me: the role and firm are the database's, not the token's. */
 export interface Me {
+  is_admin?: boolean;
+  email?: string | null;
   signer_mode?: "strict" | "small_firm" | null;
   own_role?: string | null;
   available_roles?: string[];
@@ -347,3 +349,11 @@ export interface AgentReply { agent: string; reply: string; reply_is?: string; r
 export interface EvidenceCandidate { key: string; confidence: number | null; [field: string]: string | number | null }
 export interface EvidenceSource { name: string; kind: string; sha256: string; problems: string[]; provenance: "extracted"; candidates: EvidenceCandidate[] }
 export interface EvidenceResponse { sources: EvidenceSource[] }
+
+/** Firm administration (GET /admin/overview). */
+export interface AdminUser { id: string; email: string | null; role: string; also_roles: string[]; is_admin: boolean; active: boolean; registration_no: string | null }
+export interface AdminInvitation { id: string; email: string; role: string; status: string; expires_at: string; created_at: string }
+export interface AdminTemplate { id: string; kind: "title_block" | "layer_standard"; name: string; media_type: string; sha256: string; created_at: string }
+export interface AdminFirm { id: string; name: string; signer_mode: "strict" | "small_firm"; sample_size: number; near_miss_default: number | null }
+export interface AdminOverview { firm: AdminFirm; users: AdminUser[]; invitations: AdminInvitation[]; templates: AdminTemplate[] }
+export interface MyInvitation { member: boolean; invitation: { role: string; firm: string } | null }
