@@ -391,3 +391,8 @@ export interface FixOptionView {
   target_after: string; dependent_rules: string[]; accepted: boolean; moves: { rule_id: string; before: string; after: string }[]; conflicts: string[];
 }
 export interface FixesResponse { subject_id: string; rule_id: string; outcome: string; label: string; options: FixOptionView[]; rule_text_hypotheses: string[]; note: string }
+
+/** GET /revisions/{id}/performance */
+export interface PerfEvidence { id: string; title: string; tool: string | null; description: string | null; metrics: { name: string; value: number; unit: string }[]; file_name: string | null; file_sha256: string | null; created_at: string }
+export interface PerfRow { subject_id: string; rule_id: string; clause: string | null; performance_solution_likely: boolean; flag: string | null; pathway: "DTS" | "PERFORMANCE_SOLUTION"; note: string | null; evidence: PerfEvidence[] }
+export interface PerfOverview { banner: string; results: PerfRow[] }

@@ -2,7 +2,7 @@
 import { supabase } from "./supabase";
 import type {
   ApiErrorBody, BuildingPart, ConfirmResponse, Gate1State, ImportResponse, RowRef,
-  AdminOverview, BillingOverview, FixesResponse, NewProject, NotificationPrefs, ProjectHistory, ProjectRow, PendingRegistration, MyInvitation, AgentNote, AgentReply, VisionJob, CardPreview, EvidenceResponse, Lineage, Me, ShortcutResult, SkillCard, SkillRunRow, SkillRunSummary, SkillSummary, Package, ShareLinkView, Worksheet, RevisionDiff, RevisionResults, RevisionSummary, RunRulesResponse, SpaceInput, SpaceRow, SystemInputInput, SystemInputRow, UploadResponse,
+  AdminOverview, BillingOverview, PerfOverview, FixesResponse, NewProject, NotificationPrefs, ProjectHistory, ProjectRow, PendingRegistration, MyInvitation, AgentNote, AgentReply, VisionJob, CardPreview, EvidenceResponse, Lineage, Me, ShortcutResult, SkillCard, SkillRunRow, SkillRunSummary, SkillSummary, Package, ShareLinkView, Worksheet, RevisionDiff, RevisionResults, RevisionSummary, RunRulesResponse, SpaceInput, SpaceRow, SystemInputInput, SystemInputRow, UploadResponse,
 } from "./types";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -196,6 +196,17 @@ export const api = {
   makeFixScratch: (r: string, subject: string, rule: string, option: string) =>
     apiFetch<{ scratch_id: string; accepted: boolean }>(`${rev(r)}/results/${encodeURIComponent(subject)}/${encodeURIComponent(rule)}/fixes/${option}/scratch`, json("POST", {})),
   applyFixScratch: (r: string, scratch: string) => apiFetch<{ applied: boolean; needs: string }>(`${rev(r)}/fix-scratch/${scratch}/apply`, json("POST", {})),
+  performance: (r: string) => apiFetch<PerfOverview>(`${rev(r)}/performance`),
+  setPathway: (r: string, subject: string, rule: string, pathway: string, note?: string) =>
+    apiFetch<{ saved: boolean }>(`${rev(r)}/performance/${encodeURIComponent(subject)}/${encodeURIComponent(rule)}/pathway`, json("PUT", { pathway, note: note || null })),
+  addPerfEvidence: (r: string, subject: string, rule: string, f: { title: string; tool?: string; description?: string; metrics: string; file?: File | null }) => {
+    const fd = new FormData();
+    fd.set("title", f.title); fd.set("metrics", f.metrics);
+    if (f.tool) fd.set("tool", f.tool);
+    if (f.description) fd.set("description", f.description);
+    if (f.file) fd.set("file", f.file);
+    return apiFetch<{ evidence_id: string }>(`${rev(r)}/performance/${encodeURIComponent(subject)}/${encodeURIComponent(rule)}/evidence`, { method: "POST", body: fd });
+  },
   askAgent: (r: string, agent: string, message: string) => apiFetch<AgentReply>(`${rev(r)}/agents/${agent}/message`, json("POST", { message })),
   agentNotes: (r: string, kind?: string) => apiFetch<AgentNote[]>(`${rev(r)}/agent-notes${kind ? `?kind=${kind}` : ""}`),
   resolveAgentNote: (r: string, id: string, status: "answered" | "dismissed") =>
