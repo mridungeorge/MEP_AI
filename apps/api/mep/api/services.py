@@ -5,26 +5,26 @@ ceiling void, or a take-off, is visible early. Results say CLASH / CLEAR / NO DA
 """
 import csv
 import hashlib
-import json
 import io
+import json
 import math
 import tempfile
-from pathlib import Path
 from collections.abc import Iterator
 from contextlib import contextmanager
+from pathlib import Path
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
 import psycopg
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from starlette.concurrency import run_in_threadpool
 from fastapi.responses import Response
 from psycopg.rows import dict_row
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+from starlette.concurrency import run_in_threadpool
 
+from mep import clash
 from mep.api.revisions import DESIGNER_ROLES, Repo, _err
 from mep.api.revisions import User as RevUser
-from mep import clash
 from mep.engine import units
 
 router = APIRouter()
@@ -135,7 +135,7 @@ def add_run(revision_id: UUID, body: RunBody, user: RevUser, repo: Repo, dsn: Ds
     _check_space(dsn, user, revision_id, body.space_id)
     c = _columns(body)
     names = list(c)
-    row = _service_write(dsn, f"insert into duct_run (firm_id, revision_id, created_by, {', '.join(names)}) values (%s, %s, %s, {', '.join(['%s'] * len(names))}) returning id",     # noqa: S608
+    row = _service_write(dsn, f"insert into duct_run (firm_id, revision_id, created_by, {', '.join(names)}) values (%s, %s, %s, {', '.join(['%s'] * len(names))}) returning id",
                          (user.firm_id, revision_id, user.user_id, *c.values()))
     assert row is not None
     return {"id": str(row["id"])}
@@ -146,7 +146,7 @@ def update_run(revision_id: UUID, run_id: UUID, body: RunBody, user: RevUser, re
     _open_revision(repo, user, revision_id)
     _check_space(dsn, user, revision_id, body.space_id)
     c = _columns(body)
-    row = _service_write(dsn, f"update duct_run set {', '.join(f'{k} = %s' for k in c)} where id = %s and revision_id = %s and firm_id = %s returning id",       # noqa: S608
+    row = _service_write(dsn, f"update duct_run set {', '.join(f'{k} = %s' for k in c)} where id = %s and revision_id = %s and firm_id = %s returning id",
                          (*c.values(), run_id, revision_id, user.firm_id))
     if row is None:
         raise _err(404, "not_found", "no such item")

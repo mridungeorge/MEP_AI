@@ -41,7 +41,7 @@ def read_boxes(path: Path) -> tuple[list[Box], int, list[str]]:
         raise ClashIfcError(f"the file is larger than {MAX_BYTES // (1024 * 1024)} MiB")
     try:
         model = ifcopenshell.open(str(path))
-    except Exception as exc:  # noqa: BLE001 - the library raises many types for a bad file
+    except Exception as exc:
         raise ClashIfcError("not a readable IFC file") from exc
     settings = ifcopenshell.geom.settings()
     settings.set("use-world-coords", True)
