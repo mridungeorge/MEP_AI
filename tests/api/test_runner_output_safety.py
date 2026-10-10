@@ -80,3 +80,19 @@ def test_read_regular_refuses_links_fifos_devices_and_big_files(tmp_path):
         read_regular(Path("/dev/zero"), 10)
     with pytest.raises(UnsafeOutput):
         check_output_dir(tmp_path)                          # holds a link and a FIFO
+
+
+def test_the_executor_is_asked_to_clean_up_what_the_job_left_and_the_result_still_comes_back():
+    seen = {}
+
+    class Cleaning(Hostile):
+        def cleanup(self, work):
+            seen["work"] = work
+
+    def plant(out):
+        (out / "d").mkdir()
+        (out / "d" / "x").write_text("x")
+        os.chmod(out / "d", 0o500)
+
+    result = run_skill("space-envelope", SPEC, executor=Cleaning(plant))
+    assert result.status == "revalidation_failed" and "work" in seen           # a result came back, and the executor was asked to clean

@@ -170,6 +170,7 @@ export const api = {
     apiFetch<{ resolved: boolean }>(`${rev(r)}/agent-notes/${id}/resolve`, json("POST", { status })),
   addEvidenceSpace: (r: string, b: { source_sha256: string; entity_key: string; area_unit: string; void_unit?: string }) =>
     apiFetch<{ space_id: string }>(`${rev(r)}/evidence/spaces`, json("POST", b)),
+  removeEvidenceSpace: (r: string, spaceId: string) => apiFetch<{ removed: boolean }>(`${rev(r)}/evidence/spaces/${spaceId}`, { method: "DELETE" }),
   evidence: (r: string, source?: string) => apiFetch<EvidenceResponse>(`${rev(r)}/evidence${source ? `?source=${source}` : ""}`),
   runRules: (r: string) => apiFetch<RunRulesResponse>(`${rev(r)}/run-rules`, { method: "POST" }),
 };

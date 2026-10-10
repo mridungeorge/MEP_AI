@@ -64,6 +64,19 @@ def add_space(revision_id: UUID, body: AddSpaceBody, user: User, dsn: Annotated[
     return {"space_id": str(sid), "provenance": "extracted", "needs": "Gate 1 confirmation"}
 
 
+@router.delete("/revisions/{revision_id}/evidence/spaces/{space_id}")
+def remove_space(revision_id: UUID, space_id: UUID, user: User, dsn: Annotated[str, Depends(get_dsn)]) -> dict[str, Any]:
+    """Remove a space that was made from a drawing reading (for example one added with the wrong unit), so it can be added again."""
+    try:
+        with _as_user(dsn, user) as conn:
+            if conn.execute("select 1 from space where id = %s and revision_id = %s and firm_id = %s", (space_id, revision_id, user.firm_id)).fetchone() is None:
+                raise HTTPException(status_code=404, detail={"code": "not_found", "message": "no such space in this revision"})
+            conn.execute("select evidence_remove_space(%s)", (space_id,))
+    except psycopg.errors.InsufficientPrivilege as exc:
+        raise HTTPException(status_code=403, detail={"code": "forbidden", "message": str(exc).splitlines()[0]}) from None
+    return {"removed": True}
+
+
 @router.get("/revisions/{revision_id}/evidence")
 def evidence(revision_id: UUID, user: User, dsn: Annotated[str, Depends(get_dsn)], source: str | None = None) -> dict[str, Any]:
     """Candidate spaces per source file, grouped from the evidence rows: {sources: [{name, kind, sha256, problems, candidates: [...]}]}."""

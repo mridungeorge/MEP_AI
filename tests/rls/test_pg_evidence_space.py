@@ -148,3 +148,29 @@ def test_the_unit_factors_in_the_database_equal_pint(admin, tmp_path):
         read = float(admin.execute("select value_number from extraction where revision_id = %s and entity_key = 'p1-1' and field = 'ceiling_void'",
                                    (f["revision"],)).fetchone()[0])
         assert stored == pytest.approx(UREG.Quantity(read, qty).to("mm").magnitude, rel=1e-6)
+
+
+def test_an_evidence_space_added_with_the_wrong_unit_can_be_removed_and_added_again(admin, tmp_path):
+    client, f, src = evidence_ready(admin, tmp_path)
+    sid = add(client, f, src, area_unit="m^2").json()["space_id"]
+    base = f"/revisions/{f['revision']}/evidence/spaces/{sid}"
+    assert client.delete(base, headers=h.auth(f["checker"])).status_code == 403
+    other = h.seed(admin)
+    assert client.delete(base, headers=h.auth(other["designer"])).status_code == 404
+    assert client.delete(base, headers=h.auth(f["designer"])).status_code == 200
+    assert admin.execute("select count(*) from space where id = %s", (sid,)).fetchone()[0] == 0
+    assert admin.execute("select count(*) from ledger_event where revision_id = %s and kind = 'evidence_space_removed'", (f["revision"],)).fetchone()[0] == 1
+    again = add(client, f, src, area_unit="ft^2")
+    assert again.status_code == 200 and again.json()["space_id"] != sid
+    # a typed space cannot be removed this way, and a frozen revision removes nothing
+    typed = client.post(f"/revisions/{f['revision']}/gate1/spaces", headers=h.auth(f["designer"]), json={"name": "Typed", "area_m2": 5}).json()["id"]
+    assert client.delete(f"/revisions/{f['revision']}/evidence/spaces/{typed}", headers=h.auth(f["designer"])).status_code == 403
+    admin.execute("update revision set frozen_at = now(), status = 'frozen' where id = %s", (f["revision"],))
+    assert client.delete(f"/revisions/{f['revision']}/evidence/spaces/{again.json()['space_id']}", headers=h.auth(f["designer"])).status_code in (403, 409)
+
+
+def test_a_crafted_insert_cannot_leave_half_an_evidence_link_that_locks_the_row(admin, tmp_path):
+    _, f, _ = evidence_ready(admin, tmp_path)
+    with pytest.raises(psycopg.errors.Error):
+        admin.execute("insert into space (firm_id, revision_id, name, area_m2_value, area_m2_provenance, evidence_page) values (%s, %s, 'x', 5, 'default', 1)",
+                      (f["firm"], f["revision"]))

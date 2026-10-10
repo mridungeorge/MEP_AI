@@ -4,20 +4,8 @@ Sprint: 2 (prove the data) rebuilt and finished after the 2026-10-09 recovery; t
 local devcontainer gate is the reference (tag `sprint-2-gate`). GitHub CI has never run (no remote CI evidence).
 Updated: 2026-10-09 (recovery after a device change; see "Recovery 2026-10-09")
 
-## Resume here (updated 2026-10-12, stopped at the usage limit)
-Done: 2.5, 3, 4a, 4a.1, 4b (`sprint-4b-gate`). **Phase 5 pilot hardening: items 1-7 built, committed and pushed (HEAD 3c911d9 plus this note); NOT closed, no `sprint-5-gate`.**
-Left, in order:
-1. GitHub CI on 3c911d9: jobs python/signoff green; job `images` FAILED at the step "the worker image has the CAD kernel, runs non-root, builds both skills,
-   and is isolated ..." (the API, worker and web images themselves BUILT; the API-image import step passed after the pypdf fix). The logs are not readable
-   without a GitHub token (no `gh` here): reproduce by building `deploy/worker/Dockerfile` on a machine where that is safe, or add `-rs -x --tb=long` output to the
-   step and re-run. Suspects: `import cadquery` needing another system library, the container probes (tmpfs/noexec, `-w /job/out` as uid 10001), or
-   `test_the_real_worker_image_*` (needs the image's `/srv/app` readable and `skills/duct-fab/examples/rect_reducer/spec.json` present). First failure of this issue.
-2. Item 8, the consolidated adversarial review of everything since sprint-3-gate (max two rounds): the four reviewer agents (A DB/sign-off, B API/ingest,
-   C skills/worker, D agents/web/deploy) all died on the usage limit before reporting; NOTHING was reviewed. Re-run them after the limit resets.
-3. Record in this file which fixes were and were not re-reviewed; `scripts/ci.sh` on a clean clone (note: new tests need `MEP_ISOLATION_IMAGE=python:3.12-slim`
-   to run the container probes locally, otherwise they are skipped); GitHub CI green; tag `sprint-5-gate`; `git push origin main --tags`.
-4. Then give the user the by-hand staging checklist (Supabase Sydney, Railway, Vercel, ANTHROPIC_API_KEY, plus the Docker host for the drafting worker,
-   docs/runbooks/skill-worker.md) and STOP.
+## Resume here (updated 2026-10-12)
+Done: 2.5, 3, 4a, 4a.1, 4b, **Phase 5 pilot hardening** (`sprint-5-gate`). Next: the user's by-hand staging checklist was given; nothing else is queued. A new phase needs a new prompt.
 Notes: the local Supabase signs tokens with ES256 (JWKS). Mail for magic links goes to Mailpit (`http://127.0.0.1:54324`). Run everything in
 the devcontainer; `~/ws` is a synced work copy (never `uv sync` there); clean gates run from `git clone` copies (`~/gate3`). On the Windows
 host put `AppData/Local/Python/bin` (under the user profile) first on PATH (the WindowsApps `python` stub fails). `.env.example` files cannot
@@ -46,6 +34,20 @@ Existing open revisions have results without an input fingerprint (`inputs_hash`
   against a live uvicorn (`tests/rls/test_pg_smoke.py`). None of the three images could be built locally (Docker build hangs Docker Desktop here): the CI job
   is their first build.
 - Migrations 0024 and 0025 were edited once after being pushed and before any deployment (column grants, firm_id on skill_job_file).
+
+- **Phase 5 review record.** One consolidated review of everything since `sprint-3-gate` (4 reviewers, round 1) + a round 2 on the fixes (2 reviewers).
+  Round 1: 2 blockers (a designer could attach a forged evidence link to a typed space by UPDATE; the dispatcher read worker output by following symlinks/FIFOs) +
+  the smoke script able to freeze/sign any revision, vision jobs that could stick, silent unisolated builds in a deployment, filter vocabulary, idempotent card
+  confirmation, 500 on an unchanged evidence value, and more: all fixed (0027, runner.read_regular/check_output_dir, smoke refuses non-SMOKE-TEST revisions,
+  `app_from_env` disables local builds). CI also found a real bug: files written by the container user were unreadable by the collecting user (worker now
+  chmods output 0644) and the API image lacked `pypdf` (now a lazy import).
+  Round 2: 1 blocker (an evidence space could never be removed or corrected: now `evidence_remove_space` + DELETE route + button, 0028) + should-fix (a crafted
+  insert could half-link a row and lock it: guard tightened; cleanup of root-owned job output: executor `cleanup`). **Re-reviewed: round-1 fixes (by round 2).
+  NOT re-reviewed: the round-2 fixes (0028, `_cleanup`/`DockerExecutor.cleanup`, dispatcher rowcount check, `vision_job._finish` guard).**
+  Unfixed nits: other local users on the dispatcher host can read/write the job's work directory while it runs (use a private 0700 parent or userns remap);
+  the dispatcher holds the full service DSN and the Docker socket (give it a dedicated Postgres role); the API trusts the worker's manifest (it re-hashes the
+  files but does not re-run the validator); unbounded JSON bodies on card-preview/confirm-card; raw tool arguments (incl. unfiltered explanation text) go
+  into the hash-chained ledger and cannot be purged; unit conversion for evidence lives in SQL (tied to pint by a test).
 
 ### Known limits (validator blind spots and others, deliberately left)
 - space-envelope validator does not check: the VOLUMEUNIT prefix, `IfcQuantityArea` unit overrides, a property set shared between two spaces, DXF TEXT style /

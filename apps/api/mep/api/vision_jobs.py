@@ -76,7 +76,7 @@ def claim(conn: psycopg.Connection[dict[str, Any]]) -> dict[str, Any] | None:
 def _finish(conn: psycopg.Connection[dict[str, Any]], job_id: UUID, status: str, *, error: str | None = None, problems: list[str] | None = None,
             ingest_run: str | None = None, extractions: int | None = None) -> None:
     conn.execute("update vision_job set status = %s, error = %s, problems = %s::jsonb, ingest_run = %s, extractions = %s, finished_at = now(), pdf = null"
-                 " where id = %s", (status, error, __import__("json").dumps(problems or []), ingest_run, extractions, job_id))
+                 " where id = %s and status = 'running'", (status, error, __import__("json").dumps(problems or []), ingest_run, extractions, job_id))
 
 
 def process(conn: psycopg.Connection[dict[str, Any]], job: dict[str, Any], vision: Any) -> None:

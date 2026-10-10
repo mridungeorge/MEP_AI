@@ -8,9 +8,11 @@
 Any other outcome returns a result with `files` empty of content: the caller stores nothing and releases nothing. No LLM is involved and no
 compliance value is computed here.
 """
+import contextlib
 import hashlib
 import json
 import os
+import shutil
 import stat
 import subprocess
 import sys
@@ -110,9 +112,9 @@ def run_skill(name: str, spec: dict[str, Any], *, wall_seconds: int = WALL_SECON
         return SkillRunResult("spec_rejected", "the spec card is larger than 1 MB")
     if not _SLOTS.acquire(timeout=5):
         raise SkillUnavailable("several drafting jobs are running; try again in a minute")
+    work = Path(tempfile.mkdtemp(prefix="mep-job-"))
     try:
-        with tempfile.TemporaryDirectory() as td:
-            work = Path(td)
+        if True:
             (work / "in").mkdir()
             (work / "out").mkdir()
             os.chmod(work, 0o755)
@@ -134,7 +136,18 @@ def run_skill(name: str, spec: dict[str, Any], *, wall_seconds: int = WALL_SECON
                 return SkillRunResult("build_failed", message or "the build failed")
             return _release(info.name, work, executor, wall_seconds, cpu_seconds, memory_bytes)
     finally:
+        _cleanup(work, executor)
         _SLOTS.release()
+
+
+def _cleanup(work: Path, executor: Executor) -> None:
+    """Remove the job's directory. Files the job made may belong to another user (a container's), so a plain delete can fail on the
+    dispatcher host: the executor gets to remove them as that user first. Never raises (it must not replace the result)."""
+    with contextlib.suppress(Exception):
+        remove = getattr(executor, "cleanup", None)
+        if remove is not None:
+            remove(work)
+    shutil.rmtree(work, ignore_errors=True)
 
 
 class UnsafeOutput(Exception):

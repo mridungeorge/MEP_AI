@@ -13,13 +13,15 @@ function parse(field: Field, raw: string): string | number | null {
 }
 
 export function SpaceTable({
-  spaces, selected, onToggle, onEdit,
+  spaces, selected, onToggle, onEdit, onRemoveEvidence,
 }: {
   spaces: SpaceRow[];
   selected: Set<string>;
   onToggle: (id: string) => void;
   /** Persist an edit; the parent resets the row to unconfirmed. */
   onEdit: (id: string, patch: SpaceInput) => void;
+  /** Remove a space that was made from a drawing reading (wrong unit, wrong candidate) so it can be added again. */
+  onRemoveEvidence?: (id: string) => void;
 }) {
   const cell = (s: SpaceRow, f: Field) => (
     <input
@@ -55,7 +57,8 @@ export function SpaceTable({
               <td>{cell(s, "use")}</td>
               <td>{cell(s, "storey")}</td>
               <td>{cell(s, "ceiling_void_mm")}</td>
-              <td><ProvenanceBadge provenance={s.provenance} /></td>
+              <td><ProvenanceBadge provenance={s.provenance} />
+                {s.evidence && onRemoveEvidence && <> <button type="button" onClick={() => onRemoveEvidence(s.id)}>Remove (read from a drawing)</button></>}</td>
             </tr>
           ))}
         </tbody>

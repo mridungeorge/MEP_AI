@@ -98,7 +98,8 @@ export function Gate1Screen({ revisionId }: { revisionId: string }) {
         onToggle={toggle("building_part")}
         onSave={async (p) => { await api.putParts(revisionId, p); await reload(); }}
       />
-      <SpaceTable spaces={state.spaces} selected={sel.space} onToggle={toggle("space")} onEdit={editSpace} />
+      <SpaceTable spaces={state.spaces} selected={sel.space} onToggle={toggle("space")} onEdit={editSpace}
+        onRemoveEvidence={state.role === "designer" ? (id) => { void api.removeEvidenceSpace(revisionId, id).then(reload); } : undefined} />
       {lowHealth && (
         <ManualTraceForm onAdd={async (s) => { await api.addSpace(revisionId, s); await reload(); }} />
       )}

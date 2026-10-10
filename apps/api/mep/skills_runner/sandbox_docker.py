@@ -58,6 +58,13 @@ class DockerExecutor:
         return subprocess.CompletedProcess(proc.args, proc.returncode, proc.stdout[:1 << 20].decode("utf-8", "replace"),
                                            proc.stderr[:8192].decode("utf-8", "replace"))
 
+    def cleanup(self, work: Path) -> None:
+        """Empty the output directory as the job's own user: it owns what the job wrote and the dispatcher may not be allowed to delete it."""
+        args = docker_run_args(self.image, f"mep-clean-{uuid.uuid4().hex[:12]}", work / "in", work / "out", out_writable=True, cpu_seconds=30,
+                               memory_bytes=256 * 1024 * 1024, file_bytes=self.file_bytes,
+                               command=["-c", "find /job/out -mindepth 1 -delete"], entrypoint="sh", docker=self.docker)
+        subprocess.run(args, capture_output=True, timeout=60, check=False)
+
     def build(self, skill: str, work: Path, *, wall: int, cpu: int, memory: int) -> subprocess.CompletedProcess[str] | None:
         return self._run(work, ["build", skill, "/job/in/spec.json", "/job/out"], out_writable=True, wall=wall, cpu=cpu, memory=memory)
 

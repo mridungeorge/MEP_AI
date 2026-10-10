@@ -120,8 +120,9 @@ def test_the_real_worker_image_builds_and_validates_space_envelope_twice(name):
     result = run_skill("space-envelope", spec, executor=DockerExecutor(os.environ["MEP_WORKER_IMAGE"]))
     assert result.status == "ok" and result.released and {f.role for f in result.files} >= {"ifc", "dxf", "manifest"}
     expected = json.loads((EXAMPLES / name / "expected_manifest.json").read_text(encoding="utf-8"))
-    if result.manifest["toolchain"] == expected["toolchain"]:                                # byte-for-byte only on the toolchain the golden was made with
-        assert [(f["name"], f["sha256"]) for f in result.manifest["files"]] == [(f["name"], f["sha256"]) for f in expected["files"]]
+    if result.manifest["toolchain"] != expected["toolchain"]:                                # byte-for-byte only on the toolchain the golden was made with
+        pytest.skip(f"toolchain {result.manifest['toolchain']} differs from the golden's {expected['toolchain']}: regenerate the expected manifest after review")
+    assert [(f["name"], f["sha256"]) for f in result.manifest["files"]] == [(f["name"], f["sha256"]) for f in expected["files"]]
 
 
 @pytest.mark.skipif(not (os.environ.get("MEP_WORKER_IMAGE") and shutil.which("docker")), reason="needs the built worker image (MEP_WORKER_IMAGE)")

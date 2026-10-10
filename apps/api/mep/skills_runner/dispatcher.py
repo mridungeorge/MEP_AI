@@ -47,8 +47,10 @@ def process(conn: psycopg.Connection[dict[str, Any]], job: dict[str, Any], execu
         with conn.transaction():
             for name, data in contents.items():
                 conn.execute("insert into skill_job_file (job_id, firm_id, name, content) values (%s, %s, %s, %s)", (job["id"], job["firm_id"], name, data))
-            conn.execute("update skill_job set status = 'done', finished_at = now(), result = %s::jsonb where id = %s and status = 'running'",
-                         (json.dumps(meta), job["id"]))
+            done = conn.execute("update skill_job set status = 'done', finished_at = now(), result = %s::jsonb where id = %s and status = 'running'",
+                                (json.dumps(meta), job["id"]))
+            if done.rowcount != 1:                       # the job was already failed as stale: leave no orphan files
+                raise psycopg.errors.DataException("the job is no longer running")
     except psycopg.Error as exc:
         with contextlib.suppress(psycopg.Error):
             conn.execute("update skill_job set status = 'failed', finished_at = now(), error = %s where id = %s and status = 'running'",
