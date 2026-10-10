@@ -4,9 +4,20 @@ Sprint: 2 (prove the data) rebuilt and finished after the 2026-10-09 recovery; t
 local devcontainer gate is the reference (tag `sprint-2-gate`). GitHub CI has never run (no remote CI evidence).
 Updated: 2026-10-09 (recovery after a device change; see "Recovery 2026-10-09")
 
-## Resume here (updated 2026-10-12)
-Done: 2.5, 3, 4a, 4a.1, 4b (`sprint-4b-gate`), **Phase 5 pilot hardening** (see the Phase 5 section; tag `sprint-5-gate` once cut). The user's instruction
-after Phase 5 is: give the checklist of what to do by hand to deploy staging, then STOP.
+## Resume here (updated 2026-10-12, stopped at the usage limit)
+Done: 2.5, 3, 4a, 4a.1, 4b (`sprint-4b-gate`). **Phase 5 pilot hardening: items 1-7 built, committed and pushed (HEAD 3c911d9 plus this note); NOT closed, no `sprint-5-gate`.**
+Left, in order:
+1. GitHub CI on 3c911d9: jobs python/signoff green; job `images` FAILED at the step "the worker image has the CAD kernel, runs non-root, builds both skills,
+   and is isolated ..." (the API, worker and web images themselves BUILT; the API-image import step passed after the pypdf fix). The logs are not readable
+   without a GitHub token (no `gh` here): reproduce by building `deploy/worker/Dockerfile` on a machine where that is safe, or add `-rs -x --tb=long` output to the
+   step and re-run. Suspects: `import cadquery` needing another system library, the container probes (tmpfs/noexec, `-w /job/out` as uid 10001), or
+   `test_the_real_worker_image_*` (needs the image's `/srv/app` readable and `skills/duct-fab/examples/rect_reducer/spec.json` present). First failure of this issue.
+2. Item 8, the consolidated adversarial review of everything since sprint-3-gate (max two rounds): the four reviewer agents (A DB/sign-off, B API/ingest,
+   C skills/worker, D agents/web/deploy) all died on the usage limit before reporting; NOTHING was reviewed. Re-run them after the limit resets.
+3. Record in this file which fixes were and were not re-reviewed; `scripts/ci.sh` on a clean clone (note: new tests need `MEP_ISOLATION_IMAGE=python:3.12-slim`
+   to run the container probes locally, otherwise they are skipped); GitHub CI green; tag `sprint-5-gate`; `git push origin main --tags`.
+4. Then give the user the by-hand staging checklist (Supabase Sydney, Railway, Vercel, ANTHROPIC_API_KEY, plus the Docker host for the drafting worker,
+   docs/runbooks/skill-worker.md) and STOP.
 Notes: the local Supabase signs tokens with ES256 (JWKS). Mail for magic links goes to Mailpit (`http://127.0.0.1:54324`). Run everything in
 the devcontainer; `~/ws` is a synced work copy (never `uv sync` there); clean gates run from `git clone` copies (`~/gate3`). On the Windows
 host put `AppData/Local/Python/bin` (under the user profile) first on PATH (the WindowsApps `python` stub fails). `.env.example` files cannot
