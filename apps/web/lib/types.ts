@@ -406,3 +406,10 @@ export interface Quantities { duct_by_size: { shape: string; size_mm: string; co
   insulation: { thickness_mm: number; area_m2: number }[]; terminals_per_space: { space: string; quantity: number }[]; basis: string }
 export interface ClashView { note: string; clearance_mm: number; ducts_checked: number; ducts_without_coordinates: number; models: { id: string; discipline: string; file_name: string; elements: number; skipped: number; problems: string[] }[];
   clashes: { duct_tag: string; discipline: string; model: string; element_class: string; element_name: string | null; kind: "OVERLAP" | "CLEARANCE"; gap_mm: number; level: string }[] }
+
+/** GET /revisions/{id}/sizing */
+export interface SizingView { note: string; settings: Record<string, number | null>;
+  ducts: { id: string; tag: string; system_tag: string | null; airflow_ls: number | null; status: string; reason: string | null; role?: string; velocity_note?: string; entered_matches?: boolean;
+    recommended: { shape: string; width_mm: number | null; depth_mm: number | null; diameter_mm: number | null; velocity_ms: number; friction_actual_pa_m: number; notes: string[] } | null }[];
+  balance: { system_tag: string; trunk_ls: number; terminals_ls: number; difference_pct: number | null; status: string }[];
+  spec_card_drafts: { mark: string; from_duct: string; to_duct: string; missing_engineer_inputs: string[]; note: string }[] }

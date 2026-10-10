@@ -120,3 +120,26 @@ def test_an_unconfirmed_void_is_never_called_clear_and_control_characters_are_re
     assert row["status"] == "NO DATA" and row["void_confirmed"] is False
     assert client.post(url, json=duct("bad\x01tag", sp["Office"]), headers=d).status_code == 422
     assert client.post(url, content='{"kind":"duct","tag":"N","shape":"round","diameter":200,"length":1,"start":[NaN,0,0],"end":[1,0,0]}', headers=d | {"Content-Type": "application/json"}).status_code == 422
+
+
+def test_the_sizing_schedule_uses_firm_settings_and_drafts_reducer_cards(admin, client):
+    f, d, sp = setup(admin, client)
+    url = f"{h.base(f)}/services"
+    client.post(url, json=duct("D1", sp["Office"], width=300, depth=300, system_tag="S1", airflow_ls=1000), headers=d)
+    client.post(url, json=duct("D2", sp["Office"], width=300, depth=300, system_tag="S1", airflow_ls=400), headers=d)
+    client.post(url, json={"kind": "terminal", "tag": "T1", "system_tag": "S1", "airflow_ls": 700, "quantity": 2}, headers=d)
+    got = client.get(f"{h.base(f)}/sizing", headers=d).json()
+    rows = {r["tag"]: r for r in got["ducts"]}
+    assert rows["D1"]["status"] == "SIZED" and rows["D1"]["role"] == "main" and rows["D2"]["role"] == "branch"
+    assert rows["D1"]["recommended"]["width_mm"] > rows["D2"]["recommended"]["width_mm"] - 1 and rows["D1"]["velocity_note"] == "NO LIMIT SET"
+    assert rows["D1"]["entered_matches"] is False
+    assert got["balance"][0]["system_tag"] == "S1" and got["balance"][0]["status"] == "UNBALANCED"
+    card = got["spec_card_drafts"][0]
+    assert card["fitting"] == "rect_reducer" and card["complete"] is False and "sheet_thickness_mm" in card["missing_engineer_inputs"]
+    assert client.put("/sizing/settings", json={"settings": {"friction_pa_m": 1.0}}, headers=h.auth(f["checker"])).status_code == 403
+    admin.execute("update app_user set is_admin = true where id = %s", (f["designer"],))
+    assert client.put("/sizing/settings", json={"settings": {"friction_pa_m": 0}}, headers=d).status_code == 422
+    assert client.put("/sizing/settings", json={"settings": {"max_velocity_main_ms": 4}}, headers=d).status_code == 200
+    again = client.get(f"{h.base(f)}/sizing", headers=d).json()
+    assert next(r for r in again["ducts"] if r["tag"] == "D1")["velocity_note"] == "ABOVE LIMIT"
+    assert admin.execute("select count(*) from ledger_event where firm_id = %s and kind = 'firm_sizing_settings_changed'", (f["firm"],)).fetchone()[0] == 1

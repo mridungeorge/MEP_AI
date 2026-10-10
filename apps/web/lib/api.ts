@@ -2,7 +2,7 @@
 import { supabase } from "./supabase";
 import type {
   ApiErrorBody, BuildingPart, ConfirmResponse, Gate1State, ImportResponse, RowRef,
-  AdminOverview, BillingOverview, ClashView, Quantities, ServiceItem, VoidView, PerfOverview, FixesResponse, NewProject, NotificationPrefs, ProjectHistory, ProjectRow, PendingRegistration, MyInvitation, AgentNote, AgentReply, VisionJob, CardPreview, EvidenceResponse, Lineage, Me, ShortcutResult, SkillCard, SkillRunRow, SkillRunSummary, SkillSummary, Package, ShareLinkView, Worksheet, RevisionDiff, RevisionResults, RevisionSummary, RunRulesResponse, SpaceInput, SpaceRow, SystemInputInput, SystemInputRow, UploadResponse,
+  AdminOverview, BillingOverview, SizingView, ClashView, Quantities, ServiceItem, VoidView, PerfOverview, FixesResponse, NewProject, NotificationPrefs, ProjectHistory, ProjectRow, PendingRegistration, MyInvitation, AgentNote, AgentReply, VisionJob, CardPreview, EvidenceResponse, Lineage, Me, ShortcutResult, SkillCard, SkillRunRow, SkillRunSummary, SkillSummary, Package, ShareLinkView, Worksheet, RevisionDiff, RevisionResults, RevisionSummary, RunRulesResponse, SpaceInput, SpaceRow, SystemInputInput, SystemInputRow, UploadResponse,
 } from "./types";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -218,6 +218,7 @@ export const api = {
     fd.set("discipline", discipline); fd.set("file", file);
     return apiFetch<{ elements: number }>(`${rev(r)}/clash/models`, { method: "POST", body: fd });
   },
+  sizing: (r: string) => apiFetch<SizingView>(`${rev(r)}/sizing`),
   askAgent: (r: string, agent: string, message: string) => apiFetch<AgentReply>(`${rev(r)}/agents/${agent}/message`, json("POST", { message })),
   agentNotes: (r: string, kind?: string) => apiFetch<AgentNote[]>(`${rev(r)}/agent-notes${kind ? `?kind=${kind}` : ""}`),
   resolveAgentNote: (r: string, id: string, status: "answered" | "dismissed") =>

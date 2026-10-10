@@ -5,7 +5,7 @@ local devcontainer gate is the reference (tag `sprint-2-gate`). GitHub CI has ne
 Updated: 2026-10-09 (recovery after a device change; see "Recovery 2026-10-09")
 
 ## Resume here (updated 2026-10-12, OVERNIGHT RUN: plan in docs/OVERNIGHT_PLAN.md, scheduled task 53299a5d every 30 min)
-Phase 7 DONE: tag `sprint-7-gate` (GitHub CI green on f2e7399). NEXT ACTION: Phase 8 item 1 (duct sizing, equal-friction SI, velocity limits as firm settings, feeds duct-fab spec cards, airflow-balance validator).
+Phase 7 DONE (`sprint-7-gate`). Phase 8 IN PROGRESS: 8.1 duct sizing DONE (mep/sizing.py, api/sizing_api.py, 0040, tests/api/test_sizing.py, Services screen panel). NEXT ACTION: 8.2 hvac-dxf skill (new skills/hvac-dxf with spec card, build.py, validator that tags match the sizing schedule; run via the skill worker like duct-fab).
 Done and tagged: 2.5, 3, 4a, 4a.1, 4b, 5. **Phases 6-9 are the standing order** (user prompt: run 6, 7, 8, 9 in order without stopping, then write
 `docs/review-pack.md` and STOP; do not encode AS 1668.2, AS/NZS 3000, 3008 or AS 4254).
 Phase 6 (product shell) is DONE: tag `sprint-6-gate`. Next: Phase 7 (engineering features), then 8, 9, then `docs/review-pack.md`.
@@ -481,3 +481,4 @@ JSON + PDF: met.
 ## Decisions made overnight
 - Migrations 0037 and 0039 were edited in place after being pushed (round-1 fixes): no deployed database had applied them (staging is not deployed); local DBs are reset.
 - Unanswered Docker clean-up question: continued with small local batches and GitHub CI as the full check.
+- 8.1 sizing: friction rate default 1.0 Pa/m, roughness 0.09 mm, increment 50 mm, min size 150 mm, target aspect 2, max aspect 4 are firm-changeable DESIGN-PRACTICE defaults (not from a standard); velocity limits have NO default ("NO LIMIT SET").

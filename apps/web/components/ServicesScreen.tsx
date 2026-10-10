@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, api, getToken } from "@/lib/api";
-import type { ClashView, Quantities, ServiceItem, VoidView } from "@/lib/types";
+import type { ClashView, Quantities, ServiceItem, SizingView, VoidView } from "@/lib/types";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -20,14 +20,15 @@ export function ServicesScreen({ revisionId }: { revisionId: string }) {
   const [voids, setVoids] = useState<VoidView | null>(null);
   const [qty, setQty] = useState<Quantities | null>(null);
   const [clash, setClash] = useState<ClashView | null>(null);
+  const [sizing, setSizing] = useState<SizingView | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [form, setForm] = useState({ tag: "", width: "600", depth: "300", length: "4", insulation: "25" });
   const [discipline, setDiscipline] = useState("fire");
   const fail = (e: unknown) => setMessage(e instanceof ApiError ? e.message : String(e));
   const load = useCallback(async () => {
     try {
-      const [i, v, q, c] = await Promise.all([api.services(revisionId), api.ceilingVoid(revisionId), api.quantities(revisionId), api.clash(revisionId)]);
-      setItems(i.items); setVoids(v); setQty(q); setClash(c);
+      const [i, v, q, c, z] = await Promise.all([api.services(revisionId), api.ceilingVoid(revisionId), api.quantities(revisionId), api.clash(revisionId), api.sizing(revisionId)]);
+      setItems(i.items); setVoids(v); setQty(q); setClash(c); setSizing(z);
     } catch (e) { fail(e); }
   }, [revisionId]);
   useEffect(() => { void load(); }, [load]);
@@ -51,6 +52,18 @@ export function ServicesScreen({ revisionId }: { revisionId: string }) {
             <label key={k}>{k}{" "}<input aria-label={`duct ${k}`} size={k === "tag" ? 10 : 5} value={form[k]} onChange={(e) => setForm({ ...form, [k]: e.target.value })} /></label>))}
           <button type="submit" disabled={form.tag.trim() === ""}>Add duct</button>
         </form>
+      </section>
+
+      <section aria-label="Sizing">
+        <h2>Duct sizing (equal friction)</h2>
+        <p>{sizing?.note}</p>
+        <table><thead><tr><th>Duct</th><th>Airflow (L/s)</th><th>Recommended</th><th>Velocity (m/s)</th><th>Velocity limit</th></tr></thead>
+          <tbody>{sizing?.ducts.map((d) => (
+            <tr key={d.id}><td>{d.tag}</td><td>{d.airflow_ls ?? "—"}</td>
+              <td>{d.recommended ? (d.recommended.shape === "rect" ? `${d.recommended.width_mm} x ${d.recommended.depth_mm}` : `dia ${d.recommended.diameter_mm}`) : d.reason ?? "—"}{d.recommended?.notes.length ? ` (${d.recommended.notes.join("; ")})` : ""}</td>
+              <td>{d.recommended?.velocity_ms ?? "—"}</td><td>{d.velocity_note ?? "—"}</td></tr>))}</tbody></table>
+        <ul aria-label="Airflow balance">{sizing?.balance.map((b) => <li key={b.system_tag}>{b.system_tag}: trunk {b.trunk_ls} L/s, terminals {b.terminals_ls} L/s: {b.status}{b.difference_pct !== null ? ` (${b.difference_pct} %)` : ""}</li>)}</ul>
+        <ul aria-label="Reducer spec card drafts">{sizing?.spec_card_drafts.map((c) => <li key={c.mark}>{c.mark}: reducer {c.from_duct} to {c.to_duct}. Needs from an engineer: {c.missing_engineer_inputs.join(", ")}.</li>)}</ul>
       </section>
 
       <section aria-label="Ceiling void">
