@@ -12,16 +12,19 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 
 REMOVED = "[removed]"
-RULE_ID = re.compile(r"\bNCC\s?20\d\d(?:-[A-Za-z0-9]+)+\b", re.IGNORECASE)
-CLAUSE = re.compile(r"\b[A-J]\d{1,2}[A-Z]\d{1,2}\b")
+RULE_ID = re.compile(r"\bNCC[\s_-]?20\d\d(?:[-_][A-Za-z0-9]+)+\b", re.IGNORECASE)
+CLAUSE = re.compile(r"\b[A-J]\d{1,2}[A-Z]\d{1,2}\b", re.IGNORECASE)
 # any word that states or implies an outcome / compliance
-CLAIM_STEMS = re.compile(r"\b(pass\w*|fail\w*|compl\w*|non[- ]?compl\w*|conform\w*|satisf\w*|accept\w*|approv\w*|meets?|met|ok|okay|cumple)\b"
+CLAIM_STEMS = re.compile(r"\b(pass(?:es|ed|ing)?(?![-\w])|fail(?:s|ed|ing|ure|ures)?\b|compl(?:y|ies|ied|ying|iance|iant)\b|non[- ]?compl\w*"
+                         r"|conform(?:s|ed|ing|ance|ant)?\b|satisf(?:y|ies|ied|ying|actory)\b|accept(?:s|ed|ing|able|ance)?\b|approv(?:e|es|ed|ing|al)\b"
+                         r"|meets?|met|ok|okay|cumple|green|fine|within limits)\b"
                          "|[✅✔☑❌✖]", re.IGNORECASE)
 NEEDS_JUDGEMENT = re.compile(r"\bneeds?[_ ]judg\w*", re.IGNORECASE)
 NOT_APPLICABLE = re.compile(r"\bnot[_ ]applicable\b", re.IGNORECASE)
-OWN_STEMS = {"PASS": r"pass\w*", "FAIL": r"fail\w*", "NEEDS_JUDGEMENT": r"needs?[_ ]judg\w*", "NOT_APPLICABLE": r"not[_ ]applicable"}
+OWN_STEMS = {"PASS": r"pass(?:es|ed|ing)?", "FAIL": r"fail(?:s|ed|ing|ure|ures)?", "NEEDS_JUDGEMENT": r"needs?[_ ]judg\w*", "NOT_APPLICABLE": r"not[_ ]applicable"}
 # a hypothesis may say a result FAILS; it may not say anything will pass / comply / meet / be accepted
-HYPOTHESIS_CLAIM = re.compile(r"\b(pass\w*|compl\w*|non[- ]?compl\w*|conform\w*|satisf\w*|accept\w*|approv\w*|meets?|ok|okay|achiev\w*|cumple)\b"
+HYPOTHESIS_CLAIM = re.compile(r"\b(pass(?:es|ed|ing)?(?![-\w])|compl(?:y|ies|ied|ying|iance|iant)\b|non[- ]?compl\w*|conform\w*|satisf\w*|accept\w*|approv\w*"
+                              r"|meets?|ok|okay|achiev\w*|cumple|no longer fail\w*|green|fine|within limits)\b"
                               "|[✅✔☑]", re.IGNORECASE)
 LOOKALIKES = str.maketrans({
     "А": "A", "В": "B", "С": "C", "Е": "E", "Н": "H", "К": "K", "М": "M", "О": "O", "Р": "P",
@@ -29,6 +32,8 @@ LOOKALIKES = str.maketrans({
     "Α": "A", "Β": "B", "Ε": "E", "Η": "H", "Ι": "I", "Κ": "K", "Μ": "M", "Ν": "N", "Ο": "O",
     "Ρ": "P", "Τ": "T", "Χ": "X", "ο": "o", "−": "-",
 })
+HANGUL_FILLERS = "\u115f\u1160\u3164\uffa0"
+KEEP_SYMBOLS = "\u00b0\u00b1\u00d7\u00f7\u00b2\u00b3\u00b5\u2264\u2265\u2248\u00d8\u00b7\u2013\u2014\u2022\u00a7\u00a9\u20ac\u00a3\u2192"
 _HIDDEN = "".join(chr(c) for c in (*range(9), 11, 12, *range(14, 32), 127, *range(0x200B, 0x2010), *range(0x2028, 0x202F), *range(0x2060, 0x206A), 0xFEFF))
 _HIDDEN_RE = re.compile("[" + re.escape(_HIDDEN) + "]")
 
@@ -42,8 +47,17 @@ class Filtered:
 def fold(text: str) -> str:
     """NFKC, every dash-like character to '-', look-alike Cyrillic/Greek letters to Latin, hidden characters removed."""
     text = _HIDDEN_RE.sub("", unicodedata.normalize("NFKC", text))
-    text = "".join("-" if unicodedata.category(c) == "Pd" else c for c in text)
-    return text.translate(LOOKALIKES)
+    text = "".join("-" if unicodedata.category(c) == "Pd" else c for c in text).translate(LOOKALIKES)
+    out = []
+    for ch in unicodedata.normalize("NFKD", text):
+        cat = unicodedata.category(ch)
+        if cat in ("Cf", "Mn", "Me", "Co", "Cn", "Cs") or ch in HANGUL_FILLERS:
+            continue                                                  # invisible or combining: gone
+        if ord(ch) > 127 and (cat[0] == "L" or (cat[0] == "S" and ch not in KEEP_SYMBOLS)):
+            out.append("?")                                           # a letter or symbol we cannot read as Latin must not pose as one
+        else:
+            out.append(ch)
+    return "".join(out)
 
 
 def clean_text(text: str, limit: int) -> str:

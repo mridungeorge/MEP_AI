@@ -22,7 +22,11 @@ Existing open revisions have results without an input fingerprint (`inputs_hash`
   PDF pages rendered in the worker sandbox (pdfium) and read by a vision model into the evidence table only (provenance `extracted`, never a space, never an input).
   Docs: `docs/skills/space-envelope.md`, `docs/agents.md`. Migrations 0018-0021.
 - Review round 1 (two reviewers): 2 blockers (validator measured only local profiles so placement/rotation/extra-entity tampering passed; the model's own
-  chat reply was shown unfiltered) + ~15 should-fix, all fixed or listed below (c4811cf, migration 0021). Round 2: see below.
+  chat reply was shown unfiltered) + ~15 should-fix, all fixed or listed below (c4811cf, migration 0021). Round 2 found 2 blockers (the
+  validator still ignored the representation context/map conversion/spatial chain; the reply filter was beaten by soft hyphens, variation selectors and
+  look-alike letters) + should-fix (flags/risks/questions unfiltered, underscore ids, over-broad stems, PDF-on-frozen checked after the vision spend, profile
+  subtype, validate-child cwd), all fixed. **The round-2 fixes had no third review.** Unfixed nits: validator blind spots (VOLUMEUNIT prefix, quantity unit
+  overrides, TEXT style/oblique, geometry inside the standard arrow blocks); an agent message that fails still counts toward the throttle.
 - Needs on a server: `ANTHROPIC_API_KEY` for agents and vision (without it both say so and nothing breaks); `--extra agents` in the image (Dockerfile does);
   duct-fab needs cadquery, which the API image does not carry (the card answers "not installed on this server"). CI pins cadquery 2.8.0 / ocp 7.9.3.1.1.
 - Known limits, not fixed: the worker sandbox is rlimits only (same uid, network allowed); vision runs in the request thread (150 s cap per file, no

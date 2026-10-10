@@ -363,3 +363,36 @@ def test_a_spec_with_too_many_outline_points_is_refused(build_mod):
     spec["rooms"] = [dict(room, name=f"R{i}") for i in range(20)]
     with pytest.raises(Exception, match="outline points|more than"):
         build_mod.normalise_spec(spec)
+
+
+def _wcs(f) -> None:
+    ctx = next(c for c in f.by_type("IfcGeometricRepresentationContext") if not c.is_a("IfcGeometricRepresentationSubContext"))
+    ctx.WorldCoordinateSystem.Location.Coordinates = (40000.0, 0.0, 0.0)
+
+
+def _drop_project_link(f) -> None:
+    f.remove(next(r for r in f.by_type("IfcRelAggregates") if r.RelatingObject.is_a("IfcProject")))
+
+
+def _reaggregate(f) -> None:
+    storey = f.by_type("IfcBuildingStorey")[0]
+    rel = next(r for r in f.by_type("IfcRelAggregates") if r.RelatingObject.is_a("IfcBuilding"))
+    rel.RelatingObject = f.by_type("IfcSite")[0]
+    assert storey
+
+
+def _profile_with_voids(f) -> None:
+    p = f.by_type("IfcArbitraryClosedProfileDef")[0]
+    inner = f.createIfcPolyline([f.createIfcCartesianPoint(x) for x in ((100.0, 100.0), (150.0, 100.0), (150.0, 150.0), (100.0, 100.0))])
+    new = f.createIfcArbitraryProfileDefWithVoids("AREA", None, p.OuterCurve, [inner])
+    for s in f.by_type("IfcExtrudedAreaSolid"):
+        if s.SweptArea == p:
+            s.SweptArea = new
+
+
+@pytest.mark.parametrize("mutate", [_wcs, _drop_project_link, _reaggregate, _profile_with_voids])
+def test_the_validator_rejects_context_and_spatial_chain_tampering(validator, good, mutate):
+    out, spec = good
+    _ifc_edit(out, mutate)
+    r = _validate(validator, spec, out)
+    assert not r.passed and "ifc_structure" in r.failed

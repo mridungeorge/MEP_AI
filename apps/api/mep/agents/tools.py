@@ -23,7 +23,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from mep.agents.filter import check_hypothesis, clean_text, filter_explanation
+from mep.agents.filter import check_hypothesis, clean_text, filter_explanation, filter_free_text
 from mep.skills_runner.registry import ENABLED, get_skill
 from mep.skills_runner.shortcut import missing_fields
 
@@ -249,6 +249,9 @@ class ToolLayer:
         self.backend.record_call(self.ctx.agent.value, tool, allowed, detail[:300], trimmed)
 
     # ------------------------------------------------------------------------------------------------------------------ helpers
+    def _said(self, text: str, limit: int) -> str:
+        """Free text an agent writes into a note: no outcome or compliance wording, no rule ids but this revision's own."""
+        return filter_free_text(text, {r["rule_id"] for r in self.backend.results()}, limit).text
     def _result(self, result_id: UUID) -> dict[str, Any]:
         found = self.backend.result(result_id)
         if found is None:
@@ -297,7 +300,7 @@ class ToolLayer:
 
     def _ask_clarifying_question(self, a: AskQuestion) -> Any:
         skill = self._skill_name(a.skill) if a.skill else None
-        return {"note_id": self._note("clarifying_question", clean_text(a.question, 500), skill=skill, data={"field": a.field})}
+        return {"note_id": self._note("clarifying_question", self._said(a.question, 500), skill=skill, data={"field": a.field})}
 
     def _run_skill(self, a: RunSkill) -> Any:
         skill = self._skill_name(a.skill)
@@ -335,12 +338,12 @@ class ToolLayer:
     def _raise_flag(self, a: RaiseFlag) -> Any:
         if a.result_id is not None:
             self._result(a.result_id)
-        return {"note_id": self._note("flag", clean_text(a.text, 1500), result_id=a.result_id, severity=a.severity)}
+        return {"note_id": self._note("flag", self._said(a.text, 1500), result_id=a.result_id, severity=a.severity)}
 
     def _raise_risk(self, a: RaiseRisk) -> Any:
         if a.result_id is not None:
             self._result(a.result_id)
-        return {"note_id": self._note("risk", clean_text(a.text, 1500), result_id=a.result_id, severity=a.severity,
+        return {"note_id": self._note("risk", self._said(a.text, 1500), result_id=a.result_id, severity=a.severity,
                                       data={"category": a.category})}
 
 

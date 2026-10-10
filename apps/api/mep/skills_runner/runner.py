@@ -138,7 +138,7 @@ def _release(skill: str, out: Path, spec_path: Path, wall: int, cpu: int, memory
     manifest_bytes = (out / "manifest.json").read_bytes()
     files.append(RunFile("manifest.json", "manifest", "application/json", len(manifest_bytes), hashlib.sha256(manifest_bytes).hexdigest(),
                          manifest_bytes))
-    checked = _child(["validate", skill, str(out), str(spec_path)], cwd=out, wall=wall, cpu=cpu, memory=memory)
+    checked = _child(["validate", skill, str(out), str(spec_path)], cwd=out.parent, wall=wall, cpu=cpu, memory=memory)
     if checked is None or checked.returncode != 0:
         return SkillRunResult("revalidation_failed", "the independent re-check did not finish", manifest=manifest)
     try:

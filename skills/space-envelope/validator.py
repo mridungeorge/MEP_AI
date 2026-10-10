@@ -184,6 +184,21 @@ def chk_ifc_structure(c: _Ctx) -> Outcome:
     if len([u for u in f.by_type("IfcNamedUnit") if getattr(u, "UnitType", None) == "LENGTHUNIT"]) != 1 or f.by_type("IfcConversionBasedUnit"):
         bad.append("length unit")
     site, building, storey = f.by_type("IfcSite")[0], f.by_type("IfcBuilding")[0], f.by_type("IfcBuildingStorey")[0]
+    project = f.by_type("IfcProject")[0]
+    for parent, child in ((project, site), (site, building), (building, storey)):               # the spatial chain, each link exactly once
+        rels = [r for r in f.by_type("IfcRelAggregates") if r.RelatingObject == parent]
+        if len(rels) != 1 or list(rels[0].RelatedObjects) != [child] or len(child.Decomposes) != 1:
+            bad.append("spatial chain")
+    srel = [r for r in f.by_type("IfcRelAggregates") if r.RelatingObject == storey]
+    if len(srel) != 1 or len(f.by_type("IfcRelAggregates")) != 4 or len(srel[0].RelatedObjects) != len(c.rooms):
+        bad.append("storey aggregation")
+    if f.by_type("IfcMapConversion") or f.by_type("IfcCoordinateReferenceSystem") or f.by_type("IfcProjectedCRS"):
+        bad.append("map conversion present")
+    roots = [x for x in f.by_type("IfcGeometricRepresentationContext") if not x.is_a("IfcGeometricRepresentationSubContext")]
+    subs = f.by_type("IfcGeometricRepresentationSubContext")
+    if len(roots) != 1 or len(subs) != 1 or len(project.RepresentationContexts) != 1 or project.RepresentationContexts[0] != roots[0] \
+            or subs[0].ParentContext != roots[0] or roots[0].TrueNorth is not None or not _axis_ok(roots[0].WorldCoordinateSystem, (0.0, 0.0, 0.0)):
+        bad.append("representation context")
     elevation = float(c.spec["storey"].get("elevation_mm", 0))
     if not (_placement_ok(site, None, (0.0, 0.0, 0.0)) and _placement_ok(building, site, (0.0, 0.0, 0.0))
             and _placement_ok(storey, building, (0.0, 0.0, elevation))):
@@ -197,10 +212,13 @@ def chk_ifc_structure(c: _Ctx) -> Outcome:
             bad.append(f"{name}: representation")
             continue
         solid = reps[0].Items[0]
+        if reps[0].ContextOfItems != subs[0]:
+            bad.append(f"{name}: representation context")
         if not (reps[0].RepresentationIdentifier == "Body" and solid.is_a("IfcExtrudedAreaSolid") and _axis_ok(solid.Position, (0.0, 0.0, 0.0))
                 and tuple(float(v) for v in solid.ExtrudedDirection.DirectionRatios) == (0.0, 0.0, 1.0)
-                and solid.SweptArea.is_a("IfcArbitraryClosedProfileDef") and solid.SweptArea.ProfileType == "AREA"
-                and solid.SweptArea.OuterCurve.is_a("IfcPolyline")):
+                and solid.SweptArea.is_a() == "IfcArbitraryClosedProfileDef" and solid.SweptArea.ProfileType == "AREA"
+                and solid.SweptArea.OuterCurve.is_a("IfcPolyline")
+                and all(len(p.Coordinates) == 2 for p in solid.SweptArea.OuterCurve.Points)):
             bad.append(f"{name}: solid")
     return not bad, "exactly the spec's project, site, building, storey and spaces, unrotated, unshifted, one straight extrusion each", bad or "ok"
 
