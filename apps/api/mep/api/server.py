@@ -24,6 +24,7 @@ from mep.api import evidence as evidence_api
 from mep.api import gate1, revisions, uploads
 from mep.api import me as me_api
 from mep.api import platform as platform_api
+from mep.api import projects as projects_api
 from mep.api import review as review_api
 from mep.api import schedule as schedule_api
 from mep.api import skills as skills_api
@@ -86,6 +87,9 @@ def create_pg_app(dsn: str, jwt_secret: str, pack: RulePack, cors_origins: list[
     app.include_router(vision_jobs_api.router)
     app.dependency_overrides[vision_jobs_api.current_user] = current_user
     app.dependency_overrides[vision_jobs_api.get_dsn] = lambda: dsn
+    app.include_router(projects_api.router)
+    app.dependency_overrides[projects_api.current_user] = current_user
+    app.dependency_overrides[projects_api.get_dsn] = lambda: dsn
     app.include_router(platform_api.router)
     app.dependency_overrides[platform_api.current_user] = current_user
     app.dependency_overrides[platform_api.get_dsn] = lambda: dsn

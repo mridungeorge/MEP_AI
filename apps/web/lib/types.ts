@@ -360,3 +360,16 @@ export interface AdminRegistration { id: string; user_id: string; email: string 
 export interface AdminOverview { firm: AdminFirm; users: AdminUser[]; invitations: AdminInvitation[]; templates: AdminTemplate[]; registrations: AdminRegistration[] }
 export interface PendingRegistration { id: string; firm: string; user_email: string | null; number: string; register: string; state_scheme: string | null; evidence: string; submitted_at: string; submitted_by_email: string | null }
 export interface MyInvitation { member: boolean; invitation: { role: string; firm: string } | null }
+
+/** GET /projects and /projects/{id}/history */
+export interface ProjectRow {
+  id: string; address: string; state: string; ncc_edition: string; climate_zone: number | null; created_at: string; revisions: number;
+  status: "drafting" | "in_review" | "signed";
+  latest_revision: { id: string; architect_rev: string; frozen: boolean; gates_signed: string[] } | null;
+}
+export interface HistoryRevision {
+  id: string; architect_rev: string; created_at: string; frozen_at: string | null; parent_revision_id: string | null; stage: string;
+  signoffs: { gate: string; signed_at: string; signer: string | null; registration_no: string | null; signer_mode: string }[];
+  results: Record<string, number>;
+}
+export interface ProjectHistory { project: { id: string; address: string; state: string; ncc_edition: string; climate_zone: number | null }; revisions: HistoryRevision[] }
