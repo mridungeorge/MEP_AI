@@ -53,7 +53,17 @@ class PgSkills:
             raise SkillUnavailable(f"MEP_SKILL_EXECUTOR={mode!r} is not understood (use queue)")
         if mode == "queue":
             return enqueue_and_wait(self._dsn, firm_id=self._user.firm_id, revision_id=revision_id, user_id=self._user.user_id, skill=skill, spec=spec)
-        return run_skill(skill, spec)
+        return run_skill(skill, spec, attachments=self._attachments(revision_id, spec))
+
+    def _attachments(self, revision_id: UUID, spec: dict[str, Any]) -> dict[str, bytes] | None:
+        """The architect's model for a skill that is given one (ifc-mep): looked up by the checksum in the card, within this revision and firm."""
+        digest = spec.get("base_ifc_sha256")
+        if not isinstance(digest, str):
+            return None
+        with self._service() as conn:
+            row = conn.execute("select content from base_model where revision_id = %s and firm_id = %s and file_sha256 = %s",
+                               (revision_id, self._user.firm_id, digest)).fetchone()
+        return {"base.ifc": bytes(row["content"])} if row else None
 
     # ---- confirmed card versions ---------------------------------------------------------------------------------------
     def confirm_card(self, revision_id: UUID, skill: str, digest: str, note_id: UUID | None) -> None:

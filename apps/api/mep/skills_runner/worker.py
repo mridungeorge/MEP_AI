@@ -59,6 +59,8 @@ def revalidate(skill: str, outdir: Path, submitted: Path | None = None) -> dict[
     sys.modules[spec.name] = mod
     spec.loader.exec_module(mod)
     files = [outdir / f["name"] for f in manifest["files"]] + [outdir / "manifest.json"]
+    if submitted is not None and (submitted.parent / "base.ifc").is_file():
+        files.append(submitted.parent / "base.ifc")           # the architect's file, so the validator can check it was kept
     result = mod.validate(manifest["inputs"], files)
     return {"passed": bool(result.passed), "checks": [{"name": c["name"], "passed": bool(c["passed"])} for c in result.checks],
             "failed": list(result.failed)}

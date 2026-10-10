@@ -99,14 +99,21 @@ def _child(args: list[str], *, cwd: Path, wall: int, cpu: int, memory: int) -> s
                                            err.read(8192).decode("utf-8", "replace"))
 
 
+ATTACHMENT_NAMES = frozenset({"base.ifc"})                  # the only extra input a job may be given: the architect's model, read-only next to spec.json
+MAX_ATTACHMENT_BYTES = 100 * 1024 * 1024
+
+
 def run_skill(name: str, spec: dict[str, Any], *, wall_seconds: int = WALL_SECONDS, cpu_seconds: int = CPU_SECONDS,
-              memory_bytes: int = MEMORY_BYTES, executor: Executor | None = None) -> SkillRunResult:
+              memory_bytes: int = MEMORY_BYTES, executor: Executor | None = None, attachments: dict[str, bytes] | None = None) -> SkillRunResult:
     info = get_skill(name)                                    # raises UnknownSkill for anything not enabled
     executor = executor or LocalExecutor()
     if isinstance(executor, LocalExecutor):                   # a container executor brings its own packages
         ok, why = availability(name)
         if not ok:
             raise SkillUnavailable(f"{name} {why}")
+    for att_name, att in (attachments or {}).items():
+        if att_name not in ATTACHMENT_NAMES or len(att) > MAX_ATTACHMENT_BYTES:
+            return SkillRunResult("spec_rejected", "that attachment is not allowed")
     text = json.dumps(spec, sort_keys=True)
     if len(text.encode()) > MAX_SPEC_BYTES:
         return SkillRunResult("spec_rejected", "the spec card is larger than 1 MB")
@@ -122,6 +129,9 @@ def run_skill(name: str, spec: dict[str, Any], *, wall_seconds: int = WALL_SECON
             os.chmod(work / "out", 0o777)                    # the job may run as another user and must be able to write here, and only here
             (work / "in" / "spec.json").write_text(text, encoding="utf-8")
             os.chmod(work / "in" / "spec.json", 0o644)
+            for att_name, att in (attachments or {}).items():
+                (work / "in" / att_name).write_bytes(att)
+                os.chmod(work / "in" / att_name, 0o644)
             built = executor.build(info.name, work, wall=wall_seconds, cpu=cpu_seconds, memory=memory_bytes)
             if built is None:
                 return SkillRunResult("timeout", f"the build took longer than {wall_seconds} s and was stopped")

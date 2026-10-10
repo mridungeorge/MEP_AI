@@ -239,6 +239,10 @@ def cmd_retire(a: argparse.Namespace) -> int:
         conn.execute("delete from firm_template where firm_id = %s", (fid,))
         conn.execute("delete from share_session where firm_id = %s", (fid,))                              # certifier links stop working at once
         conn.execute("update ledger_link set expires_at = least(expires_at, now()), revoked_at = coalesce(revoked_at, now()) where firm_id = %s", (fid,))
+        conn.execute("alter table base_model disable trigger base_model_append_only")                       # the stored architect models are drawings: erased too
+        conn.execute("delete from base_model where firm_id = %s", (fid,))
+        conn.execute("alter table base_model enable trigger base_model_append_only")
+        conn.execute("delete from clash_model where firm_id = %s", (fid,))
         conn.execute("alter table artifact_blob disable trigger artifact_blob_append_only")        # break-glass for the one erase the product allows
         conn.execute("delete from artifact_blob where firm_id = %s", (fid,))
         conn.execute("alter table artifact_blob enable trigger artifact_blob_append_only")

@@ -23,10 +23,11 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from mep.api import admin as admin_api
 from mep.api import agents as agents_api
+from mep.api import base_model as base_model_api
 from mep.api import billing as billing_api
 from mep.api import evidence as evidence_api
 from mep.api import fixes as fixes_api
-from mep.api import gate1, revisions, uploads
+from mep.api import gate1, revisions, sizing_api, uploads
 from mep.api import me as me_api
 from mep.api import notifications as notifications_api
 from mep.api import performance as performance_api
@@ -35,7 +36,6 @@ from mep.api import projects as projects_api
 from mep.api import review as review_api
 from mep.api import schedule as schedule_api
 from mep.api import services as services_api
-from mep.api import sizing_api
 from mep.api import skills as skills_api
 from mep.api import vision_jobs as vision_jobs_api
 from mep.api.agents_pg import PgAgentBackend
@@ -116,6 +116,7 @@ def create_pg_app(dsn: str, jwt_secret: str, pack: RulePack, cors_origins: list[
     app.include_router(vision_jobs_api.router)
     app.dependency_overrides[vision_jobs_api.current_user] = current_user
     app.dependency_overrides[vision_jobs_api.get_dsn] = lambda: dsn
+    app.include_router(base_model_api.router)
     app.include_router(sizing_api.router)
     app.include_router(services_api.router)
     app.dependency_overrides[services_api.get_dsn] = lambda: dsn

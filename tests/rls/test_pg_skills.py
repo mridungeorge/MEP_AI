@@ -43,7 +43,7 @@ def run_url(f, skill="space-envelope"):
 def test_both_skills_are_listed_and_their_cards_become_forms(admin, client):
     f = h.seed(admin)
     listed = {s["name"]: s for s in client.get("/skills", headers=hd(f)).json()}
-    assert set(listed) == {"duct-fab", "space-envelope"} and listed["space-envelope"]["available"]
+    assert set(listed) == {"duct-fab", "space-envelope", "hvac-dxf", "ifc-mep"} and listed["space-envelope"]["available"]
     card = client.get("/skills/space-envelope/card", headers=hd(f)).json()
     by_name = {x["name"]: x for x in card["form"]}
     assert by_name["mark"]["required"] and by_name["storey"]["kind"] == "group" and by_name["rooms"]["kind"] == "list"

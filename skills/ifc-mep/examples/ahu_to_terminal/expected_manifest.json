@@ -1,0 +1,134 @@
+{
+  "files": [
+    {
+      "bytes": 151006,
+      "name": "GF-MEP.ifc",
+      "role": "ifc",
+      "sha256": "fc153a444ef0413f06bee830e4ccaa0d758ab2caff9e05114ca6dff93db1a910"
+    }
+  ],
+  "inputs": {
+    "base_ifc_sha256": "8790a1e193e82b8e7e7f337ec2633cd40f2120590317a1443503a25b079e2e80",
+    "connections": [
+      {
+        "from": "AHU-1.out",
+        "to": "D1.start"
+      },
+      {
+        "from": "D1.end",
+        "to": "D2.start"
+      },
+      {
+        "from": "D2.end",
+        "to": "T1.in"
+      }
+    ],
+    "ducts": [
+      {
+        "airflow_ls": 600,
+        "end_mm": [
+          6750,
+          1000,
+          2950
+        ],
+        "size": {
+          "depth_mm": 300,
+          "shape": "rect",
+          "width_mm": 600
+        },
+        "start_mm": [
+          1750,
+          1000,
+          2950
+        ],
+        "storey": "00 groundfloor",
+        "system": "SA-1",
+        "tag": "D1"
+      },
+      {
+        "airflow_ls": 600,
+        "end_mm": [
+          6750,
+          4000,
+          2950
+        ],
+        "size": {
+          "diameter_mm": 400,
+          "shape": "round"
+        },
+        "start_mm": [
+          6750,
+          1000,
+          2950
+        ],
+        "storey": "00 groundfloor",
+        "system": "SA-1",
+        "tag": "D2"
+      }
+    ],
+    "equipment": [
+      {
+        "at_mm": [
+          1000,
+          1000,
+          2600
+        ],
+        "box": {
+          "height_mm": 700,
+          "length_mm": 1500,
+          "width_mm": 800
+        },
+        "kind": "ahu",
+        "storey": "00 groundfloor",
+        "system": "SA-1",
+        "tag": "AHU-1"
+      }
+    ],
+    "mark": "GF-MEP",
+    "spec_version": "1",
+    "terminals": [
+      {
+        "airflow_ls": 600,
+        "at_mm": [
+          6750,
+          4000,
+          2950
+        ],
+        "storey": "00 groundfloor",
+        "system": "SA-1",
+        "tag": "T1"
+      }
+    ],
+    "units": "mm"
+  },
+  "measures": {
+    "added_entities": 159,
+    "connections": 3,
+    "ducts": 2,
+    "equipment": 1,
+    "terminals": 1
+  },
+  "skill": "ifc-mep",
+  "skill_version": "1.0.0",
+  "spec_sha256": "e20245510149ef7a85a8f1f4d5d12ee8185347e143c4c7ef59adffa9fd2d4164",
+  "toolchain": {
+    "ifcopenshell": "0.9.0"
+  },
+  "validation": {
+    "checks": [
+      "schema_supported",
+      "architect_model_preserved",
+      "schema_valid",
+      "elements_present_once",
+      "nothing_else_added",
+      "storey_assignment",
+      "system_assignment",
+      "duct_geometry",
+      "ports_present",
+      "connections_match_spec",
+      "connected_ports_meet_with_flow",
+      "airflow_balance"
+    ],
+    "passed": true
+  }
+}

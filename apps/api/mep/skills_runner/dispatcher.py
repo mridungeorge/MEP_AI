@@ -29,12 +29,18 @@ def claim(conn: psycopg.Connection[dict[str, Any]], who: str) -> dict[str, Any] 
     return conn.execute(
         "update skill_job set status = 'running', started_at = now(), locked_by = %s where id = ("
         " select id from skill_job where status = 'queued' order by created_at for update skip locked limit 1)"
-        " returning id, firm_id, skill, spec", (who,)).fetchone()
+        " returning id, firm_id, revision_id, skill, spec", (who,)).fetchone()
 
 
 def process(conn: psycopg.Connection[dict[str, Any]], job: dict[str, Any], executor: Executor) -> None:
+    attachments = None
+    digest = dict(job["spec"]).get("base_ifc_sha256")
+    if isinstance(digest, str):                      # a skill given the architect's model: fetched here, within the job's own revision and firm
+        row = conn.execute("select content from base_model where revision_id = %s and firm_id = %s and file_sha256 = %s",
+                           (job["revision_id"], job["firm_id"], digest)).fetchone()
+        attachments = {"base.ifc": bytes(row["content"])} if row else None
     try:
-        result = run_skill(job["skill"], dict(job["spec"]), executor=executor)
+        result = run_skill(job["skill"], dict(job["spec"]), executor=executor, attachments=attachments)
     except SkillUnavailable as exc:
         conn.execute("update skill_job set status = 'failed', finished_at = now(), error = %s where id = %s", (str(exc)[:300], job["id"]))
         return

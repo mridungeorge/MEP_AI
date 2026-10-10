@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mep-copilot.local/skills/ifc-mep/spec_card.json",
+  "title": "ifc-mep spec card",
+  "description": "Inputs for writing ducts, terminals and equipment into the architect's IFC. Lengths are millimetres, airflow is L/s. Coordinates are relative to the named storey's origin. The architect's file is supplied to the job as base.ifc and must match base_ifc_sha256.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["spec_version", "mark", "units", "base_ifc_sha256", "ducts"],
+  "$defs": {
+    "tag": { "type": "string", "minLength": 1, "maxLength": 30, "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$" },
+    "storey": { "type": "string", "minLength": 1, "maxLength": 80, "pattern": "^[^\\u0000-\\u001f\\u007f\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2069\\ufeff]*$" },
+    "point3": { "type": "array", "items": { "type": "number", "minimum": -1000000, "maximum": 1000000 }, "minItems": 3, "maxItems": 3 },
+    "airflow": { "type": "number", "exclusiveMinimum": 0, "maximum": 1000000 },
+    "size": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["shape"],
+      "properties": {
+        "shape": { "enum": ["rect", "round"] },
+        "width_mm": { "type": "number", "exclusiveMinimum": 0, "maximum": 10000 },
+        "depth_mm": { "type": "number", "exclusiveMinimum": 0, "maximum": 10000 },
+        "diameter_mm": { "type": "number", "exclusiveMinimum": 0, "maximum": 10000 }
+      }
+    },
+    "box": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["length_mm", "width_mm", "height_mm"],
+      "properties": {
+        "length_mm": { "type": "number", "exclusiveMinimum": 0, "maximum": 20000 },
+        "width_mm": { "type": "number", "exclusiveMinimum": 0, "maximum": 20000 },
+        "height_mm": { "type": "number", "exclusiveMinimum": 0, "maximum": 20000 }
+      }
+    }
+  },
+  "properties": {
+    "spec_version": { "const": "1" },
+    "mark": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,39}$", "description": "File stem." },
+    "units": { "const": "mm" },
+    "base_ifc_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "Checksum of the architect's file the job is given as base.ifc." },
+    "ducts": {
+      "type": "array", "minItems": 1, "maxItems": 2000,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["tag", "system", "storey", "size", "airflow_ls", "start_mm", "end_mm"],
+        "properties": { "tag": { "$ref": "#/$defs/tag" }, "system": { "$ref": "#/$defs/tag" }, "storey": { "$ref": "#/$defs/storey" }, "size": { "$ref": "#/$defs/size" },
+                        "airflow_ls": { "$ref": "#/$defs/airflow" }, "start_mm": { "$ref": "#/$defs/point3" }, "end_mm": { "$ref": "#/$defs/point3" } }
+      }
+    },
+    "terminals": {
+      "type": "array", "maxItems": 2000,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["tag", "system", "storey", "airflow_ls", "at_mm"],
+        "properties": { "tag": { "$ref": "#/$defs/tag" }, "system": { "$ref": "#/$defs/tag" }, "storey": { "$ref": "#/$defs/storey" }, "airflow_ls": { "$ref": "#/$defs/airflow" },
+                        "at_mm": { "$ref": "#/$defs/point3" }, "box": { "$ref": "#/$defs/box" } }
+      }
+    },
+    "equipment": {
+      "type": "array", "maxItems": 200,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["tag", "system", "storey", "kind", "at_mm", "box"],
+        "properties": { "tag": { "$ref": "#/$defs/tag" }, "system": { "$ref": "#/$defs/tag" }, "storey": { "$ref": "#/$defs/storey" }, "kind": { "enum": ["ahu", "fan"] },
+                        "at_mm": { "$ref": "#/$defs/point3" }, "box": { "$ref": "#/$defs/box" } }
+      }
+    },
+    "connections": {
+      "type": "array", "maxItems": 6000,
+      "description": "Flow goes from 'from' to 'to'. Port names: ducts start/end, terminals in, equipment in/out. Written as TAG.port.",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["from", "to"],
+        "properties": { "from": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*\\.(start|end|in|out)$", "maxLength": 40 },
+                        "to": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*\\.(start|end|in|out)$", "maxLength": 40 } }
+      }
+    }
+  }
+}

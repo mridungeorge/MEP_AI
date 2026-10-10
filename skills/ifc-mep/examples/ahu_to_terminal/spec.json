@@ -1,0 +1,21 @@
+{
+  "spec_version": "1",
+  "mark": "GF-MEP",
+  "units": "mm",
+  "base_ifc_sha256": "8790a1e193e82b8e7e7f337ec2633cd40f2120590317a1443503a25b079e2e80",
+  "equipment": [
+    { "tag": "AHU-1", "system": "SA-1", "storey": "00 groundfloor", "kind": "ahu", "at_mm": [1000, 1000, 2600], "box": { "length_mm": 1500, "width_mm": 800, "height_mm": 700 } }
+  ],
+  "ducts": [
+    { "tag": "D1", "system": "SA-1", "storey": "00 groundfloor", "size": { "shape": "rect", "width_mm": 600, "depth_mm": 300 }, "airflow_ls": 600, "start_mm": [1750, 1000, 2950], "end_mm": [6750, 1000, 2950] },
+    { "tag": "D2", "system": "SA-1", "storey": "00 groundfloor", "size": { "shape": "round", "diameter_mm": 400 }, "airflow_ls": 600, "start_mm": [6750, 1000, 2950], "end_mm": [6750, 4000, 2950] }
+  ],
+  "terminals": [
+    { "tag": "T1", "system": "SA-1", "storey": "00 groundfloor", "airflow_ls": 600, "at_mm": [6750, 4000, 2950] }
+  ],
+  "connections": [
+    { "from": "AHU-1.out", "to": "D1.start" },
+    { "from": "D1.end", "to": "D2.start" },
+    { "from": "D2.end", "to": "T1.in" }
+  ]
+}
