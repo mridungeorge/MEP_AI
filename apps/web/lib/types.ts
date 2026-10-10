@@ -416,3 +416,13 @@ export interface SizingView { note: string; settings: Record<string, number | nu
 
 /** GET /revisions/{id}/base-models */
 export interface BaseModelRow { id: string; file_name: string; file_sha256: string; schema_name: string; storeys: { name: string; elevation_mm: number }[]; created_at: string }
+
+/** GET /revisions/{id}/nsw-declaration */
+export interface NswDeclaration {
+  banner: string; lodged: boolean; kind: string; applies_to: { state: string; classes: string[] };
+  building: { address: string; ncc_edition: string; climate_zone: number; approval_date: string };
+  signed_by: { gate: string; role: string; email: string | null; registration_no: string | null; signed_at: string }[];
+  accepted_fails: { subject: string; rule_id: string; category: string }[];
+  performance_solutions: { subject: string; rule_id: string; note: string | null }[];
+  fields_to_complete: { field: string; note: string }[];
+}
