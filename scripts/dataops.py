@@ -267,15 +267,19 @@ def cmd_purge(a: argparse.Namespace) -> int:
             sys.exit(f"the retention period ({a.retention_years} years from {row['deleted_at']:%Y-%m-%d}) has not passed")
         # everything of the firm, children first; the append-only guards are switched off for this one deliberate erase
         order = [t for t in reversed(tables(conn, with_firm=True)) if t != "firm"]
+        guarded: list[tuple[str, str]] = []
         for t in order:
             for trg in [r["tgname"] for r in conn.execute(
                     "select tgname from pg_trigger where tgrelid = %s::regclass and not tgisinternal and tgname ~ '(append_only|no_edit|no_update|immutable|no_truncate)'",
                     (f"public.{t}",)).fetchall()]:
                 conn.execute(f'alter table public."{t}" disable trigger "{trg}"')
+                guarded.append((t, trg))
         conn.execute("set session_replication_role = replica")
         for t in order:
             conn.execute(f'delete from public."{t}" where firm_id = %s', (fid,))
         conn.execute("delete from public.firm where id = %s", (fid,))
+        for t, trg in guarded:                       # the guards go back on in the SAME transaction: they are never left off
+            conn.execute(f'alter table public."{t}" enable trigger "{trg}"')
         conn.commit()
     print("firm purged")
     return 0

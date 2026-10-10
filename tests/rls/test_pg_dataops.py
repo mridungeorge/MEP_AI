@@ -118,3 +118,18 @@ def test_purge_waits_for_the_retention_period_and_then_erases_everything(admin, 
     assert admin.execute("select count(*) from firm where id = %s", (f["firm"],)).fetchone()[0] == 0
     assert admin.execute("select count(*) from ledger_event where firm_id = %s", (f["firm"],)).fetchone()[0] == 0
     assert time.time() > 0 and subprocess.run is not None
+
+
+def test_a_purge_leaves_every_guard_trigger_switched_on(admin, tmp_path):
+    f, name = seeded_firm(admin)
+    out = tmp_path / "ex"
+    dataops.cmd_export(ns(dsn=DB_URL, firm=name, out=str(out)))
+    dataops.cmd_retire(ns(dsn=DB_URL, firm=name, export=str(out), confirm=name))
+    admin.execute("update firm set deleted_at = now() - interval '8 years' where id = %s", (f["firm"],))
+    dataops.cmd_purge(ns(dsn=DB_URL, firm=name, confirm=name, retention_years=7))
+    off = admin.execute("select c.relname, t.tgname from pg_trigger t join pg_class c on c.oid = t.tgrelid join pg_namespace n on n.oid = c.relnamespace"
+                        " where n.nspname = 'public' and not t.tgisinternal and t.tgenabled <> 'O'").fetchall()
+    assert off == []
+    other, _ = seeded_firm(admin)                                           # and the guards still bite
+    with pytest.raises(psycopg.errors.Error):
+        admin.execute("update signoff set gate = 'gate3' where firm_id = %s", (other["firm"],))
