@@ -5,7 +5,7 @@ local devcontainer gate is the reference (tag `sprint-2-gate`). GitHub CI has ne
 Updated: 2026-10-09 (recovery after a device change; see "Recovery 2026-10-09")
 
 ## Resume here (updated 2026-10-12, OVERNIGHT RUN: plan in docs/OVERNIGHT_PLAN.md, scheduled task 53299a5d every 30 min)
-Phase 7 DONE (`sprint-7-gate`). Phase 8 IN PROGRESS: 8.1 duct sizing DONE (mep/sizing.py, api/sizing_api.py, 0040, tests/api/test_sizing.py, Services screen panel). NEXT ACTION: 8.2 hvac-dxf skill (new skills/hvac-dxf with spec card, build.py, validator that tags match the sizing schedule; run via the skill worker like duct-fab).
+Phase 7 DONE (`sprint-7-gate`). Phase 8 IN PROGRESS: 8.1 duct sizing DONE; 8.2 hvac-dxf skill DONE (skills/hvac-dxf, registry ENABLED, tests/skills/test_hvac_dxf.py, `/revisions/{id}/sizing/hvac-dxf-draft`). NEXT ACTION: 8.3 ifc-mep skill (new skills/ifc-mep: write ducts, terminals, equipment into the architect IFC via IfcOpenShell, ports connected, right storeys; validator checks schema, connectivity, sizes).
 Done and tagged: 2.5, 3, 4a, 4a.1, 4b, 5. **Phases 6-9 are the standing order** (user prompt: run 6, 7, 8, 9 in order without stopping, then write
 `docs/review-pack.md` and STOP; do not encode AS 1668.2, AS/NZS 3000, 3008 or AS 4254).
 Phase 6 (product shell) is DONE: tag `sprint-6-gate`. Next: Phase 7 (engineering features), then 8, 9, then `docs/review-pack.md`.

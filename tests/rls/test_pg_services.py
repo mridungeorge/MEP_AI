@@ -143,3 +143,14 @@ def test_the_sizing_schedule_uses_firm_settings_and_drafts_reducer_cards(admin, 
     again = client.get(f"{h.base(f)}/sizing", headers=d).json()
     assert next(r for r in again["ducts"] if r["tag"] == "D1")["velocity_note"] == "ABOVE LIMIT"
     assert admin.execute("select count(*) from ledger_event where firm_id = %s and kind = 'firm_sizing_settings_changed'", (f["firm"],)).fetchone()[0] == 1
+
+
+def test_the_hvac_dxf_draft_draws_the_recommended_size(admin, client):
+    f, d, sp = setup(admin, client)
+    url = f"{h.base(f)}/services"
+    client.post(url, json=duct("D1", sp["Office"], system_tag="S1", airflow_ls=600, start=[0, 0, 0], end=[5000, 0, 0]), headers=d)
+    client.post(url, json=duct("D2", sp["Office"], system_tag="S1", airflow_ls=300), headers=d)
+    client.post(url, json={"kind": "terminal", "tag": "T1", "system_tag": "S1", "airflow_ls": 600, "start": [5000, 0, 0], "end": [5000, 0, 0]}, headers=d)
+    got = client.get(f"{h.base(f)}/sizing/hvac-dxf-draft", headers=d).json()
+    assert [x["tag"] for x in got["spec"]["ducts"]] == ["D1"] and got["skipped"][0]["tag"] == "D2" and got["complete"] is False
+    assert got["spec"]["ducts"][0]["size"] == got["spec"]["sizing_schedule"][0]["size"] and got["spec"]["terminals"][0]["tag"] == "T1"

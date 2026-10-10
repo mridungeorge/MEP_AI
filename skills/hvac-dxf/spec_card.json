@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mep-copilot.local/skills/hvac-dxf/spec_card.json",
+  "title": "hvac-dxf spec card",
+  "description": "Inputs for one duct layout or schematic drawing (DXF). Lengths are millimetres, airflow is L/s. The sizing_schedule is the reference every duct tag is checked against. Layers and the title block come from the firm template when the app fills them in.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["spec_version", "mark", "units", "mode", "title_block", "ducts", "sizing_schedule"],
+  "$defs": {
+    "text": { "type": "string", "minLength": 1, "maxLength": 80, "pattern": "^[^\u0000-\u001f\u007f\u200b-\u200f\u2028-\u202e\u2060-\u2069\ufeff]*$" },
+    "tag": { "type": "string", "minLength": 1, "maxLength": 30, "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$" },
+    "point": { "type": "array", "items": { "type": "number", "minimum": -1000000, "maximum": 1000000 }, "minItems": 2, "maxItems": 2 },
+    "airflow": { "type": "number", "exclusiveMinimum": 0, "maximum": 1000000 },
+    "size": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["shape"],
+      "properties": {
+        "shape": { "enum": ["rect", "round"] },
+        "width_mm": { "type": "number", "exclusiveMinimum": 0, "maximum": 10000 },
+        "depth_mm": { "type": "number", "exclusiveMinimum": 0, "maximum": 10000 },
+        "diameter_mm": { "type": "number", "exclusiveMinimum": 0, "maximum": 10000 }
+      }
+    }
+  },
+  "properties": {
+    "spec_version": { "const": "1" },
+    "mark": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,39}$", "description": "File stem." },
+    "units": { "const": "mm" },
+    "mode": { "enum": ["layout", "schematic"], "description": "layout draws each duct at its true width; schematic draws a centreline." },
+    "balance_tolerance_pct": { "type": "number", "minimum": 0, "maximum": 20, "default": 1 },
+    "layers": {
+      "type": "object",
+      "additionalProperties": false,
+      "x-firm-default": true,
+      "properties": {
+        "duct_rect": { "type": "string", "pattern": "^[A-Za-z0-9_$-]{1,31}$" },
+        "duct_round": { "type": "string", "pattern": "^[A-Za-z0-9_$-]{1,31}$" },
+        "terminal": { "type": "string", "pattern": "^[A-Za-z0-9_$-]{1,31}$" },
+        "tag": { "type": "string", "pattern": "^[A-Za-z0-9_$-]{1,31}$" },
+        "frame": { "type": "string", "pattern": "^[A-Za-z0-9_$-]{1,31}$" },
+        "title": { "type": "string", "pattern": "^[A-Za-z0-9_$-]{1,31}$" }
+      }
+    },
+    "title_block": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["project", "drawing_title", "drawing_no", "revision"],
+      "properties": {
+        "project": { "$ref": "#/$defs/text" },
+        "drawing_title": { "$ref": "#/$defs/text" },
+        "drawing_no": { "$ref": "#/$defs/text" },
+        "revision": { "$ref": "#/$defs/text" },
+        "date": { "$ref": "#/$defs/text" },
+        "drawn_by": { "$ref": "#/$defs/text" },
+        "firm": { "$ref": "#/$defs/text" }
+      }
+    },
+    "ducts": {
+      "type": "array", "minItems": 1, "maxItems": 2000,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["tag", "system", "size", "airflow_ls", "start_mm", "end_mm"],
+        "properties": {
+          "tag": { "$ref": "#/$defs/tag" }, "system": { "$ref": "#/$defs/tag" }, "size": { "$ref": "#/$defs/size" },
+          "airflow_ls": { "$ref": "#/$defs/airflow" }, "start_mm": { "$ref": "#/$defs/point" }, "end_mm": { "$ref": "#/$defs/point" }
+        }
+      }
+    },
+    "terminals": {
+      "type": "array", "maxItems": 2000,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["tag", "system", "airflow_ls", "at_mm"],
+        "properties": { "tag": { "$ref": "#/$defs/tag" }, "system": { "$ref": "#/$defs/tag" }, "airflow_ls": { "$ref": "#/$defs/airflow" }, "at_mm": { "$ref": "#/$defs/point" } }
+      }
+    },
+    "sizing_schedule": {
+      "type": "array", "minItems": 1, "maxItems": 2000,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["tag", "size", "airflow_ls"],
+        "properties": { "tag": { "$ref": "#/$defs/tag" }, "size": { "$ref": "#/$defs/size" }, "airflow_ls": { "$ref": "#/$defs/airflow" } }
+      }
+    }
+  }
+}

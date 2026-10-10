@@ -1,0 +1,164 @@
+{
+  "files": [
+    {
+      "bytes": 40622,
+      "name": "L1-SA-LAYOUT.dxf",
+      "role": "dxf",
+      "sha256": "f4f0cb8aeeff335e57fdab7dea1bbaec204fdc5a16baf590a124c3d520f078b3"
+    }
+  ],
+  "inputs": {
+    "balance_tolerance_pct": 1,
+    "ducts": [
+      {
+        "airflow_ls": 600,
+        "end_mm": [
+          6000,
+          0
+        ],
+        "size": {
+          "depth_mm": 300,
+          "shape": "rect",
+          "width_mm": 600
+        },
+        "start_mm": [
+          0,
+          0
+        ],
+        "system": "SA-1",
+        "tag": "D1"
+      },
+      {
+        "airflow_ls": 400,
+        "end_mm": [
+          6000,
+          4000
+        ],
+        "size": {
+          "depth_mm": 300,
+          "shape": "rect",
+          "width_mm": 400
+        },
+        "start_mm": [
+          6000,
+          0
+        ],
+        "system": "SA-1",
+        "tag": "D2"
+      },
+      {
+        "airflow_ls": 200,
+        "end_mm": [
+          3000,
+          -3000
+        ],
+        "size": {
+          "diameter_mm": 300,
+          "shape": "round"
+        },
+        "start_mm": [
+          3000,
+          0
+        ],
+        "system": "SA-1",
+        "tag": "D3"
+      }
+    ],
+    "mark": "L1-SA-LAYOUT",
+    "mode": "layout",
+    "sizing_schedule": [
+      {
+        "airflow_ls": 600,
+        "size": {
+          "depth_mm": 300,
+          "shape": "rect",
+          "width_mm": 600
+        },
+        "tag": "D1"
+      },
+      {
+        "airflow_ls": 400,
+        "size": {
+          "depth_mm": 300,
+          "shape": "rect",
+          "width_mm": 400
+        },
+        "tag": "D2"
+      },
+      {
+        "airflow_ls": 200,
+        "size": {
+          "diameter_mm": 300,
+          "shape": "round"
+        },
+        "tag": "D3"
+      }
+    ],
+    "spec_version": "1",
+    "terminals": [
+      {
+        "airflow_ls": 200,
+        "at_mm": [
+          6000,
+          4000
+        ],
+        "system": "SA-1",
+        "tag": "T1"
+      },
+      {
+        "airflow_ls": 200,
+        "at_mm": [
+          6000,
+          2000
+        ],
+        "system": "SA-1",
+        "tag": "T2"
+      },
+      {
+        "airflow_ls": 200,
+        "at_mm": [
+          3000,
+          -3000
+        ],
+        "system": "SA-1",
+        "tag": "T3"
+      }
+    ],
+    "title_block": {
+      "date": "2026-10-11",
+      "drawing_no": "M-101",
+      "drawing_title": "Level 1 supply air layout",
+      "drawn_by": "MEP Co-pilot (draft)",
+      "project": "Synthetic demo office",
+      "revision": "A"
+    },
+    "units": "mm"
+  },
+  "measures": {
+    "duct_length_m": 13.0,
+    "ducts": 3,
+    "mode": "layout",
+    "terminals": 3
+  },
+  "skill": "hvac-dxf",
+  "skill_version": "1.0.0",
+  "spec_sha256": "fc84735b8e35c7794a2b945f5675348613804390b5d6370675b7c10168d94e37",
+  "toolchain": {
+    "ezdxf": "1.4.4"
+  },
+  "validation": {
+    "checks": [
+      "units_mm",
+      "layers_present",
+      "no_foreign_layers",
+      "schedule_matches_drawing",
+      "ducts_drawn_once",
+      "duct_geometry",
+      "tags_match_sizing_schedule",
+      "terminals",
+      "airflow_balance",
+      "title_block"
+    ],
+    "passed": true
+  }
+}
