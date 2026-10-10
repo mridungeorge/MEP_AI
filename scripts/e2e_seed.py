@@ -68,7 +68,7 @@ def make_world(conn: psycopg.Connection[Any], label: str, approver: bool = False
     for role in ("designer", "checker"):
         f[f"{role}_email"] = f"{role}-{label}-{run}@e2e.invalid"
         f[role] = make_auth_user(f[f"{role}_email"])
-        conn.execute("insert into app_user (id, firm_id, role) values (%s, %s, %s)", (f[role], f["firm"], role))
+        conn.execute("insert into app_user (id, firm_id, role, is_admin) values (%s, %s, %s, %s)", (f[role], f["firm"], role, role == "designer"))
     if approver:
         f["approver_email"] = f"approver-{label}-{run}@e2e.invalid"
         f["approver"] = make_auth_user(f["approver_email"])

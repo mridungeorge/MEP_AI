@@ -31,7 +31,7 @@ def firm_with_approver(admin):
 
 def platform_admin(admin):
     other = h.seed(admin)                                   # the operator's own firm
-    admin.execute("insert into platform_admin (user_id) values (%s)", (other["designer"],))
+    admin.execute("insert into platform_admin (user_id, firm_id) values (%s, %s)", (other["designer"], other["firm"]))
     return other["designer"]
 
 
@@ -69,7 +69,7 @@ def test_who_may_submit_and_who_may_decide(admin, client):
         assert client.post(f"/platform/registrations/{rid}", headers=hdr(who), json={"verify": True, "note": "I am sure, honestly"}).status_code == 403
         assert client.get("/platform/registrations", headers=hdr(who)).status_code == 403
     # a platform administrator who is also the submitter or the person cannot decide their own
-    admin.execute("insert into platform_admin (user_id) values (%s) on conflict do nothing", (f["designer"],))
+    admin.execute("insert into platform_admin (user_id, firm_id) values (%s, %s) on conflict do nothing", (f["designer"], f["firm"]))
     assert client.post(f"/platform/registrations/{rid}", headers=hdr(f["designer"]), json={"verify": True, "note": "my own firm, I checked it"}).status_code == 422
     rej = client.post(f"/platform/registrations/{rid}", headers=hdr(pa), json={"verify": False, "note": "not on the register"})
     assert rej.status_code == 200

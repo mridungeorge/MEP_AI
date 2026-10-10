@@ -2,7 +2,7 @@
 -- operator, a different person from the firm) VERIFIES it against the public register and records what they checked. Only a verified
 -- registration reaches app_user.registration_no through the app; the service-only script remains as a logged break-glass path.
 
-create table platform_admin (user_id uuid primary key references auth.users (id), created_at timestamptz not null default now());
+create table platform_admin (user_id uuid primary key references auth.users (id), firm_id uuid not null references firm(id), created_at timestamptz not null default now());
 alter table platform_admin enable row level security;
 revoke all on platform_admin from anon, authenticated;
 

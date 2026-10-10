@@ -26,6 +26,7 @@ create trigger firm_subscription after insert on firm for each row execute funct
 
 -- Stripe may send an event more than once: each id is processed once.
 create table stripe_event (
+  firm_id uuid references firm(id),      -- set when the event could be tied to a firm
   id text primary key check (id ~ '^evt_[A-Za-z0-9_]+$'),
   type text not null,
   received_at timestamptz not null default now()

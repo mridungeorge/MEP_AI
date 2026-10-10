@@ -75,6 +75,7 @@ def main() -> None:
     ap.add_argument("--checker", required=True)
     ap.add_argument("--approver", required=True)
     ap.add_argument("--mode", choices=["strict", "small_firm"], default="strict")
+    ap.add_argument("--platform-admin", help="e-mail of the operator's person who verifies approver registration numbers (created in a separate firm)")
     ap.add_argument("--smoke", action="store_true",
                     help=f'create the separate throwaway project "{SMOKE_ADDRESS}" that scripts/staging_smoke.py is allowed to freeze and sign (instead of the demo project)')
     ap.add_argument("--firm-name", default=FIRM_NAME, help='for a second demo set: a name starting "Demo Mechanical (synthetic)"')
@@ -106,6 +107,16 @@ def main() -> None:
                 continue                      # one person: ONE account, as the approver, acting as the other two
             conn.execute("insert into app_user (id, firm_id, role, registration_no) values (%s, %s, %s, %s)"
                          " on conflict (id) do nothing", (uid, firm_id, role, DEMO_REGISTRATION if role == "approver" else None))
+        conn.execute("update app_user set is_admin = true where id = %s", (ids["approver"] if one_person else ids["designer"],))   # the firm administrator
+        if args.platform_admin:             # the operator's own person, in a separate firm, who verifies registration numbers
+            pf = conn.execute("select id from firm where name = 'Platform operator (synthetic)'").fetchone()
+            pfid = str(pf[0]) if pf else str(uuid.uuid4())
+            if not pf:
+                conn.execute("insert into firm (id, name) values (%s, 'Platform operator (synthetic)')", (pfid,))
+            puid = ensure_user(conn, supabase_url, service_key, args.platform_admin)
+            conn.execute("insert into app_user (id, firm_id, role, is_admin) values (%s, %s, 'checker', true) on conflict (id) do nothing", (puid, pfid))
+            conn.execute("insert into platform_admin (user_id, firm_id) values (%s, %s) on conflict do nothing", (puid, pfid))
+            print(f"platform administrator: {args.platform_admin}")
         if args.mode == "small_firm":       # one person may hold every gate; every package then says NOT INDEPENDENTLY CHECKED
             conn.execute("update firm set signer_mode = 'small_firm' where id = %s", (firm_id,))
             conn.execute("update app_user set also_roles = '{designer,checker}' where id = %s", (ids["approver"],))
