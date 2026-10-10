@@ -85,7 +85,7 @@ def _require_admin(dsn: str, user: CurrentUser) -> None:
 def overview(user: User, dsn: Dsn) -> dict[str, Any]:
     _require_admin(dsn, user)
     with _as_user(dsn, user) as conn:
-        firm = conn.execute("select id, name, signer_mode, sample_size, near_miss_default from firm where id = %s", (user.firm_id,)).fetchone()
+        firm = conn.execute("select id, name, signer_mode, sample_size, near_miss_default, void_clearance_mm from firm where id = %s", (user.firm_id,)).fetchone()
         users = conn.execute("select id, email, role::text as role, also_roles::text[] as also_roles, is_admin, active, registration_no from app_user"
                              " where firm_id = %s order by email nulls last, id", (user.firm_id,)).fetchall()
         invites = conn.execute("select id, email, role::text as role, status, expires_at, created_at from invitation where firm_id = %s"
@@ -96,7 +96,8 @@ def overview(user: User, dsn: Dsn) -> dict[str, Any]:
                             " from registration r join app_user u on u.id = r.user_id where r.firm_id = %s order by r.submitted_at desc limit 100",
                             (user.firm_id,)).fetchall()
     return {
-        "firm": {**firm, "id": str(firm["id"]), "near_miss_default": None if firm["near_miss_default"] is None else float(firm["near_miss_default"])},
+        "firm": {**firm, "id": str(firm["id"]), "near_miss_default": None if firm["near_miss_default"] is None else float(firm["near_miss_default"]),
+                 "void_clearance_mm": float(firm["void_clearance_mm"])},
         "users": [{**u, "id": str(u["id"])} for u in users],
         "invitations": [{**i, "id": str(i["id"]), "expires_at": i["expires_at"].isoformat(), "created_at": i["created_at"].isoformat()} for i in invites],
         "templates": [{**t, "id": str(t["id"]), "created_at": t["created_at"].isoformat()} for t in templates],
@@ -185,11 +186,13 @@ class FirmBody(BaseModel):
     signer_mode: Literal["strict", "small_firm"]
     sample_size: int = Field(ge=1, le=1000)
     near_miss_default: float | None = Field(default=None, gt=0, le=0.5)
+    void_clearance_mm: float | None = Field(default=None, ge=0, le=1000)
 
 
 @router.put("/admin/firm")
 def put_firm(body: FirmBody, user: User, dsn: Dsn) -> dict[str, Any]:
-    _call(dsn, user, "select admin_set_settings(%s::text, %s::text, %s::int, %s::numeric)", (body.name, body.signer_mode, body.sample_size, body.near_miss_default))
+    _call(dsn, user, "select admin_set_settings(%s::text, %s::text, %s::int, %s::numeric, %s::numeric)",
+          (body.name, body.signer_mode, body.sample_size, body.near_miss_default, body.void_clearance_mm))
     return {"saved": True}
 
 
