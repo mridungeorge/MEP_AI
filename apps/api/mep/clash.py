@@ -80,7 +80,7 @@ def read_boxes(path: Path) -> tuple[list[Box], int, list[str]]:
         except Exception:  # noqa: BLE001 - a failed element is counted, not fatal
             skipped += 1
             continue
-        boxes.append(Box(str(element.GlobalId), element.is_a(), clean(element.Name), lo, hi))
+        boxes.append(Box((clean(str(element.GlobalId)) or "")[:64], element.is_a(), clean(element.Name), lo, hi))
     if skipped:
         problems.append(f"{skipped} elements had no usable geometry and were left out")
     return boxes, skipped, problems
@@ -107,15 +107,19 @@ def gap(a: Box, b: Box) -> float:
     return max(per_axis)
 
 
-def detect(ducts: list[dict[str, Any]], models: list[dict[str, Any]], clearance_mm: float) -> list[dict[str, Any]]:
+def detect(ducts: list[dict[str, Any]], models: list[dict[str, Any]], clearance_mm: float, limit: int | None = None) -> list[dict[str, Any]]:
     """models: [{"discipline", "file_name", "elements": [Box...]}]. Sorted for a stable output."""
-    found = []
+    found: list[dict[str, Any]] = []
     for d in ducts:
+        if limit is not None and len(found) > limit:
+            break
         db = duct_box(d)
         if db is None:
             continue
         for m in models:
             for e in m["elements"]:
+                if limit is not None and len(found) > limit:
+                    break
                 g = gap(db, e)
                 if g < clearance_mm:
                     found.append({"duct_id": str(d["id"]), "duct_tag": d["tag"], "discipline": m["discipline"], "model": m["file_name"], "element_guid": e.guid,
@@ -145,32 +149,36 @@ def bcf_zip(clashes: list[dict[str, Any]], project_name: str, author: str) -> by
             title = clean(f"{c['kind']}: duct {c['duct_tag']} / {c['discipline']} {c['element_class']}") or "clash"
             desc = (f"Warning only. Gap {c['gap_mm']} mm against a clearance of {c['clearance_mm']} mm. Axis-aligned boxes; check the model. "
                     f"Point (mm) {c['point_mm']}. Element GUID {c['element_guid']}.")
+            desc = clean(desc) or ""
             z.writestr(f"{tid}/markup.bcf",
                        '<?xml version="1.0" encoding="UTF-8"?>\n<Markup xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">'
                        f'<Topic Guid="{tid}" TopicType="Clash" TopicStatus="Open"><Title>{escape(title)}</Title><Priority>Normal</Priority>'
-                       f"<CreationDate>{stamp}</CreationDate><CreationAuthor>{escape(author)}</CreationAuthor>"
+                       f"<CreationDate>{stamp}</CreationDate><CreationAuthor>{escape(clean(author) or '')}</CreationAuthor>"
                        f"<Description>{escape(desc)}</Description></Topic></Markup>")
     return out.getvalue()
 
 
 def read_boxes_isolated(path: Path) -> tuple[list[Box], int, list[str]]:
     """read_boxes in a child process with a wall-clock limit and (on Linux) CPU and address-space limits, so a hostile or huge model cannot hang or take down the API."""
-    def limits() -> None:  # pragma: no cover - runs in the child
-        import resource
-        resource.setrlimit(resource.RLIMIT_CPU, (READ_SECONDS, READ_SECONDS))
-        resource.setrlimit(resource.RLIMIT_AS, (READ_MEMORY, READ_MEMORY))
     try:
         done = subprocess.run([sys.executable, "-I", "-m", "mep.clash", str(path)], capture_output=True, timeout=READ_SECONDS + 10, check=False,
-                              preexec_fn=limits if os.name == "posix" else None, cwd=str(path.parent))
+                              cwd=str(path.parent))
     except subprocess.TimeoutExpired:
         raise ClashIfcError("reading the model took too long") from None
     if done.returncode != 0:
-        raise ClashIfcError(done.stderr.decode(errors="replace").strip().splitlines()[-1][:200] if done.stderr.strip() else "the model could not be read")
-    data = json.loads(done.stdout)
-    return [Box(b[0], b[1], b[2], tuple(b[3]), tuple(b[4])) for b in data["boxes"]], data["skipped"], data["problems"]
+        raise ClashIfcError("the model could not be read (not a valid IFC, or too large)")
+    try:
+        data = json.loads(done.stdout.strip().splitlines()[-1])
+        return [Box(str(b[0]), str(b[1]), b[2], tuple(b[3]), tuple(b[4])) for b in data["boxes"]], int(data["skipped"]), [str(p) for p in data["problems"]]
+    except (ValueError, KeyError, IndexError, TypeError):
+        raise ClashIfcError("the model could not be read") from None
 
 
 if __name__ == "__main__":  # pragma: no cover - the child process
+    if os.name == "posix":                                    # limits set here, not in preexec_fn (unsafe in a threaded parent)
+        import resource
+        resource.setrlimit(resource.RLIMIT_CPU, (READ_SECONDS, READ_SECONDS))
+        resource.setrlimit(resource.RLIMIT_AS, (READ_MEMORY, READ_MEMORY))
     try:
         got = read_boxes(Path(sys.argv[1]))
     except ClashIfcError as exc:

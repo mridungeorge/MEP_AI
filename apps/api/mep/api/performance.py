@@ -67,6 +67,12 @@ def _likely(repo: Any, pack: Any, graph: Any, revision_id: UUID, firm_id: UUID, 
     return not any(o["accepted"] for o in options)
 
 
+def _is_stale(repo: Any, pack: Any, graph: Any, revision_id: UUID, firm_id: UUID, subject: str, rule: str) -> bool:
+    """The stored FAIL is not reproduced by today's inputs (an unconfirmed edit or a fix applied since): re-run before relying on the flag."""
+    result, _, _ = options_for(repo, pack, graph, revision_id, firm_id, subject, rule)
+    return result.get("live_outcome") != "FAIL"
+
+
 @router.get("/revisions/{revision_id}/performance")
 def overview(revision_id: UUID, user: RevUser, repo: Repo, pack: Pack, graph: Graph, dsn: Dsn) -> dict[str, Any]:
     if repo.revision_info(revision_id, user.firm_id) is None:
@@ -79,9 +85,10 @@ def overview(revision_id: UUID, user: RevUser, repo: Repo, pack: Pack, graph: Gr
             continue
         key = (r["subject_id"], r["rule_id"])
         likely = _likely(repo, pack, graph, revision_id, user.firm_id, *key)
+        stale = _is_stale(repo, pack, graph, revision_id, user.firm_id, *key)
         p = chosen.get(key)
         rows.append({"subject_id": key[0], "rule_id": key[1], "clause": (r.get("citation") or {}).get("clause"), "performance_solution_likely": likely,
-                     "flag": "Performance Solution pathway likely" if likely else None, "pathway": p["pathway"] if p else "DTS", "note": p["note"] if p else None,
+                     "flag": "Performance Solution pathway likely" if likely else None, "stale": stale, "pathway": p["pathway"] if p else "DTS", "note": p["note"] if p else None,
                      "evidence": [e for e in evidence if (e["subject_id"], e["rule_id"]) == key]})
     return {"banner": BANNER, "results": rows}
 

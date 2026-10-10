@@ -4,7 +4,9 @@ Sprint: 2 (prove the data) rebuilt and finished after the 2026-10-09 recovery; t
 local devcontainer gate is the reference (tag `sprint-2-gate`). GitHub CI has never run (no remote CI evidence).
 Updated: 2026-10-09 (recovery after a device change; see "Recovery 2026-10-09")
 
-## Resume here (updated 2026-10-12)
+## Resume here (updated 2026-10-12, OVERNIGHT RUN: plan in docs/OVERNIGHT_PLAN.md, scheduled task 53299a5d every 30 min)
+Phase 7 items 7.1-7.5 are DONE and pushed; two adversarial review rounds done (see "Phase 7"). NEXT ACTION: Phase 7 close = full `scripts/ci.sh` (or, if the
+host is too low on memory, GitHub CI on the head commit) green, then `git tag sprint-7-gate && git push origin main --tags`; then Phase 8 item 1.
 Done and tagged: 2.5, 3, 4a, 4a.1, 4b, 5. **Phases 6-9 are the standing order** (user prompt: run 6, 7, 8, 9 in order without stopping, then write
 `docs/review-pack.md` and STOP; do not encode AS 1668.2, AS/NZS 3000, 3008 or AS 4254).
 Phase 6 (product shell) is DONE: tag `sprint-6-gate`. Next: Phase 7 (engineering features), then 8, 9, then `docs/review-pack.md`.
@@ -459,3 +461,24 @@ JSON + PDF: met.
 - Rule schema with unit-bearing thresholds, validator with pint dimension analysis, 24 draft rules, dual-encoding
   second pass (`docs/threshold-diff.md`: 178 cells match, 0 disagreements, 0 swaps, 4 unresolved CZ8)
 - Engineer review pack `docs/engineer-review/`, disposable review database `scripts/review_db.py` + hook
+
+
+## Phase 7 engineering features (2026-10-12)
+- 7.1 Fix hypotheses: `engine/fix_search.py` (smallest single-input change found by bisection/choice, only engineer-confirmed inputs, never climate zone/class/system type),
+  `api/fixes.py` + 0037 (`fix_scratch` records, client writes revoked, ledger `fix_proposed`/`fix_applied`). An option is `accepted` only if no dependent rule gets worse
+  AND no dependent rule still FAILs. Apply recomputes now, writes an UNCONFIRMED hand-entered value, then marks the scratch applied; the run refuses until Gate 1 again.
+  UI: `FixPanel` under each FAIL on the revision screen, every option labelled "Hypothesis: verify".
+- 7.2 Performance Solution: 0038, `api/performance.py`, `/projects/.../performance`. Flag only when the stored FAIL is reproduced by today's inputs and no option is
+  accepted; otherwise `stale`. Pathway per result (DTS/PERFORMANCE_SOLUTION), engineer evidence append-only with provenance `engineer_supplied` (never read by the engine),
+  JSON/XLSX starting package with the draft-rules banner; spreadsheet cells neutralise formulas and control characters.
+- 7.3/7.5 `api/services.py` + 0039: duct/fitting/terminal schedule (lengths via pint to mm), ceiling-void check (deepest duct + insulation both faces + firm clearance;
+  only a CONFIRMED void can be CLEAR), firm setting `void_clearance_mm`, quantities with CSV/XLSX. Results are CLASH/CLEAR/NO DATA, never PASS/FAIL.
+- 7.4 Clash-lite: `mep/clash.py` (axis-aligned boxes, IFC read in an isolated child process with CPU/memory/time limits, caps on models/elements/clashes),
+  BCF 2.1 export, warnings only. UI: `/projects/.../services`.
+- Review: round 1 (12 findings) fixed; round 2 (6 findings): claim-then-write order fixed, stale flag from unconfirmed inputs fixed, rlimits moved into the child, clash
+  early-stop, BCF guid/author cleaned. NOT re-reviewed after round 2: those last fixes. Known limits: integer-only inputs are not distinguished (spec has no integer type);
+  MAX_MODELS count is not transactional; `accepted` allows NEEDS_JUDGEMENT on a dependent rule; clash detection is O(ducts x elements) with early stop only.
+
+## Decisions made overnight
+- Migrations 0037 and 0039 were edited in place after being pushed (round-1 fixes): no deployed database had applied them (staging is not deployed); local DBs are reset.
+- Unanswered Docker clean-up question: continued with small local batches and GitHub CI as the full check.

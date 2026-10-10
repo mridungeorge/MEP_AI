@@ -106,3 +106,15 @@ def test_the_starting_package_holds_the_failed_benchmarks_and_is_safe_to_open(ad
     assert not any(v.startswith(("=", "+", "@")) for v in cells)                                     # nothing can run when the file is opened
     assert any("HYPERLINK" in v for v in cells)                                                        # but the text is kept
     assert client.get(f"{base(f)}/package.json", headers=h.auth(h.seed(admin)["designer"])).status_code == 404
+
+
+def test_an_unconfirmed_edit_makes_the_flag_stale_not_wrong(admin, client):
+    f = run_revision(admin, client)
+    d = h.auth(f["designer"])
+    fx = f"/revisions/{f['revision']}/results/{SUBJECT}/{RULE}/fixes"
+    chosen = next(o for o in client.get(fx, headers=d).json()["options"] if o["accepted"])
+    sid = client.post(f"{fx}/{chosen['id']}/scratch", headers=d).json()["scratch_id"]
+    assert client.post(f"/revisions/{f['revision']}/fix-scratch/{sid}/apply", headers=d).status_code == 200
+    row = next(r for r in client.get(base(f), headers=d).json()["results"] if r["rule_id"] == RULE)
+    assert row["stale"] is True and row["flag"] is None                                           # the stored FAIL is not reproduced by the edited input
+    assert client.get(fx, headers=d).json()["options"] == []                                        # no hypotheses from unconfirmed inputs

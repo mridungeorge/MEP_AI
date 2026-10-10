@@ -362,7 +362,7 @@ def clashes_of(dsn: str, user: Any, revision_id: UUID) -> dict[str, Any]:
         by_model.setdefault(e["model_id"], []).append(clash.Box(e["guid"], e["ifc_class"], e["name"], (float(e["min_x"]), float(e["min_y"]), float(e["min_z"])),
                                                               (float(e["max_x"]), float(e["max_y"]), float(e["max_z"]))))
     ducts = [r for r in runs_of(dsn, user, revision_id) if r["kind"] == "duct"]
-    found = clash.detect(ducts, [{"discipline": m["discipline"], "file_name": m["file_name"], "elements": by_model.get(m["id"], [])} for m in models], clearance)
+    found = clash.detect(ducts, [{"discipline": m["discipline"], "file_name": m["file_name"], "elements": by_model.get(m["id"], [])} for m in models], clearance, MAX_CLASHES)
     return {"note": "Warnings only. Boxes are axis-aligned, so a diagonal or bent element can raise a false alarm; ducts need entered coordinates to be checked.",
             "clearance_mm": clearance, "ducts_checked": sum(1 for d in ducts if d["x0"] is not None), "ducts_without_coordinates": sum(1 for d in ducts if d["x0"] is None),
             "models": [{"id": str(m["id"]), "discipline": m["discipline"], "file_name": m["file_name"], "elements": m["element_count"], "skipped": m["skipped"],

@@ -70,9 +70,9 @@ def test_upload_detect_and_export(admin, client):
     bare = {k: v for k, v in duct.items() if k not in ("start", "end")} | {"tag": "D3"}
     for body in (duct, far, bare):
         assert client.post(f"{url}/services", headers=d, json=body).status_code == 200
-    nan = client.post(f"{url}/services", headers=d, content='{"kind":"duct","tag":"N","shape":"round","diameter":200,"length":1,"start":[NaN,0,0],"end":[1,0,0]}',
-                      ).status_code
-    assert nan in (401, 422)                                                                      # not finite: refused before it can hide a clash
+    nan = client.post(f"{url}/services", headers=d | {"Content-Type": "application/json"},
+                      content='{"kind":"duct","tag":"N","shape":"round","diameter":200,"length":1,"start":[NaN,0,0],"end":[1,0,0]}')
+    assert nan.status_code == 422                                                                 # not finite: refused before it can hide a clash
     view = client.get(f"{url}/clash", headers=d).json()
     assert view["ducts_checked"] == 2 and view["ducts_without_coordinates"] == 1
     assert {c["duct_tag"] for c in view["clashes"]} == {"D1"} and all(c["level"] == "WARNING" for c in view["clashes"])

@@ -48,9 +48,12 @@ def options_for(repo: Any, pack: Any, graph: Any, revision_id: UUID, firm_id: UU
     raw: list[FixOption] = []
     if result["outcome"] == "FAIL":
         project = _project(data["project"], revision_id, firm_id)
-        live = evaluate_rule(rule, _inputs_for(subject, project, rule)).outcome
-        result = {**result, "live_outcome": live.value}
-        raw = candidate_fixes(rule, _inputs_for(subject, project, rule))
+        live_inputs = _inputs_for(subject, project, rule)
+        ev = evaluate_rule(rule, live_inputs)
+        same = json.loads(json.dumps(ev.inputs_used, default=str)) == json.loads(json.dumps(result.get("inputs_used"), default=str))
+        # the stored FAIL is only reproduced by today's inputs when they are the inputs it was run on; otherwise (an unconfirmed edit since) say so
+        result = {**result, "live_outcome": ev.outcome.value if same else "STALE_INPUTS_CHANGED"}
+        raw = candidate_fixes(rule, live_inputs) if same else []
         for o in raw:
             change = {o.input_name: InputValue(o.to_value, o.unit, Provenance.ENGINEER_CONFIRMED)}
             cross = cross_rule_rerun(subject=subject, project=project, changes=change, pack=pack, graph=graph, target_rule=rule_id)
@@ -127,12 +130,15 @@ def apply_scratch(revision_id: UUID, scratch_id: UUID, user: RevUser, repo: Repo
     row = next((i for i in (view or {}).get("inputs", []) if i.get("system") == sc["subject_id"] and i.get("name") == chosen["input"]), None)
     if row is None:
         raise _err(409, "not_editable", "that input is not a hand-editable row of this system")
-    try:                                                       # claim the scratch change first: a second concurrent apply loses here
+    # write the value first, then mark the scratch change applied: a failed write leaves it 'proposed' (never 'applied' with nothing written).
+    # Two concurrent applies write the same value; only one wins the claim, the other gets 409.
+    if repo.upsert_input(revision_id, user.firm_id, row["id"], {"name": chosen["input"], "system": sc["subject_id"], "value": chosen["to"], "unit": chosen["unit"]}) is None:
+        raise _err(409, "not_editable", "the input row is gone or the revision changed: reload")
+    try:
         claimed = _write(dsn, "update fix_scratch set status = 'applied', applied_at = now() where id = %s and status = 'proposed' returning id", (scratch_id,))
     except psycopg.errors.Error:
         claimed = None
     if claimed is None:
         raise _err(409, "already_applied", "this scratch change was already applied")
-    repo.upsert_input(revision_id, user.firm_id, row["id"], {"name": chosen["input"], "system": sc["subject_id"], "value": chosen["to"], "unit": chosen["unit"]})
     return {"applied": True, "needs": "Confirm the changed value at Gate 1, re-run the rules, and take the revision through the gates again.",
             "input": chosen["input"], "value": chosen["to"]}
