@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Data safety operations: backup, restore check, per-firm export, firm retirement.
 
     dataops.py backup        --dsn $MEP_DB_URL --out backups/2026-10-12            (pg_dump of the public schema + auth.users, with a manifest)
