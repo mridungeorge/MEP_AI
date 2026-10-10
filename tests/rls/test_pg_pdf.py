@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 from mep.api.server import create_pg_app
+from mep.api.vision_jobs import process_pending
 from mep.engine.loader import load_pack
 from reportlab.lib.pagesizes import A3
 from reportlab.pdfgen import canvas
@@ -39,20 +40,46 @@ def pdf_bytes(tmp: Path, text="Open office 108 m2", pages=1) -> bytes:
 
 
 def app(vision):
-    return TestClient(create_pg_app(DB_URL, h.SECRET, load_pack(lin.ROOT / "rules"), supabase_url=lin.SUPABASE_URL, anon_key=lin.ANON, vision=vision))
+    client = TestClient(create_pg_app(DB_URL, h.SECRET, load_pack(lin.ROOT / "rules"), supabase_url=lin.SUPABASE_URL, anon_key=lin.ANON, vision=vision))
+    client.vision = vision                 # the background runner is not started in tests: they run the queued jobs themselves
+    return client
+
+
+def up_raw(client, f, data, name="drawing.pdf", role="designer"):
+    """The upload request only: for a PDF it returns at once with a queued job."""
+    return client.post(f"/revisions/{f['revision']}/uploads", headers=h.auth(f[role]), files={"file": (name, data)})
+
+
+def read(client) -> int:
+    """Run the queued reading jobs now (what the background runner does)."""
+    return process_pending(DB_URL, client.vision)
 
 
 def up(client, f, data, name="drawing.pdf", role="designer"):
-    return client.post(f"/revisions/{f['revision']}/uploads", headers=h.auth(f[role]), files={"file": (name, data)})
+    r = up_raw(client, f, data, name, role)
+    if r.status_code == 200:
+        read(client)
+    return r
+
+
+def jobs(client, f, role="designer"):
+    return client.get(f"/revisions/{f['revision']}/vision-jobs", headers=h.auth(f[role])).json()
 
 
 def test_a_pdf_becomes_evidence_never_a_space_and_never_an_input(admin, tmp_path):
     vision = FakeVision()
     client, f = app(vision), h.seed(admin)
-    r = up(client, f, pdf_bytes(tmp_path))
+    r = up_raw(client, f, pdf_bytes(tmp_path))
     assert r.status_code == 200, r.text
     body = r.json()
-    assert body["kind"] == "pdf" and body["spaces"] == 0 and body["extractions"] >= 6 and body["health"] is None and vision.calls == 1
+    # the upload returned at once: nothing was read yet, the job is queued and visible
+    assert body["kind"] == "pdf" and body["status"] == "queued" and body["job_id"] and vision.calls == 0
+    assert [j["status"] for j in jobs(client, f)] == ["queued"]
+    assert admin.execute("select count(*) from extraction where revision_id = %s", (f["revision"],)).fetchone()[0] == 0
+    assert read(client) == 1 and vision.calls == 1
+    done = jobs(client, f)[0]
+    assert done["status"] == "done" and done["extractions"] >= 6 and done["error"] is None
+    assert admin.execute("select pdf is null from vision_job where id = %s", (body["job_id"],)).fetchone()[0] is True      # the bytes are dropped
     rows = admin.execute("select provenance::text, source_kind, entity_kind from extraction where revision_id = %s", (f["revision"],)).fetchall()
     assert rows and {r[0] for r in rows} == {"extracted"} and {r[1] for r in rows} == {"pdf"} and {r[2] for r in rows} == {"space"}
     assert admin.execute("select count(*) from space where revision_id = %s", (f["revision"],)).fetchone()[0] == 0
@@ -81,13 +108,15 @@ def test_a_pdf_without_a_vision_model_is_still_stored_and_says_nothing_was_read(
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     client, f = app(None), h.seed(admin)
     r = up(client, f, pdf_bytes(tmp_path, "No model"))
-    assert r.status_code == 200 and r.json()["extractions"] == 0 and any("no vision model is configured" in p for p in r.json()["problems"])
+    assert r.status_code == 200 and (j := jobs(client, f)[0])["status"] == "done" and j["extractions"] == 0
+    assert any("no vision model is configured" in p for p in j["problems"])
 
 
 def test_a_failing_model_is_a_problem_not_a_crash_and_junk_output_is_dropped(admin, tmp_path):
     client, f = app(FakeVision(boom=True)), h.seed(admin)
     r = up(client, f, pdf_bytes(tmp_path, "Boom"))
-    assert r.status_code == 200 and r.json()["extractions"] == 0 and any("vision call failed" in p for p in r.json()["problems"])
+    assert r.status_code == 200 and (j := jobs(client, f)[0])["status"] == "done" and j["extractions"] == 0
+    assert any("vision call failed" in p for p in j["problems"])
     client2, f2 = app(FakeVision(payload={"spaces": [{"name": "X", "area": "99999999"}, {"name": "<script>alert(1)</script>", "area": 5}]})), h.seed(admin)
     r2 = up(client2, f2, pdf_bytes(tmp_path, "Junk"))
     assert r2.status_code == 200
@@ -100,7 +129,10 @@ def test_who_may_upload_a_pdf_and_what_is_refused(admin, tmp_path):
     client, f = app(FakeVision()), h.seed(admin)
     data = pdf_bytes(tmp_path, "Roles")
     assert up(client, f, data, role="checker").status_code == 403
-    assert up(client, f, b"%PDF-1.7\n" + b"x" * 200).status_code == 422                       # not a real PDF
+    assert up_raw(client, f, b"%PDF-1.7\n" + b"x" * 200).status_code == 200                  # accepted for reading ...
+    read(client)
+    failed = jobs(client, f)[0]
+    assert failed["status"] == "failed" and failed["error"]                                  # ... and the job says why it could not be read
     assert up(client, f, data).status_code == 200
     again = up(client, f, data)
     assert again.status_code == 409 and again.json()["detail"]["code"] == "already_uploaded"
@@ -122,3 +154,39 @@ def test_a_pdf_uploaded_to_a_frozen_revision_is_refused_and_makes_no_child(admin
 def test_the_file_name_never_decides_the_type(admin, tmp_path, name):
     client, f = app(FakeVision()), h.seed(admin)
     assert up(client, f, pdf_bytes(tmp_path, f"N{len(name)}"), name=name).json()["kind"] == "pdf"
+
+
+def test_the_background_runner_takes_the_job_without_the_request_waiting(admin, tmp_path):
+    import time
+
+    from mep.api.vision_jobs import VisionRunner
+    vision = FakeVision()
+    client, f = app(vision), h.seed(admin)
+    runner = VisionRunner(DB_URL, vision, poll=0.2)
+    runner.start()
+    try:
+        r = up_raw(client, f, pdf_bytes(tmp_path, "Background"))
+        assert r.status_code == 200 and r.json()["status"] == "queued"
+        states = []
+        for _ in range(100):
+            states.append(jobs(client, f)[0]["status"])
+            if states[-1] in ("done", "failed"):
+                break
+            time.sleep(0.2)
+        assert states[-1] == "done" and vision.calls == 1
+    finally:
+        runner.stop()
+
+
+def test_another_firm_cannot_see_the_job_and_a_client_cannot_write_or_read_the_bytes(admin, tmp_path):
+    client, f = app(FakeVision()), h.seed(admin)
+    other = h.seed(admin)
+    assert up_raw(client, f, pdf_bytes(tmp_path, "Mine")).status_code == 200
+    assert client.get(f"/revisions/{f['revision']}/vision-jobs", headers=h.auth(other["designer"])).status_code == 404
+    import psycopg
+    with pytest.raises(psycopg.errors.InsufficientPrivilege), psycopg.connect(DB_URL, autocommit=True) as c:
+        c.execute("set role authenticated")
+        c.execute("select pdf from vision_job")
+    with pytest.raises(psycopg.errors.InsufficientPrivilege), psycopg.connect(DB_URL, autocommit=True) as c:
+        c.execute("set role authenticated")
+        c.execute("update vision_job set status = 'done'")

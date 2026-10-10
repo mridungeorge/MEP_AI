@@ -117,6 +117,22 @@ class PgUploads:
         with contextlib.suppress(Exception):
             drop_empty_child(svc, user.firm_id, child)
 
+    def _queue_pdf(self, user: CurrentUser, token: str, revision_id: UUID, name: str, sha: str, data: bytes) -> dict[str, Any]:
+        """A PDF is read in the background: store the file as the user, enqueue the job, answer at once. The job's status is polled by the UI."""
+        from mep.api.vision_jobs import enqueue
+
+        path = f"{user.firm_id}/{revision_id}/{sha}.pdf"
+        self._store(token, path, data)
+        with psycopg.connect(self._dsn, autocommit=True) as svc:
+            with svc.cursor() as cur:
+                cur.execute("delete from vision_job where revision_id = %s and sha256 = %s and status = 'failed'", (revision_id, sha))
+            try:
+                job = enqueue(svc, user=user, revision_id=revision_id, name=name, sha=sha, storage_path=f"{BUCKET}/{path}", data=data)
+            except psycopg.errors.UniqueViolation:
+                raise UploadRefused(409, "already_uploaded", "this file was already uploaded to this revision") from None
+        return {"kind": "pdf", "name": name, "sha256": sha, "bytes": len(data), "storage_path": f"{BUCKET}/{path}", "revision_id": str(revision_id),
+                "job_id": str(job), "status": "queued", "ingest_run": None, "spaces": 0, "extractions": 0, "health": None, "problems": []}
+
     def ingest(self, *, user: CurrentUser, token: str, revision_id: UUID, name: str, kind: str, data: bytes,
                architect_rev: str | None = None) -> dict[str, Any]:
         """Ingest into an open revision; for a FROZEN revision make a child revision (the architect re-issued the model) and
@@ -132,14 +148,17 @@ class PgUploads:
                 raise UploadRefused(404, "not_found", "revision not found")
             frozen, parent_label, project_id = bool(rev[0]), str(rev[1]), rev[2]
             if conn.execute("select 1 from ingest_run where revision_id = %s and source_sha256 = %s",
-                            (revision_id, sha)).fetchone():
+                            (revision_id, sha)).fetchone() or conn.execute(
+                    "select 1 from vision_job where revision_id = %s and sha256 = %s and status <> 'failed'", (revision_id, sha)).fetchone():
                 raise UploadRefused(409, "already_uploaded", "this file was already uploaded to this revision")
         label = architect_rev or next_label(parent_label)
         if architect_rev is not None and not LABEL_OK.match(architect_rev):
             raise UploadRefused(422, "bad_label", "the architect revision label is 1-20 letters, digits, spaces, dots, dashes")
         if frozen and kind == "pdf":
             raise UploadRefused(409, "pdf_on_frozen", "a PDF is evidence only and does not make a new revision: add it to an open revision")
-        result = read_pdf(name, data, self._vision) if kind == "pdf" else read_file(kind, name, data)
+        if kind == "pdf":
+            return self._queue_pdf(user, token, revision_id, name, sha, data)
+        result = read_file(kind, name, data)
         target, child = revision_id, None
         with psycopg.connect(self._dsn, autocommit=True) as svc:
             if frozen:

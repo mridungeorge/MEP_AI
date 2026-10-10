@@ -25,6 +25,7 @@ from mep.api import me as me_api
 from mep.api import review as review_api
 from mep.api import schedule as schedule_api
 from mep.api import skills as skills_api
+from mep.api import vision_jobs as vision_jobs_api
 from mep.api.agents_pg import PgAgentBackend
 from mep.api.app import create_app
 from mep.api.auth import make_current_user
@@ -52,7 +53,7 @@ DEMO_JWT_SECRET = "super-secret-jwt-token-with-at-least-32-characters-long"   # 
 
 
 def create_pg_app(dsn: str, jwt_secret: str, pack: RulePack, cors_origins: list[str] | None = None,
-                  supabase_url: str | None = None, anon_key: str | None = None, vision: Any = None) -> FastAPI:
+                  supabase_url: str | None = None, anon_key: str | None = None, vision: Any = None, vision_worker: bool = False) -> FastAPI:
     jwks_url = f"{supabase_url.rstrip('/')}/auth/v1/.well-known/jwks.json" if supabase_url else None
     logging.getLogger("uvicorn.access").addFilter(_RedactShareTokens())
     current_user = make_current_user(dsn, jwt_secret, jwks_url)
@@ -79,6 +80,9 @@ def create_pg_app(dsn: str, jwt_secret: str, pack: RulePack, cors_origins: list[
     app.include_router(skills_api.router)
     app.dependency_overrides[skills_api.current_user] = current_user
     app.dependency_overrides[skills_api.get_service] = lambda user=Depends(current_user): PgSkills(dsn, user)  # noqa: B008
+    app.include_router(vision_jobs_api.router)
+    app.dependency_overrides[vision_jobs_api.current_user] = current_user
+    app.dependency_overrides[vision_jobs_api.get_dsn] = lambda: dsn
     app.include_router(evidence_api.router)
     app.dependency_overrides[evidence_api.current_user] = current_user
     app.dependency_overrides[evidence_api.get_dsn] = lambda: dsn
@@ -93,6 +97,10 @@ def create_pg_app(dsn: str, jwt_secret: str, pack: RulePack, cors_origins: list[
         app.dependency_overrides[uploads.get_service] = lambda: service
         app.dependency_overrides[skills_api.get_uploads] = lambda: service
     app.dependency_overrides[schedule_api.get_repository] = repository
+    if vision_worker:                  # PDF drawings are read by this background thread (one per process; replicas share the queue)
+        runner = vision_jobs_api.VisionRunner(dsn, vision if vision is not None else vision_from_env())
+        app.router.on_startup.append(runner.start)
+        app.router.on_shutdown.append(runner.stop)
     if cors_origins:
         app.add_middleware(CORSMiddleware, allow_origins=cors_origins, allow_methods=["GET", "POST", "PUT", "DELETE"],
                            allow_headers=["Authorization", "Content-Type", "X-Acting-Role"])
@@ -109,4 +117,4 @@ def app_from_env() -> FastAPI:
     origins = [o.strip() for o in os.environ.get("MEP_CORS_ORIGINS", "").split(",") if o.strip()]
     rules = Path(os.environ.get("MEP_RULES_DIR") or REPO_ROOT / "rules")
     return create_pg_app(dsn, secret, load_pack(rules), origins, os.environ.get("MEP_SUPABASE_URL"),
-                         os.environ.get("MEP_SUPABASE_ANON_KEY"))
+                         os.environ.get("MEP_SUPABASE_ANON_KEY"), vision_worker=os.environ.get("MEP_VISION_WORKER", "1") != "0")

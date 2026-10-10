@@ -175,6 +175,12 @@ export interface RevisionSummary {
   parent_revision_id: string | null;
 }
 
+/** GET /revisions/{id}/vision-jobs */
+export interface VisionJob {
+  id: string; name: string; sha256: string; status: "queued" | "running" | "done" | "failed"; error: string | null; problems: string[];
+  extractions: number | null; created_at: string; finished_at: string | null;
+}
+
 /** POST /revisions/{id}/uploads */
 export interface UploadResponse {
   kind: "ifc" | "dxf" | "pdf";
@@ -182,7 +188,11 @@ export interface UploadResponse {
   sha256: string;
   bytes: number;
   storage_path: string;
-  ingest_run: string;
+  /** Null for a PDF: it is read in the background (see job_id / status). */
+  ingest_run: string | null;
+  /** A PDF only: the background job that reads it, and where it stands. */
+  job_id?: string;
+  status?: "queued";
   spaces: number;
   extractions: number;
   health: IngestHealth | null;
