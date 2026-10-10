@@ -5,13 +5,45 @@ local devcontainer gate is the reference (tag `sprint-2-gate`). GitHub CI has ne
 Updated: 2026-10-09 (recovery after a device change; see "Recovery 2026-10-09")
 
 ## Resume here (updated 2026-10-12)
-Done: 2.5, 3, 4a, 4a.1, **4b** (`sprint-4b-gate`, once cut: see the 4b section). The user's standing instruction after 4b is STOP and report.
+Done: 2.5, 3, 4a, 4a.1, 4b (`sprint-4b-gate`), **Phase 5 pilot hardening** (see the Phase 5 section; tag `sprint-5-gate` once cut). The user's instruction
+after Phase 5 is: give the checklist of what to do by hand to deploy staging, then STOP.
 Notes: the local Supabase signs tokens with ES256 (JWKS). Mail for magic links goes to Mailpit (`http://127.0.0.1:54324`). Run everything in
 the devcontainer; `~/ws` is a synced work copy (never `uv sync` there); clean gates run from `git clone` copies (`~/gate3`). On the Windows
 host put `AppData/Local/Python/bin` (under the user profile) first on PATH (the WindowsApps `python` stub fails). `.env.example` files cannot
 be written here (permission rule): the templates are `deploy/env.api.example` and `deploy/env.web.example`. DO NOT run `docker build` in the
 devcontainer: it hung Docker Desktop (restarted once); `deploy/api/Dockerfile` is unverified by a build (read-reviewed; uv image 0.12.24 matches the lock).
 Existing open revisions have results without an input fingerprint (`inputs_hash` NULL): re-run once before freezing.
+
+## Phase 5 pilot hardening (2026-10-12): no new features
+- (1) Evidence spaces: "Add as a space" from a drawing reading is `evidence_add_space` (0022): the space stays `extracted`, links to the extraction row, the
+  page and the source file, records the unit the designer declared (m^2/ft^2/mm^2; void mm/m/in/ft; no unit is assumed, PDF numbers are stored with unit
+  `unverified`), needs Gate 1, and database triggers refuse any edit or relabel of the evidence-derived area/void or the link (all roles). Tests:
+  `tests/rls/test_pg_evidence_space.py`.
+- (2) An agent's `run_skill` returns `needs_confirmation` (and leaves a note) unless a designer confirmed the EXACT effective card version (hash of the card with
+  firm defaults and constants applied): `spec_confirmation` + `spec_card_confirm` (0023), API `card-preview` / `confirm-card`, drafting-screen review button;
+  `perform_run(expected_digest=...)` refuses a card that changed after confirmation.
+- (3) Drafting builds: `skill_job` queue (0024) + dispatcher (`python -m mep.skills_runner.dispatcher`) running the build and the independent re-check as two
+  separate containers (non-root, no network, read-only, `/job/out` the only writable place, CPU/memory/pids/time limits; `sandbox_docker.docker_run_args` is the one
+  place that defines it). `MEP_SKILL_EXECUTOR=queue` makes the API enqueue. `deploy/worker/Dockerfile` carries cadquery. Isolation tests run real probes in a
+  container (`MEP_ISOLATION_IMAGE=python:3.12-slim` locally, the built worker image in CI). **The dispatcher needs a Docker host: Railway cannot run it**
+  (docs/runbooks/skill-worker.md); without one, drafting says "no drafting worker is running" and the rest works.
+- (4) PDF reading is a background job (`vision_job`, 0025): the upload stores the file and returns `queued`; a thread in the API (or `process_pending`) renders
+  and reads it; the upload panel shows queued/running/done/failed.
+- (5) Agent notes written after a freeze are marked `post_freeze` by a database trigger, labelled in the UI, and are not in the signed package or its PDF (tested).
+- (6) CI `images` job builds the API, web (`deploy/web/Dockerfile`) and worker images and starts/checks each; `scripts/staging_smoke.py` (sign in, upload the
+  fixture IFC, Gate 1, run, report; with checker+approver tokens also freeze, sign Gates 2 and 3 and use/revoke a share link) runs against any URL and is tested
+  against a live uvicorn (`tests/rls/test_pg_smoke.py`). None of the three images could be built locally (Docker build hangs Docker Desktop here): the CI job
+  is their first build.
+- Migrations 0024 and 0025 were edited once after being pushed and before any deployment (column grants, firm_id on skill_job_file).
+
+### Known limits (validator blind spots and others, deliberately left)
+- space-envelope validator does not check: the VOLUMEUNIT prefix, `IfcQuantityArea` unit overrides, a property set shared between two spaces, DXF TEXT style /
+  oblique / width factor / mirror flags, or geometry placed inside the standard arrow-head blocks (never drawn). It does check the world geometry (placement chain,
+  context, map conversion, solid, DXF entity attributes).
+- The explanation/reply filters remove outcome and compliance wording, foreign rule ids and clause numbers; they cannot check numbers or truth in prose, and a
+  denylist cannot catch every paraphrase of "this is fine" in a fix hypothesis.
+- LocalExecutor (development) is not isolated; the message throttle and the vision reader are per process; one vision job holds a request-independent thread for up
+  to ~150 s per file; notes and clarifying questions can be added to a frozen revision (marked post-freeze).
 
 ## Phase 4b drafting skills, agents, PDF evidence (2026-10-12)
 - Built: space-envelope skill (rooms/plant rooms -> IFC4 + plan DXF, 30-check independent validator, determinism, round-trip through the app readers);

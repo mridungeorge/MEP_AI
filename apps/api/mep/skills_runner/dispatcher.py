@@ -28,7 +28,7 @@ def claim(conn: psycopg.Connection[dict[str, Any]], who: str) -> dict[str, Any] 
     return conn.execute(
         "update skill_job set status = 'running', started_at = now(), locked_by = %s where id = ("
         " select id from skill_job where status = 'queued' order by created_at for update skip locked limit 1)"
-        " returning id, skill, spec", (who,)).fetchone()
+        " returning id, firm_id, skill, spec", (who,)).fetchone()
 
 
 def process(conn: psycopg.Connection[dict[str, Any]], job: dict[str, Any], executor: Executor) -> None:
@@ -44,7 +44,7 @@ def process(conn: psycopg.Connection[dict[str, Any]], job: dict[str, Any], execu
     meta, contents = result_to_json(result if isinstance(result, SkillRunResult) else SkillRunResult("build_failed"))
     with conn.transaction():
         for name, data in contents.items():
-            conn.execute("insert into skill_job_file (job_id, name, content) values (%s, %s, %s)", (job["id"], name, data))
+            conn.execute("insert into skill_job_file (job_id, firm_id, name, content) values (%s, %s, %s, %s)", (job["id"], job["firm_id"], name, data))
         conn.execute("update skill_job set status = 'done', finished_at = now(), result = %s::jsonb where id = %s", (json.dumps(meta), job["id"]))
 
 

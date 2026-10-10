@@ -20,6 +20,7 @@ create table skill_job (
 create index skill_job_queue_idx on skill_job (status, created_at);
 create table skill_job_file (
   job_id uuid not null references skill_job (id) on delete cascade,
+  firm_id uuid not null references firm(id),
   name text not null,
   content bytea not null,
   primary key (job_id, name)

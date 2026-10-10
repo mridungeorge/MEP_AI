@@ -15,8 +15,6 @@ import time
 from pathlib import Path
 from typing import Any, Protocol
 
-from pypdf import PdfReader
-
 from mep.ingest.records import ExtractionRecord, IngestResult
 
 PROMPT = (
@@ -43,6 +41,10 @@ def _finite_positive(v: Any) -> bool:
 
 
 def extract_pdf(path: str | Path, vision: Vision) -> IngestResult:
+    from pypdf import (
+        PdfReader,  # a development dependency: only the legacy embedded-image reader and its tests use it
+    )
+
     path = Path(path)
     res = IngestResult("pdf", path.name, hashlib.sha256(path.read_bytes()).hexdigest())
     reader = PdfReader(path)
