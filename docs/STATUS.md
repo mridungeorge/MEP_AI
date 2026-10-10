@@ -7,7 +7,7 @@ Updated: 2026-10-09 (recovery after a device change; see "Recovery 2026-10-09")
 ## Resume here (updated 2026-10-12)
 Done and tagged: 2.5, 3, 4a, 4a.1, 4b, 5. **Phases 6-9 are the standing order** (user prompt: run 6, 7, 8, 9 in order without stopping, then write
 `docs/review-pack.md` and STOP; do not encode AS 1668.2, AS/NZS 3000, 3008 or AS 4254).
-Phase 6 (product shell): items 1-8 built, GitHub CI green on `1fafd3a`; adversarial review round 1 in progress; then `sprint-6-gate`.
+Phase 6 (product shell) is DONE: tag `sprint-6-gate`. Next: Phase 7 (engineering features), then 8, 9, then `docs/review-pack.md`.
 **Local environment is fragile:** the Windows host has ~2 GB free RAM and ~7 GB free disk (Docker holds ~45 GB: 8 GB of unused images, 7.7 GB build cache; WSL has
 no memory cap). Claude Code stopped one long test run for low memory and said not to re-launch it unasked. Until the user frees space (suggested: prune unused
 images + a `.wslconfig` memory cap), run only SMALL local test batches and use GitHub CI (it runs the whole suite and e2e) as the full check. A clean-clone
@@ -41,6 +41,18 @@ Existing open revisions have results without an input fingerprint (`inputs_hash`
 - 6.8 `/terms`, `/privacy`: placeholders marked LEGAL REVIEW REQUIRED (no legal text drafted).
 - Not done / limits: the near-miss firm default is stored but not applied by the engine; no email-verified self-signup (people join by invitation only); the
   platform-admin console is minimal; billing has no invoices UI; Sentry/Resend/Stripe paths are tested with fakes only (no live keys exist).
+
+### Phase 6 review
+- **Phase 6 review record.** Round 1 (two reviewers): 2 blockers (clients could INSERT projects/revisions around the billing gate; an admin could make themselves
+  approver and submit their own registration number) + should-fix (last-admin race, invitation oracle and no choice among invitations, Stripe event ordering and
+  duplicate subscriptions, Sentry local variables, uvicorn logs, `/readyz` DoS and detail, share links surviving retirement, outbox to deactivated people): fixed in
+  0035 + code. Round 2: no blocker; should-fix (project address reuse, one registration number for two accounts, re-subscription after cancel, equal-time events,
+  concurrent project limit): fixed in 0036. **Re-reviewed: round-1 fixes (by round 2). NOT re-reviewed: the round-2 fixes (0036, billing adoption/ordering change).**
+  CI also found: `ruff` shebang, and purge-firm leaving append-only guards off (fixed + tested). A clean-clone `scripts/ci.sh` was not run locally (memory); GitHub
+  CI, which runs the same steps including e2e, is green on `9f4b839`.
+  Unfixed nits: two simultaneous Stripe checkouts can both charge (the second subscription is ignored but billed: cancel unadopted subscriptions); the permanent ledger
+  holds the registration NUMBER and the platform administrator's note only as a hash; the invitation e-mail has no rate limit (admin-chosen firm name in a mail to any
+  address); the near-miss firm default is stored but not applied by the engine.
 
 ## Phase 5 pilot hardening (2026-10-12): no new features
 - (1) Evidence spaces: "Add as a space" from a drawing reading is `evidence_add_space` (0022): the space stays `extracted`, links to the extraction row, the
