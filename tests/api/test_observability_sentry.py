@@ -1,4 +1,6 @@
 """A real sentry_sdk.init with a capturing transport: nothing from the frames' local variables reaches an event."""
+import os
+
 import pytest
 
 sentry_sdk = pytest.importorskip("sentry_sdk")
@@ -21,8 +23,8 @@ def test_an_exception_event_carries_no_local_variables_and_no_secret(monkeypatch
     assert init_sentry("test")
     sentry_sdk.get_client().transport = Capture({})
 
-    secret = "".join(["Zx9", "-LIVE", "_TOKEN-not-hex"])
-    street = "".join(["12 Sec", "ret Street"])
+    secret = "tok-" + os.urandom(9).hex()
+    street = "12 " + os.urandom(5).hex() + " Street"
 
     def handler(share_token=secret, address=street):
         raise RuntimeError("failed")

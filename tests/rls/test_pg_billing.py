@@ -219,6 +219,21 @@ def test_events_apply_in_order_one_subscription_at_a_time_and_never_live(admin, 
 def test_a_firm_with_a_live_subscription_cannot_start_a_second_checkout(admin, client, monkeypatch):
     f = firm(admin)
     monkeypatch.setenv("STRIPE_PRICE_STARTER_SEAT", "price_test_seat")
-    admin.execute("update subscription set stripe_subscription_id = 'sub_live1', status = 'active' where firm_id = %s", (f["firm"],))
+    admin.execute("update subscription set stripe_subscription_id = 'sub_live_' || firm_id::text, status = 'active' where firm_id = %s", (f["firm"],))
     r = client.post("/billing/checkout", headers=hdr(f["designer"]), json={"plan_id": "starter"})
     assert r.status_code == 409 and r.json()["detail"]["code"] == "already_subscribed"
+
+
+def test_a_project_cannot_be_reused_for_another_site_and_a_resubscribing_firm_is_adopted(admin, client):
+    import psycopg
+    f = firm(admin)
+    with pytest.raises(psycopg.errors.Error):
+        admin.execute("update project set address = '99 Another Rd' where id = %s", (f["project"],))
+    fid = str(f["firm"])
+    ev = lambda t, obj, created: {"id": f"evt_{uid().replace('-', '')}", "type": t, "created": created, "livemode": False, "data": {"object": obj}}
+    admin.execute("update subscription set stripe_subscription_id = 'sub_old_' || firm_id::text, status = 'canceled', stripe_last_event_at = 500 where firm_id = %s", (f["firm"],))
+    r = post_event(client, ev("customer.subscription.created", {"id": "sub_new_" + fid[:8], "customer": "cus_2", "status": "active", "metadata": {"firm_id": fid}}, 1000))
+    assert r.json()["result"] == "updated" and sub(admin, f)[0] == "active" and sub(admin, f)[5] == "sub_new_" + fid[:8]
+    # equal timestamps: a downgrade does not win, an upgrade does
+    assert post_event(client, ev("customer.subscription.updated", {"id": "sub_new_" + fid[:8], "status": "incomplete", "metadata": {"firm_id": fid}}, 1000)).json()["result"] == "ignored"
+    assert sub(admin, f)[0] == "active"

@@ -11,6 +11,7 @@ from tests.rls import test_pg_review_api as rv
 from tests.rls.conftest import DB_URL, uid
 
 PACK = load_pack(lin.ROOT / "rules")
+RUN = uid().replace("-", "")[:6].upper()          # numbers are verified for one person only, so every run uses its own
 EVIDENCE = "RPEQ register search 12 Oct 2026: name and number match, status current"
 
 
@@ -35,23 +36,24 @@ def platform_admin(admin):
     return other["designer"]
 
 
-def submit(client, f, number="RPEQ 20480", who=None, user=None):
+def submit(client, f, number=None, who=None, user=None):
+    number = number or "RPEQ " + uid().replace("-", "")[:10].upper()
     return client.post("/admin/registrations", headers=hdr(who or f["designer"]),
                        json={"user_id": str(user or f["approver"]), "number": number, "register": "RPEQ", "evidence": EVIDENCE})
 
 
 def test_the_whole_route_submit_verify_and_the_number_reaches_the_approver_only_then(admin, client):
     f, pa = firm_with_approver(admin), platform_admin(admin)
-    r = submit(client, f)
+    r = submit(client, f, f"RPEQ {RUN}20480")
     assert r.status_code == 200 and admin.execute("select registration_no from app_user where id = %s", (f["approver"],)).fetchone()[0] is None
     queue = client.get("/platform/registrations", headers=hdr(pa)).json()
     mine = next(q for q in queue if q["id"] == r.json()["registration_id"])
-    assert mine["number"] == "RPEQ 20480" and mine["register"] == "RPEQ"
+    assert mine["number"] == f"RPEQ {RUN}20480" and mine["register"] == "RPEQ"
     assert client.post(f"/platform/registrations/{mine['id']}", headers=hdr(pa), json={"verify": True, "note": "ok"}).status_code == 422       # say what you checked
     done = client.post(f"/platform/registrations/{mine['id']}", headers=hdr(pa), json={"verify": True, "note": "RPEQ register, 12 Oct 2026, name and number match, current"})
     assert done.status_code == 200
-    assert admin.execute("select registration_no from app_user where id = %s", (f["approver"],)).fetchone()[0] == "RPEQ 20480"
-    ev = admin.execute("select payload from ledger_event where firm_id = %s and kind = 'app_user_changed' and payload ->> 'registration_no' = 'RPEQ 20480'", (f["firm"],)).fetchone()[0]
+    assert admin.execute("select registration_no from app_user where id = %s", (f["approver"],)).fetchone()[0] == f"RPEQ {RUN}20480"
+    ev = admin.execute(f"select payload from ledger_event where firm_id = %s and kind = 'app_user_changed' and payload ->> 'registration_no' = 'RPEQ {RUN}20480'", (f["firm"],)).fetchone()[0]
     assert ev["registration_path"] == "verified"
     kinds = {k for (k,) in admin.execute("select kind from ledger_event where firm_id = %s", (f["firm"],)).fetchall()}
     assert {"registration_submitted", "registration_verified"} <= kinds
@@ -78,13 +80,13 @@ def test_who_may_submit_and_who_may_decide(admin, client):
 
 def test_a_new_submission_supersedes_the_old_and_a_correction_replaces_the_number(admin, client):
     f, pa = firm_with_approver(admin), platform_admin(admin)
-    first = submit(client, f, "RPEQ 1111").json()["registration_id"]
-    second = submit(client, f, "RPEQ 2222").json()["registration_id"]
+    first = submit(client, f, f"RPEQ {RUN}1111").json()["registration_id"]
+    second = submit(client, f, f"RPEQ {RUN}2222").json()["registration_id"]
     assert admin.execute("select status from registration where id = %s", (first,)).fetchone()[0] == "superseded"
     client.post(f"/platform/registrations/{second}", headers=hdr(pa), json={"verify": True, "note": "RPEQ register 12 Oct 2026, current, name matches"})
-    third = submit(client, f, "RPEQ 3333").json()["registration_id"]
+    third = submit(client, f, f"RPEQ {RUN}3333").json()["registration_id"]
     client.post(f"/platform/registrations/{third}", headers=hdr(pa), json={"verify": True, "note": "RPEQ register 13 Oct 2026, current, name matches"})
-    assert admin.execute("select registration_no from app_user where id = %s", (f["approver"],)).fetchone()[0] == "RPEQ 3333"
+    assert admin.execute("select registration_no from app_user where id = %s", (f["approver"],)).fetchone()[0] == f"RPEQ {RUN}3333"
     assert [s for (s,) in admin.execute("select status from registration where user_id = %s order by submitted_at", (f["approver"],)).fetchall()] == \
         ["superseded", "superseded", "verified"]
 
@@ -102,8 +104,8 @@ def test_visibility_and_the_overview(admin, client):
 
 def test_a_direct_change_to_a_registration_number_is_marked_direct_in_the_ledger(admin, client):
     f = firm_with_approver(admin)
-    admin.execute("update app_user set registration_no = 'RPEQ 9999' where id = %s", (f["approver"],))
-    p = admin.execute("select payload from ledger_event where firm_id = %s and kind = 'app_user_changed' and payload ->> 'registration_no' = 'RPEQ 9999'", (f["firm"],)).fetchone()[0]
+    admin.execute(f"update app_user set registration_no = 'RPEQ {RUN}9999' where id = %s", (f["approver"],))
+    p = admin.execute(f"select payload from ledger_event where firm_id = %s and kind = 'app_user_changed' and payload ->> 'registration_no' = 'RPEQ {RUN}9999'", (f["firm"],)).fetchone()[0]
     assert p["registration_path"] == "direct"
     assert uid()
 
@@ -121,3 +123,15 @@ def test_an_administrator_cannot_submit_their_own_number_and_the_decider_is_from
     assert ok.status_code == 200
     payload = admin.execute("select payload from ledger_event where firm_id = %s and kind = 'registration_verified'", (f["firm"],)).fetchone()[0]
     assert "note" not in payload and len(payload["note_sha256"]) == 64                          # the permanent ledger holds a hash, not the free text
+
+
+def test_one_number_cannot_be_verified_for_two_people_and_a_renewal_still_works(admin, client):
+    f, g, pa = firm_with_approver(admin), firm_with_approver(admin), platform_admin(admin)
+    note = {"verify": True, "note": "RPEQ register 12 Oct 2026, name matches, current"}
+    one = submit(client, f, f"RPEQ {RUN}424242").json()["registration_id"]
+    assert client.post(f"/platform/registrations/{one}", headers=hdr(pa), json=note).status_code == 200
+    two = submit(client, g, f"RPEQ {RUN}424242").json()["registration_id"]
+    dup = client.post(f"/platform/registrations/{two}", headers=hdr(pa), json=note)
+    assert dup.status_code == 422 and "two accounts" in dup.json()["detail"]["message"]
+    again = submit(client, f, f"RPEQ {RUN}424242").json()["registration_id"]                          # the same person renews the same number
+    assert client.post(f"/platform/registrations/{again}", headers=hdr(pa), json=note).status_code == 200

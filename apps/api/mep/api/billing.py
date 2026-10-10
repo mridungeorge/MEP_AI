@@ -138,7 +138,7 @@ def apply_event(conn: psycopg.Connection[Any], event: dict[str, Any]) -> str:
     if kind == "checkout.session.completed":
         if firm and obj.get("customer") and obj.get("subscription"):
             row = conn.execute("update subscription set stripe_customer_id = %s, stripe_subscription_id = %s, updated_at = now()"
-                               " where firm_id = %s and (stripe_subscription_id is null or stripe_subscription_id = %s or status in ('canceled')) returning firm_id",
+                               " where firm_id = %s and (stripe_subscription_id is null or stripe_subscription_id = %s or status = 'canceled') returning firm_id",
                                (obj["customer"], obj["subscription"], firm, obj["subscription"])).fetchone()
             return "linked" if row else "ignored"
         return "ignored"
@@ -148,12 +148,13 @@ def apply_event(conn: psycopg.Connection[Any], event: dict[str, Any]) -> str:
         # keyed on the subscription id; a firm with no subscription yet adopts the first one its own metadata names (events can arrive out of order)
         row = conn.execute(
             "update subscription set status = %s, plan_id = coalesce(%s, plan_id), seats = coalesce(%s, seats), max_projects = case when %s then %s else max_projects end,"
-            " current_period_end = %s, stripe_customer_id = coalesce(stripe_customer_id, %s), stripe_subscription_id = coalesce(stripe_subscription_id, %s),"
+            " current_period_end = %s, stripe_customer_id = coalesce(%s, stripe_customer_id), stripe_subscription_id = %s,"
             " stripe_last_event_at = greatest(stripe_last_event_at, %s), updated_at = now()"
-            " where stripe_last_event_at <= %s and (stripe_subscription_id = %s or (stripe_subscription_id is null and %s::uuid is not null and firm_id = %s::uuid))"
+            " where (stripe_last_event_at < %s or (stripe_last_event_at = %s and %s in ('active', 'trialing', 'canceled')))"
+            " and (stripe_subscription_id = %s or (%s::uuid is not null and firm_id = %s::uuid and (stripe_subscription_id is null or status = 'canceled')))"
             " returning firm_id",
             (status, (obj.get("metadata") or {}).get("plan_id"), seats, "plan_id" in (obj.get("metadata") or {}), _plan_max((obj.get("metadata") or {}).get("plan_id")),
-             _ts(obj.get("current_period_end")), obj.get("customer"), obj.get("id"), created, created, obj.get("id"), firm, firm)).fetchone()
+             _ts(obj.get("current_period_end")), obj.get("customer"), obj.get("id"), created, created, created, status, obj.get("id"), firm, firm)).fetchone()
         return "updated" if row else "ignored"
     if kind in ("invoice.payment_failed", "invoice.paid"):
         sub = _sub_of_invoice(obj)
