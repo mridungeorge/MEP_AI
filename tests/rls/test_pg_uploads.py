@@ -102,7 +102,6 @@ def test_the_same_file_twice_is_refused(admin, client):
 @pytest.mark.parametrize("data, name, why", [
     (b"just some text, not a model\n" * 20, "plan.ifc", "not a recognised"),
     (b"AC1032" + b"\x00" * 200, "plan.dxf", "DWG"),
-    (b"%PDF-1.7\n" + b"x" * 200, "plan.dxf", "PDF"),
     (b"PK\x03\x04" + b"x" * 200, "model.ifc", "zipped"),
     (b"ISO-10303-21;\nHEADER;\nFILE_SCHEMA(('AP214'));\nENDSEC;\n", "model.ifc", "not a recognised"),   # STEP, but not IFC
     (b"", "empty.ifc", "not a recognised"),

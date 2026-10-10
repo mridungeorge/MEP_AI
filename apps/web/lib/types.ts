@@ -175,7 +175,7 @@ export interface RevisionSummary {
 
 /** POST /revisions/{id}/uploads */
 export interface UploadResponse {
-  kind: "ifc" | "dxf";
+  kind: "ifc" | "dxf" | "pdf";
   name: string;
   sha256: string;
   bytes: number;
@@ -325,3 +325,7 @@ export interface AgentNote {
   id: string; agent: string; kind: string; severity: string | null; body: string; status: string; rule_result_id: string | null; created_at: string;
 }
 export interface AgentReply { agent: string; reply: string; calls: { tool: string; ok: boolean; denied: boolean; error: string | null }[] }
+
+export interface EvidenceCandidate { key: string; confidence: number | null; [field: string]: string | number | null }
+export interface EvidenceSource { name: string; kind: string; sha256: string; problems: string[]; provenance: "extracted"; candidates: EvidenceCandidate[] }
+export interface EvidenceResponse { sources: EvidenceSource[] }

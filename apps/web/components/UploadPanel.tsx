@@ -27,7 +27,7 @@ export function UploadPanel({ revisionId, onUploaded }: { revisionId: string; on
   return (
     <section aria-label="Upload model">
       <h2>Upload architect model</h2>
-      <p>An IFC (preferred) or DXF plan, up to 50 MiB. The file type is checked from its content.</p>
+      <p>An IFC (preferred) or DXF plan, or a PDF drawing (read as evidence only), up to 50 MiB. The file type is checked from its content.</p>
       <input
         type="file"
         aria-label="Upload IFC or DXF"
@@ -41,7 +41,7 @@ export function UploadPanel({ revisionId, onUploaded }: { revisionId: string; on
       {busy && <p>Reading the file…</p>}
       {done && (
         <p role="status" data-testid="upload-result">
-          Uploaded {done.name} as {done.kind.toUpperCase()}: {done.spaces} space(s) read
+          Uploaded {done.name} as {done.kind.toUpperCase()}: {done.kind === "pdf" ? `${done.extractions} value(s) read as evidence (not inputs)` : `${done.spaces} space(s) read`}
           {done.health ? `, ingest health ${done.health.score_percent}%` : ""}.
         </p>
       )}

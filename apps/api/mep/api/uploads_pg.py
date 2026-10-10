@@ -28,8 +28,9 @@ from mep.api.lineage_pg import (
 from mep.api.pg import health_view
 from mep.api.schedule import CurrentUser
 from mep.api.uploads import UploadRefused
+from mep.ingest.pdf import extract_rendered
 from mep.ingest.records import IngestRefused, IngestResult
-from mep.ingest.sandbox import read_isolated
+from mep.ingest.sandbox import read_isolated, render_isolated
 from mep.ingest.store import AlreadyIngested, store_ingest
 
 BUCKET = "uploads"
@@ -49,6 +50,25 @@ def read_file(kind: str, name: str, data: bytes) -> IngestResult:
         _READERS.release()
 
 
+def read_pdf(name: str, data: bytes, vision: Any) -> IngestResult:
+    """A PDF: pages rendered in the sandbox (one slot), then read by the vision model, if one is configured. The result is evidence only."""
+    if not _READERS.acquire(timeout=5):
+        raise UploadRefused(503, "busy", "several files are being read right now; try again in a minute")
+    try:
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "upload.pdf"
+            path.write_bytes(data)
+            try:
+                rendered = render_isolated(path)
+            except IngestRefused as exc:
+                raise UploadRefused(422, "too_complex" if "was stopped" in str(exc) else "unreadable_file", str(exc)) from None
+    finally:
+        _READERS.release()
+    if not rendered.get("pages"):
+        raise UploadRefused(422, "unreadable_file", "no page of this PDF could be drawn: " + ("; ".join(rendered.get("problems", [])[:2]) or "it has no pages"))
+    return extract_rendered(name, hashlib.sha256(data).hexdigest(), rendered, vision)
+
+
 def _read(kind: str, name: str, data: bytes) -> IngestResult:
     with tempfile.TemporaryDirectory() as td:
         path = Path(td) / f"{Path(name).stem or 'upload'}.{kind}"
@@ -61,8 +81,8 @@ def _read(kind: str, name: str, data: bytes) -> IngestResult:
 
 
 class PgUploads:
-    def __init__(self, dsn: str, supabase_url: str, anon_key: str) -> None:
-        self._dsn, self._url, self._anon = dsn, supabase_url.rstrip("/"), anon_key
+    def __init__(self, dsn: str, supabase_url: str, anon_key: str, vision: Any = None) -> None:
+        self._dsn, self._url, self._anon, self._vision = dsn, supabase_url.rstrip("/"), anon_key, vision
 
     def _store(self, token: str, path: str, data: bytes) -> None:
         try:
@@ -117,7 +137,7 @@ class PgUploads:
         label = architect_rev or next_label(parent_label)
         if architect_rev is not None and not LABEL_OK.match(architect_rev):
             raise UploadRefused(422, "bad_label", "the architect revision label is 1-20 letters, digits, spaces, dots, dashes")
-        result = read_file(kind, name, data)
+        result = read_pdf(name, data, self._vision) if kind == "pdf" else read_file(kind, name, data)
         target, child = revision_id, None
         with psycopg.connect(self._dsn, autocommit=True) as svc:
             if frozen:

@@ -335,7 +335,7 @@ test("drafting: a sentence is read back for confirmation, the card is completed,
   const s = state.scenarios["drafting"];
   await signIn(page, s.designer_email);
   await page.goto(`/projects/${s.project}/revisions/${s.revision}/drafting`);
-  await expect(page.getByRole("heading", { name: "Drafting" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Drafting", exact: true })).toBeVisible();
   await page.getByLabel("Skill", { exact: true }).selectOption("space-envelope");
   await expect(page.getByRole("heading", { name: "The card" })).toBeVisible();
 

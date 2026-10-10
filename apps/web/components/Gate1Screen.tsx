@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ApiError, api } from "@/lib/api";
 import { applyEdit, canConfirm, canRun, unconfirmedRefs, withEtags } from "@/lib/gate1";
 import type { Gate1State, Report, RowKind, RowRef, SpaceInput } from "@/lib/types";
+import { EvidencePanel } from "./EvidencePanel";
 import { HealthPanel } from "./HealthPanel";
 import { PartAssignmentPanel } from "./PartAssignmentPanel";
 import { PartsEditor } from "./PartsEditor";
@@ -85,6 +86,7 @@ export function Gate1Screen({ revisionId }: { revisionId: string }) {
       <h1>Gate 1: confirm inputs</h1>
       <UploadPanel revisionId={revisionId} onUploaded={reload} />
       <HealthPanel health={state.health} />
+      <EvidencePanel revisionId={revisionId} canEdit={state.role === "designer"} onChanged={reload} />
       {state.project && (
         <ProjectFactsPanel project={state.project} selected={sel.project.has(state.project.id)}
                            onToggle={() => toggle("project")(state.project!.id)} />

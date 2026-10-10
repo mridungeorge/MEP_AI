@@ -1,6 +1,6 @@
 # duct-fab skill
 
-Status: **built, reviewed in two rounds, not integrated.** Round 2's two blockers were fixed afterwards and checked against the reviewer's own attack scripts; there has been no third review. Geometry only: the skill never decides
+Status: **built, reviewed in two rounds, integrated in the app in Phase 4b** (see `space-envelope.md` for how the runner gates release). Round 2's two blockers were fixed afterwards and checked against the reviewer's own attack scripts; there has been no third review. Geometry only: the skill never decides
 compliance. Checked 2026-10-09 in the devcontainer (Linux, Python 3.12, cadquery 2.8.0, cadquery-ocp 7.9.3.1.1,
 ezdxf 1.4.4). Source: `skills/duct-fab/`, shared kit `skills/cad/` (`cadkit.py` STEP solids, `develop.py` triangulation
 development). Tests: `tests/skills/`.

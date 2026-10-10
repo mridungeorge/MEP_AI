@@ -109,7 +109,7 @@ _DWG = re.compile(rb"\AAC10\d\d")
 
 
 def sniff(data: bytes) -> tuple[str | None, str]:
-    """(kind, '') for an IFC or DXF file recognised by its content, else (None, why it was refused)."""
+    """(kind, '') for an IFC, DXF or PDF file recognised by its content, else (None, why it was refused)."""
     head = data[:20_000]
     if _IFC_START.match(head) and _IFC_SCHEMA.search(head):
         return "ifc", ""
@@ -119,9 +119,9 @@ def sniff(data: bytes) -> tuple[str | None, str]:
         return None, "DWG files are not accepted: export the drawing as DXF"
     if head.startswith(b"PK\x03\x04"):
         return None, "zipped files are not accepted: upload the .ifc or .dxf itself"
-    if head.startswith(b"%PDF"):
-        return None, "PDF files are not accepted here yet"
-    return None, "not a recognised IFC (STEP) or DXF file"
+    if head.startswith(b"%PDF-"):
+        return "pdf", ""
+    return None, "not a recognised IFC (STEP), DXF or PDF file"
 
 
 def safe_name(name: str | None) -> str:

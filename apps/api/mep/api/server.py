@@ -13,11 +13,13 @@ import logging
 import os
 import re
 from pathlib import Path
+from typing import Any
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from mep.api import agents as agents_api
+from mep.api import evidence as evidence_api
 from mep.api import gate1, revisions, uploads
 from mep.api import me as me_api
 from mep.api import review as review_api
@@ -33,6 +35,7 @@ from mep.api.skills_pg import PgSkills
 from mep.api.uploads_pg import PgUploads
 from mep.diff.graph import build_graph
 from mep.engine.loader import RulePack, load_pack
+from mep.ingest.vision_anthropic import vision_from_env
 
 
 class _RedactShareTokens(logging.Filter):
@@ -49,7 +52,7 @@ DEMO_JWT_SECRET = "super-secret-jwt-token-with-at-least-32-characters-long"   # 
 
 
 def create_pg_app(dsn: str, jwt_secret: str, pack: RulePack, cors_origins: list[str] | None = None,
-                  supabase_url: str | None = None, anon_key: str | None = None) -> FastAPI:
+                  supabase_url: str | None = None, anon_key: str | None = None, vision: Any = None) -> FastAPI:
     jwks_url = f"{supabase_url.rstrip('/')}/auth/v1/.well-known/jwks.json" if supabase_url else None
     logging.getLogger("uvicorn.access").addFilter(_RedactShareTokens())
     current_user = make_current_user(dsn, jwt_secret, jwks_url)
@@ -76,6 +79,9 @@ def create_pg_app(dsn: str, jwt_secret: str, pack: RulePack, cors_origins: list[
     app.include_router(skills_api.router)
     app.dependency_overrides[skills_api.current_user] = current_user
     app.dependency_overrides[skills_api.get_service] = lambda user=Depends(current_user): PgSkills(dsn, user)  # noqa: B008
+    app.include_router(evidence_api.router)
+    app.dependency_overrides[evidence_api.current_user] = current_user
+    app.dependency_overrides[evidence_api.get_dsn] = lambda: dsn
     app.include_router(agents_api.router)
     app.dependency_overrides[agents_api.current_user] = current_user
     app.dependency_overrides[agents_api.get_backend_factory] = lambda: (lambda user, rev: PgAgentBackend(dsn, user, rev, pack))
@@ -83,7 +89,7 @@ def create_pg_app(dsn: str, jwt_secret: str, pack: RulePack, cors_origins: list[
     app.dependency_overrides[me_api.get_repository] = repository
     app.dependency_overrides[uploads.current_user] = current_user
     if supabase_url and anon_key:      # without a storage endpoint the upload route refuses (503)
-        service = PgUploads(dsn, supabase_url, anon_key)
+        service = PgUploads(dsn, supabase_url, anon_key, vision=vision if vision is not None else vision_from_env())
         app.dependency_overrides[uploads.get_service] = lambda: service
         app.dependency_overrides[skills_api.get_uploads] = lambda: service
     app.dependency_overrides[schedule_api.get_repository] = repository

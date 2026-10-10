@@ -22,12 +22,39 @@ def apply_limits() -> None:
             resource.setrlimit(limit, (n, n + 5 if limit == resource.RLIMIT_CPU else n))
 
 
+def render(path: str) -> int:
+    """Render a PDF's pages for the vision step: JSON with base64 PNGs on stdout (the file-size limit caps it)."""
+    import base64
+
+    from mep.ingest.pdf_render import PdfRenderError, render_pdf
+    try:
+        out = render_pdf(path)
+    except PdfRenderError as exc:
+        print(str(exc), file=sys.stderr)
+        return 3
+    except Exception as exc:  # noqa: BLE001 - any failure of the PDF library on a hostile file
+        print(type(exc).__name__, file=sys.stderr)
+        return 4
+    for p in out["pages"]:
+        p["png"] = base64.b64encode(p["png"]).decode("ascii")
+    try:
+        json.dump(out, sys.stdout)
+        sys.stdout.flush()
+    except OSError:
+        print("result too large", file=sys.stderr)
+        sys.stderr.flush()
+        os._exit(5)
+    return 0
+
+
 def main(argv: list[str]) -> int:
     apply_limits()
-    if len(argv) != 2 or argv[0] not in ("ifc", "dxf"):
-        print("usage: python -m mep.ingest.worker <ifc|dxf> <path>", file=sys.stderr)
+    if len(argv) != 2 or argv[0] not in ("ifc", "dxf", "pdf-render"):
+        print("usage: python -m mep.ingest.worker <ifc|dxf|pdf-render> <path>", file=sys.stderr)
         return 2
     kind, path = argv
+    if kind == "pdf-render":
+        return render(path)
     try:
         if kind == "ifc":
             from mep.ingest.ifc import read_ifc
