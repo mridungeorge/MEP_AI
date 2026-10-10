@@ -3,7 +3,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ApiError, api } from "@/lib/api";
 import { prune, setPath } from "@/lib/specpath";
 import type { ShortcutResult, SkillCard, SkillRunRow, SkillRunSummary, SkillSummary } from "@/lib/types";
+import { AgentPanel } from "./AgentPanel";
 import { SpecForm } from "./SpecForm";
+
+const DESIGNER_AGENT = [{ id: "designer", label: "Ask the assistant", prompt: "Fill in the card for a plant room 6 x 4 m ..." }] as const;
+const DESIGNER_KINDS = ["clarifying_question", "spec_card_draft", "fix_hypothesis", "explanation"];
 
 function refusal(e: unknown): string {
   if (e instanceof ApiError) return e.code ? `${e.code}: ${e.message}` : e.message;
@@ -164,6 +168,8 @@ export function DraftingScreen({ projectId, revisionId }: { projectId: string; r
           )}
         </section>
       )}
+
+      <AgentPanel revisionId={revisionId} title="Drafting assistant" agents={[...DESIGNER_AGENT]} kinds={DESIGNER_KINDS} />
 
       <section aria-label="Earlier runs">
         <h2>Earlier runs</h2>

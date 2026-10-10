@@ -2,7 +2,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, api } from "@/lib/api";
 import type { Me, Package, ReviewLine, ShareLinkView, Worksheet } from "@/lib/types";
+import { AgentPanel } from "./AgentPanel";
 import { PackageView } from "./PackageView";
+
+const REVIEW_AGENTS = [
+  { id: "adversarial_checker", label: "Ask the adversarial checker to look for problems", prompt: "Look for reasons these results or their inputs could be wrong." },
+  { id: "compliance_risk", label: "Ask the compliance-risk agent for risks", prompt: "Assess the delivery and compliance risks of this revision." },
+] as const;
+const REVIEW_KINDS = ["flag", "risk"];
 
 function refusal(e: unknown): string {
   if (e instanceof ApiError) return e.code ? `${e.code}: ${e.message}` : e.message;
@@ -156,6 +163,8 @@ export function ReviewScreen({ revisionId }: { revisionId: string }) {
           )}
         </section>
       )}
+
+      <AgentPanel revisionId={revisionId} title="Flags and risks raised by agents" agents={[...REVIEW_AGENTS]} kinds={REVIEW_KINDS} />
 
       <table data-testid="review-table">
         <thead><tr><th>System</th><th>Rule / clause</th><th>Outcome</th><th>Class</th><th>Decision</th></tr></thead>

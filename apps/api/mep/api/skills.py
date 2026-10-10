@@ -134,22 +134,36 @@ def _summary(result: SkillRunResult, recorded: dict[str, Any], filled: list[str]
             "validation": result.validation, "files": recorded["artifacts"], "firm_defaults_applied": filled}
 
 
-@router.post("/revisions/{revision_id}/skills/{name}/run")
-def run(revision_id: UUID, name: str, body: RunBody, user: User, svc: Service) -> dict[str, Any]:
-    _designer(user)
-    s = _skill(name)
+def perform_run(svc: SkillsService, user: CurrentUser, revision_id: UUID, name: str, spec_in: dict[str, Any], *,
+                use_firm_defaults: bool = True, via: str = "user") -> tuple[SkillRunResult, dict[str, Any], list[str]]:
+    """Run a skill for a designer on an open revision of their firm and record it: the one door used by the API and by the designer agent.
+    Raises SkillsRefused (404 unknown skill / revision, 403 not a designer, 409 frozen, 503 unavailable)."""
+    if user.role not in DESIGNER_ROLES:
+        raise SkillsRefused(403, "forbidden", "only a designer runs a drafting skill")
+    try:
+        s = get_skill(name)
+    except UnknownSkill:
+        raise SkillsRefused(404, "unknown_skill", f"no skill named {name!r}") from None
     frozen = svc.revision_frozen(revision_id)
     if frozen is None:
-        raise _err(404, "not_found", "revision not found")
+        raise SkillsRefused(404, "not_found", "revision not found")
     if frozen:
-        raise _err(409, "revision_frozen", "revision is frozen")
-    spec, filled = (skill_form.apply_defaults(s.schema, body.spec, svc.firm_defaults(name)) if body.use_firm_defaults else (body.spec, []))
+        raise SkillsRefused(409, "revision_frozen", "revision is frozen")
+    spec, filled = (skill_form.apply_defaults(s.schema, spec_in, svc.firm_defaults(name)) if use_firm_defaults else (spec_in, []))
     spec = skill_form.apply_constants(s.schema, spec)
     try:
         result = run_skill(name, spec)
     except SkillUnavailable as exc:
-        raise _err(503, "skill_unavailable", str(exc)) from None
-    recorded = svc.record(revision_id, name, spec, result)
+        raise SkillsRefused(503, "skill_unavailable", str(exc)) from None
+    return result, svc.record(revision_id, name, spec, result, via), filled
+
+
+@router.post("/revisions/{revision_id}/skills/{name}/run")
+def run(revision_id: UUID, name: str, body: RunBody, user: User, svc: Service) -> dict[str, Any]:
+    try:
+        result, recorded, filled = perform_run(svc, user, revision_id, name, body.spec, use_firm_defaults=body.use_firm_defaults)
+    except SkillsRefused as exc:
+        raise _err(exc.status, exc.code, exc.message) from None
     return _summary(result, recorded, filled)
 
 

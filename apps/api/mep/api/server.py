@@ -17,11 +17,13 @@ from pathlib import Path
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from mep.api import agents as agents_api
 from mep.api import gate1, revisions, uploads
 from mep.api import me as me_api
 from mep.api import review as review_api
 from mep.api import schedule as schedule_api
 from mep.api import skills as skills_api
+from mep.api.agents_pg import PgAgentBackend
 from mep.api.app import create_app
 from mep.api.auth import make_current_user
 from mep.api.pg import PgLedger, PgRepository
@@ -74,6 +76,9 @@ def create_pg_app(dsn: str, jwt_secret: str, pack: RulePack, cors_origins: list[
     app.include_router(skills_api.router)
     app.dependency_overrides[skills_api.current_user] = current_user
     app.dependency_overrides[skills_api.get_service] = lambda user=Depends(current_user): PgSkills(dsn, user)  # noqa: B008
+    app.include_router(agents_api.router)
+    app.dependency_overrides[agents_api.current_user] = current_user
+    app.dependency_overrides[agents_api.get_backend_factory] = lambda: (lambda user, rev: PgAgentBackend(dsn, user, rev, pack))
     app.dependency_overrides[me_api.current_user] = current_user
     app.dependency_overrides[me_api.get_repository] = repository
     app.dependency_overrides[uploads.current_user] = current_user

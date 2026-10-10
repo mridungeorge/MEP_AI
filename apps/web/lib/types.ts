@@ -319,3 +319,9 @@ export interface SkillRunRow {
   run_id: string; skill: string; status: string; message: string; passed: boolean; created_at: string; via: string; spec_sha256: string;
   artifacts: { artifact_id: string; name: string; role: string; released: boolean }[];
 }
+
+/** Runtime agents: they only leave notes (flags, risks, questions, hypotheses, explanations). People read and close them. */
+export interface AgentNote {
+  id: string; agent: string; kind: string; severity: string | null; body: string; status: string; rule_result_id: string | null; created_at: string;
+}
+export interface AgentReply { agent: string; reply: string; calls: { tool: string; ok: boolean; denied: boolean; error: string | null }[] }
