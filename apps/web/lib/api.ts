@@ -2,7 +2,7 @@
 import { supabase } from "./supabase";
 import type {
   ApiErrorBody, BuildingPart, ConfirmResponse, Gate1State, ImportResponse, RowRef,
-  AdminOverview, ProjectHistory, ProjectRow, PendingRegistration, MyInvitation, AgentNote, AgentReply, VisionJob, CardPreview, EvidenceResponse, Lineage, Me, ShortcutResult, SkillCard, SkillRunRow, SkillRunSummary, SkillSummary, Package, ShareLinkView, Worksheet, RevisionDiff, RevisionResults, RevisionSummary, RunRulesResponse, SpaceInput, SpaceRow, SystemInputInput, SystemInputRow, UploadResponse,
+  AdminOverview, NotificationPrefs, ProjectHistory, ProjectRow, PendingRegistration, MyInvitation, AgentNote, AgentReply, VisionJob, CardPreview, EvidenceResponse, Lineage, Me, ShortcutResult, SkillCard, SkillRunRow, SkillRunSummary, SkillSummary, Package, ShareLinkView, Worksheet, RevisionDiff, RevisionResults, RevisionSummary, RunRulesResponse, SpaceInput, SpaceRow, SystemInputInput, SystemInputRow, UploadResponse,
 } from "./types";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -186,6 +186,8 @@ export const api = {
     return apiFetch<ProjectRow[]>(`/projects${p.size ? `?${p}` : ""}`);
   },
   projectHistory: (id: string) => apiFetch<ProjectHistory>(`/projects/${id}/history`),
+  notificationPrefs: () => apiFetch<NotificationPrefs>("/me/notifications"),
+  saveNotificationPrefs: (kinds: NotificationPrefs["kinds"]) => apiFetch<{ saved: boolean }>("/me/notifications", json("PUT", kinds)),
   askAgent: (r: string, agent: string, message: string) => apiFetch<AgentReply>(`${rev(r)}/agents/${agent}/message`, json("POST", { message })),
   agentNotes: (r: string, kind?: string) => apiFetch<AgentNote[]>(`${rev(r)}/agent-notes${kind ? `?kind=${kind}` : ""}`),
   resolveAgentNote: (r: string, id: string, status: "answered" | "dismissed") =>

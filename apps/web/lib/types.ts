@@ -373,3 +373,5 @@ export interface HistoryRevision {
   results: Record<string, number>;
 }
 export interface ProjectHistory { project: { id: string; address: string; state: string; ncc_edition: string; climate_zone: number | null }; revisions: HistoryRevision[] }
+
+export interface NotificationPrefs { kinds: Record<"review_requested" | "changes_requested" | "signed" | "share_link_opened", boolean> }

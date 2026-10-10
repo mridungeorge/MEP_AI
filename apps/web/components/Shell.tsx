@@ -20,6 +20,7 @@ function Header({ email }: { email: string | undefined }) {
     <header style={{ display: "flex", gap: 16, alignItems: "center", borderBottom: "1px solid #ddd", paddingBottom: 8, marginBottom: 16 }}>
       <a href="/" style={{ fontWeight: 600, textDecoration: "none", color: "inherit" }}>MEP Co-pilot</a>
       <a href="/projects">Projects</a>
+      <a href="/notifications">Notifications</a>
       {me?.is_admin && <a href="/admin">Admin</a>}
       {me?.platform_admin && <a href="/platform">Registrations</a>}
       <span style={{ flex: 1 }} />

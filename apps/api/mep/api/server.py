@@ -23,6 +23,7 @@ from mep.api import agents as agents_api
 from mep.api import evidence as evidence_api
 from mep.api import gate1, revisions, uploads
 from mep.api import me as me_api
+from mep.api import notifications as notifications_api
 from mep.api import platform as platform_api
 from mep.api import projects as projects_api
 from mep.api import review as review_api
@@ -57,7 +58,7 @@ DEMO_JWT_SECRET = "super-secret-jwt-token-with-at-least-32-characters-long"   # 
 
 def create_pg_app(dsn: str, jwt_secret: str, pack: RulePack, cors_origins: list[str] | None = None,
                   supabase_url: str | None = None, anon_key: str | None = None, vision: Any = None, vision_worker: bool = False,
-                  skill_executor: str | None = None) -> FastAPI:
+                  skill_executor: str | None = None, mailer: Any = None) -> FastAPI:
     jwks_url = f"{supabase_url.rstrip('/')}/auth/v1/.well-known/jwks.json" if supabase_url else None
     logging.getLogger("uvicorn.access").addFilter(_RedactShareTokens())
     current_user, token_subject = make_auth(dsn, jwt_secret, jwks_url)
@@ -87,6 +88,10 @@ def create_pg_app(dsn: str, jwt_secret: str, pack: RulePack, cors_origins: list[
     app.include_router(vision_jobs_api.router)
     app.dependency_overrides[vision_jobs_api.current_user] = current_user
     app.dependency_overrides[vision_jobs_api.get_dsn] = lambda: dsn
+    app.include_router(notifications_api.router)
+    app.dependency_overrides[notifications_api.current_user] = current_user
+    app.dependency_overrides[notifications_api.get_dsn] = lambda: dsn
+    app.dependency_overrides[admin_api.get_mailer] = lambda: mailer
     app.include_router(projects_api.router)
     app.dependency_overrides[projects_api.current_user] = current_user
     app.dependency_overrides[projects_api.get_dsn] = lambda: dsn
@@ -115,6 +120,10 @@ def create_pg_app(dsn: str, jwt_secret: str, pack: RulePack, cors_origins: list[
         runner = vision_jobs_api.VisionRunner(dsn, vision if vision is not None else vision_from_env())
         app.router.on_startup.append(runner.start)
         app.router.on_shutdown.append(runner.stop)
+    if vision_worker and mailer is not None:          # e-mail is delivered by a background thread; without a provider the outbox simply waits
+        mail_runner = notifications_api.NotificationRunner(dsn, mailer)
+        app.router.on_startup.append(mail_runner.start)
+        app.router.on_shutdown.append(mail_runner.stop)
     if cors_origins:
         app.add_middleware(CORSMiddleware, allow_origins=cors_origins, allow_methods=["GET", "POST", "PUT", "DELETE"],
                            allow_headers=["Authorization", "Content-Type", "X-Acting-Role"])
@@ -134,4 +143,4 @@ def app_from_env() -> FastAPI:
     rules = Path(os.environ.get("MEP_RULES_DIR") or REPO_ROOT / "rules")
     return create_pg_app(dsn, secret, load_pack(rules), origins, os.environ.get("MEP_SUPABASE_URL"),
                          os.environ.get("MEP_SUPABASE_ANON_KEY"), vision_worker=os.environ.get("MEP_VISION_WORKER", "1") != "0",
-                         skill_executor=skill_executor)
+                         skill_executor=skill_executor, mailer=notifications_api.mailer_from_env())
