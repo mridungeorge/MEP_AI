@@ -5,7 +5,7 @@ local devcontainer gate is the reference (tag `sprint-2-gate`). GitHub CI has ne
 Updated: 2026-10-09 (recovery after a device change; see "Recovery 2026-10-09")
 
 ## Resume here (updated 2026-10-12, OVERNIGHT RUN: plan in docs/OVERNIGHT_PLAN.md, scheduled task 53299a5d every 30 min)
-Phase 7 DONE (`sprint-7-gate`). Phase 8 items 8.1-8.6 DONE and pushed, adversarial review round 1 IN FLIGHT (fix its findings, round 2, CI, tag `sprint-8-gate`). Phase 9: 9.1 NSW declaration draft DONE (review/declaration.py, api/declaration.py, DeclarationPanel). NEXT ACTION: finish Phase 8 close, then 9.2 commissioning sheets.
+Phase 7 DONE (`sprint-7-gate`). Phase 8 items 8.1-8.6 DONE; its adversarial review round 1 was started twice (first run died on a rate limit; second run in flight): fix findings, round 2, CI, tag `sprint-8-gate`. Phase 9: 9.1 NSW declaration DONE, 9.2 commissioning sheets + re-import DONE (review/commissioning.py, api/commissioning.py, 0042, CommissioningPanel). NEXT ACTION: collect the Phase 8 review; then 9.3 licensed-standard readiness (rule-pack slots + UI, empty packs, licence-required state), 9.4 docs/integrations/revit.md.
 Done and tagged: 2.5, 3, 4a, 4a.1, 4b, 5. **Phases 6-9 are the standing order** (user prompt: run 6, 7, 8, 9 in order without stopping, then write
 `docs/review-pack.md` and STOP; do not encode AS 1668.2, AS/NZS 3000, 3008 or AS 4254).
 Phase 6 (product shell) is DONE: tag `sprint-6-gate`. Next: Phase 7 (engineering features), then 8, 9, then `docs/review-pack.md`.

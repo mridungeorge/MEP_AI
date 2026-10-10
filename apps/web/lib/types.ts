@@ -426,3 +426,9 @@ export interface NswDeclaration {
   performance_solutions: { subject: string; rule_id: string; note: string | null }[];
   fields_to_complete: { field: string; note: string }[];
 }
+
+/** POST /revisions/{id}/commissioning/import */
+export interface CommissioningImport {
+  batch_id: string; tolerance_pct: number; counts: Record<string, number>; note: string;
+  readings: { terminal: string; system: string; design_ls: number | null; measured_ls: number | null; variance_pct: number | null; flag: string }[];
+}

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ApiError, api } from "@/lib/api";
 import type { Me, Package, ReviewLine, ShareLinkView, Worksheet } from "@/lib/types";
 import { AgentPanel } from "./AgentPanel";
+import { CommissioningPanel } from "./CommissioningPanel";
 import { DeclarationPanel } from "./DeclarationPanel";
 import { PackageView } from "./PackageView";
 
@@ -206,6 +207,7 @@ export function ReviewScreen({ revisionId }: { revisionId: string }) {
 
       {pkg && <PackageView pkg={pkg} />}
       {pkg && pkg.project.state === "NSW" && <DeclarationPanel revisionId={revisionId} />}
+      {pkg && pkg.status.complete && <CommissioningPanel revisionId={revisionId} />}
       <p>
         <button type="button" onClick={() => act(async () => {
           const blob = await api.pdfBlob(revisionId);

@@ -25,6 +25,7 @@ from mep.api import admin as admin_api
 from mep.api import agents as agents_api
 from mep.api import base_model as base_model_api
 from mep.api import billing as billing_api
+from mep.api import commissioning as commissioning_api
 from mep.api import declaration as declaration_api
 from mep.api import evidence as evidence_api
 from mep.api import fixes as fixes_api
@@ -117,6 +118,7 @@ def create_pg_app(dsn: str, jwt_secret: str, pack: RulePack, cors_origins: list[
     app.include_router(vision_jobs_api.router)
     app.dependency_overrides[vision_jobs_api.current_user] = current_user
     app.dependency_overrides[vision_jobs_api.get_dsn] = lambda: dsn
+    app.include_router(commissioning_api.router)
     app.include_router(declaration_api.router)
     app.include_router(base_model_api.router)
     app.include_router(sizing_api.router)

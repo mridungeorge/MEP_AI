@@ -2,7 +2,7 @@
 import { supabase } from "./supabase";
 import type {
   ApiErrorBody, BuildingPart, ConfirmResponse, Gate1State, ImportResponse, RowRef,
-  AdminOverview, BaseModelRow, NswDeclaration, BillingOverview, SizingView, ClashView, Quantities, ServiceItem, VoidView, PerfOverview, FixesResponse, NewProject, NotificationPrefs, ProjectHistory, ProjectRow, PendingRegistration, MyInvitation, AgentNote, AgentReply, VisionJob, CardPreview, EvidenceResponse, Lineage, Me, ShortcutResult, SkillCard, SkillRunRow, SkillRunSummary, SkillSummary, Package, ShareLinkView, Worksheet, RevisionDiff, RevisionResults, RevisionSummary, RunRulesResponse, SpaceInput, SpaceRow, SystemInputInput, SystemInputRow, UploadResponse,
+  AdminOverview, BaseModelRow, CommissioningImport, NswDeclaration, BillingOverview, SizingView, ClashView, Quantities, ServiceItem, VoidView, PerfOverview, FixesResponse, NewProject, NotificationPrefs, ProjectHistory, ProjectRow, PendingRegistration, MyInvitation, AgentNote, AgentReply, VisionJob, CardPreview, EvidenceResponse, Lineage, Me, ShortcutResult, SkillCard, SkillRunRow, SkillRunSummary, SkillSummary, Package, ShareLinkView, Worksheet, RevisionDiff, RevisionResults, RevisionSummary, RunRulesResponse, SpaceInput, SpaceRow, SystemInputInput, SystemInputRow, UploadResponse,
 } from "./types";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -126,6 +126,17 @@ export const api = {
     const res = await fetch(`${BASE_URL}${rev(r)}/nsw-declaration.pdf`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
     if (!res.ok) throw new ApiError(res.status, null, `HTTP ${res.status}`);
     return res.blob();
+  },
+  commissioningFile: async (r: string, kind: "xlsx" | "pdf") => {
+    const token = await getToken();
+    const res = await fetch(`${BASE_URL}${rev(r)}/commissioning.${kind}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+    if (!res.ok) throw new ApiError(res.status, null, res.status === 409 ? "The revision must be fully signed first." : `HTTP ${res.status}`);
+    return res.blob();
+  },
+  importCommissioning: (r: string, file: File, tolerancePct: number) => {
+    const fd = new FormData();
+    fd.set("tolerance_pct", String(tolerancePct)); fd.set("file", file);
+    return apiFetch<CommissioningImport>(`${rev(r)}/commissioning/import`, { method: "POST", body: fd });
   },
   shareLinks: (r: string) => apiFetch<ShareLinkView[]>(`${rev(r)}/share-links`),
   createShare: (r: string, days: number, label?: string) =>
