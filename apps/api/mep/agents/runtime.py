@@ -18,6 +18,8 @@ from mep.agents.tools import DESCRIPTIONS, MODELS, Agent, ToolLayer
 BUILTIN_TOOLS = ("Bash", "BashOutput", "KillShell", "Read", "Write", "Edit", "MultiEdit", "NotebookEdit", "Glob", "Grep", "WebFetch", "WebSearch",
                  "Task", "TodoWrite", "ExitPlanMode", "SlashCommand", "Skill", "AskUserQuestion", "Agent")
 SERVER = "mep"
+# the model's CLI process must not inherit the server's secrets (it takes ANTHROPIC_API_KEY from the environment)
+SECRET_ENV = ("MEP_DB_URL", "MEP_JWT_SECRET", "MEP_SUPABASE_ANON_KEY", "MEP_SUPABASE_SERVICE_KEY", "PGPASSWORD", "DATABASE_URL")
 
 PROMPTS = {
     Agent.DESIGNER: (
@@ -66,6 +68,8 @@ def sdk_ready() -> tuple[bool, str]:
 class SdkRuntime:
     """One conversation turn with a model. Needs ANTHROPIC_API_KEY and the claude-agent-sdk package."""
 
+    wall_seconds = 120.0
+
     def __init__(self, model: str | None = None, max_turns: int = 8, max_budget_usd: float = 0.5) -> None:
         ok, why = sdk_ready()
         if not ok:
@@ -73,7 +77,7 @@ class SdkRuntime:
         self.model, self.max_turns, self.max_budget_usd = model or os.environ.get("MEP_AGENT_MODEL") or None, max_turns, max_budget_usd
 
     def converse(self, layer: ToolLayer, message: str) -> Reply:
-        return asyncio.run(self._converse(layer, message))
+        return asyncio.run(asyncio.wait_for(self._converse(layer, message), timeout=self.wall_seconds))
 
     async def _converse(self, layer: ToolLayer, message: str) -> Reply:
         from claude_agent_sdk import (
@@ -110,7 +114,8 @@ class SdkRuntime:
             options = ClaudeAgentOptions(
                 system_prompt=PROMPTS[layer.ctx.agent], mcp_servers={SERVER: server}, tools=[], allowed_tools=sorted(allowed),
                 disallowed_tools=list(BUILTIN_TOOLS), can_use_tool=can_use, max_turns=self.max_turns, max_budget_usd=self.max_budget_usd,
-                setting_sources=[], cwd=empty, model=self.model, permission_mode="default")
+                setting_sources=[], cwd=empty, model=self.model, permission_mode="default",
+                strict_mcp_config=True, env=dict.fromkeys(SECRET_ENV, ""))
             text: list[str] = []
             async with ClaudeSDKClient(options=options) as client:
                 await client.query(message)

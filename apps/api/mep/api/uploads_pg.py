@@ -140,6 +140,8 @@ class PgUploads:
         result = read_pdf(name, data, self._vision) if kind == "pdf" else read_file(kind, name, data)
         target, child = revision_id, None
         with psycopg.connect(self._dsn, autocommit=True) as svc:
+            if frozen and kind == "pdf":
+                raise UploadRefused(409, "pdf_on_frozen", "a PDF is evidence only and does not make a new revision: add it to an open revision")
             if frozen:
                 try:
                     child = target = create_child(svc, user.firm_id, revision_id, label, sha)

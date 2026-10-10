@@ -1,21 +1,36 @@
-"""The post-filter for what an agent says about a result, and the guards on free text an agent writes.
+"""The post-filters on what an agent says, and the guards on free text an agent writes.
 
-`filter_explanation` keeps an explanation inside the facts of ONE stored result: it may cite only that result's rule id, and may name only that
-result's outcome. Anything else is removed (and reported) before the text is stored or shown. This does not make the text TRUE; it makes it
-impossible for an explanation to cite a rule the result does not involve or to contradict the result's outcome. The authoritative facts are
-always attached beside the text by the tool layer, never produced by the model.
+Nothing here makes an agent's words TRUE; it makes some false statements impossible to publish: an explanation of one result may cite only that
+result's rule id, name only that result's outcome and make no compliance statement; a fix hypothesis may not announce a passing or compliant
+result; the model's free-text reply may cite only rule ids of this revision's results and contains no outcome or compliance wording at all (outcomes
+come only from the stored results, shown beside the text by the server). Text is folded first (NFKC, every dash to '-', look-alike letters to Latin,
+invisible characters removed) so look-alike spellings do not get past the patterns. Numbers and thresholds in prose are NOT checked: the docs say so.
 """
 import re
+import unicodedata
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 
-RULE_ID = re.compile(r"\bNCC\s?20\d\d(?:-[A-Za-z0-9]+)+\b", re.IGNORECASE)
-OUTCOMES = ("PASS", "FAIL", "NEEDS_JUDGEMENT", "NOT_APPLICABLE")
-OUTCOME_WORDS = re.compile(r"\b(PASS(?:ES|ED)?|FAIL(?:S|ED|URE)?|NEEDS[_ ]JUDGEMENT|NOT[_ ]APPLICABLE|COMPLIES|COMPLIANT|NON[- ]?COMPLIANT)\b", re.IGNORECASE)
 REMOVED = "[removed]"
-# a fix hypothesis is a suggestion to be verified: it may not announce a compliance result
-COMPLIANCE_CLAIM = re.compile(r"\b(complies|compliant|non[- ]?compliant|will pass|would pass|now passes|passes|meets (?:the )?(?:requirement|ncc|code|clause)|satisfies)\b",
-                              re.IGNORECASE)
-_CONTROL = re.compile("[" + "".join(chr(c) for c in (*range(9), 11, 12, *range(14, 32), 127, *range(0x200B, 0x2010), *range(0x2028, 0x202F), *range(0x2060, 0x206A), 0xFEFF)) + "]")
+RULE_ID = re.compile(r"\bNCC\s?20\d\d(?:-[A-Za-z0-9]+)+\b", re.IGNORECASE)
+CLAUSE = re.compile(r"\b[A-J]\d{1,2}[A-Z]\d{1,2}\b")
+# any word that states or implies an outcome / compliance
+CLAIM_STEMS = re.compile(r"\b(pass\w*|fail\w*|compl\w*|non[- ]?compl\w*|conform\w*|satisf\w*|accept\w*|approv\w*|meets?|met|ok|okay|cumple)\b"
+                         "|[✅✔☑❌✖]", re.IGNORECASE)
+NEEDS_JUDGEMENT = re.compile(r"\bneeds?[_ ]judg\w*", re.IGNORECASE)
+NOT_APPLICABLE = re.compile(r"\bnot[_ ]applicable\b", re.IGNORECASE)
+OWN_STEMS = {"PASS": r"pass\w*", "FAIL": r"fail\w*", "NEEDS_JUDGEMENT": r"needs?[_ ]judg\w*", "NOT_APPLICABLE": r"not[_ ]applicable"}
+# a hypothesis may say a result FAILS; it may not say anything will pass / comply / meet / be accepted
+HYPOTHESIS_CLAIM = re.compile(r"\b(pass\w*|compl\w*|non[- ]?compl\w*|conform\w*|satisf\w*|accept\w*|approv\w*|meets?|ok|okay|achiev\w*|cumple)\b"
+                              "|[✅✔☑]", re.IGNORECASE)
+LOOKALIKES = str.maketrans({
+    "А": "A", "В": "B", "С": "C", "Е": "E", "Н": "H", "К": "K", "М": "M", "О": "O", "Р": "P",
+    "Т": "T", "Х": "X", "а": "a", "с": "c", "е": "e", "о": "o", "р": "p", "х": "x", "у": "y",
+    "Α": "A", "Β": "B", "Ε": "E", "Η": "H", "Ι": "I", "Κ": "K", "Μ": "M", "Ν": "N", "Ο": "O",
+    "Ρ": "P", "Τ": "T", "Χ": "X", "ο": "o", "−": "-",
+})
+_HIDDEN = "".join(chr(c) for c in (*range(9), 11, 12, *range(14, 32), 127, *range(0x200B, 0x2010), *range(0x2028, 0x202F), *range(0x2060, 0x206A), 0xFEFF))
+_HIDDEN_RE = re.compile("[" + re.escape(_HIDDEN) + "]")
 
 
 @dataclass
@@ -24,40 +39,94 @@ class Filtered:
     redactions: list[str] = field(default_factory=list)
 
 
+def fold(text: str) -> str:
+    """NFKC, every dash-like character to '-', look-alike Cyrillic/Greek letters to Latin, hidden characters removed."""
+    text = _HIDDEN_RE.sub("", unicodedata.normalize("NFKC", text))
+    text = "".join("-" if unicodedata.category(c) == "Pd" else c for c in text)
+    return text.translate(LOOKALIKES)
+
+
 def clean_text(text: str, limit: int) -> str:
-    """Control and direction-override characters removed, whitespace normalised, length bounded."""
-    return " ".join(_CONTROL.sub("", text).split())[:limit]
+    """Folded, whitespace normalised, bounded."""
+    return " ".join(fold(text).split())[:limit]
 
 
 def _normal(rule_id: str) -> str:
-    return re.sub(r"[\s_]+", "-", rule_id.strip()).upper()
+    return re.sub(r"[\s_]+", "-", fold(rule_id).strip()).upper()
 
 
-def filter_explanation(text: str, rule_id: str, outcome: str) -> Filtered:
-    """Remove rule ids other than `rule_id`, and outcome words other than `outcome`."""
-    text = clean_text(text, 4000)
-    red: list[str] = []
-    allowed = _normal(rule_id)
-
+def _sub_rules(text: str, allowed: set[str], red: list[str], keep_as: dict[str, str] | None = None) -> str:
     def rule(m: re.Match[str]) -> str:
-        if _normal(m.group(0)) == allowed:
-            return rule_id
+        n = _normal(m.group(0))
+        if n in allowed:
+            return (keep_as or {}).get(n, m.group(0))
         red.append(f"rule id {m.group(0)!r}")
         return REMOVED
 
-    text = RULE_ID.sub(rule, text)
-    want = outcome.upper().replace("_", " ")
+    return RULE_ID.sub(rule, text)
 
-    def word(m: re.Match[str]) -> str:
-        w = m.group(0).upper().replace("_", " ")
-        base = {"PASSES": "PASS", "PASSED": "PASS", "FAILS": "FAIL", "FAILED": "FAIL", "FAILURE": "FAIL"}.get(w, w)
-        if base == want:
+
+def _outside_ids(text: str, fn: Callable[[str], str]) -> str:
+    """Apply `fn` to the stretches of `text` that are not rule ids (the ids that remain were already checked and are the result's own)."""
+    out, last = [], 0
+    for m in RULE_ID.finditer(text):
+        out.append(fn(text[last:m.start()]))
+        out.append(m.group(0))
+        last = m.end()
+    out.append(fn(text[last:]))
+    return "".join(out)
+
+
+def _sub_clauses(text: str, own_clause: str | None, red: list[str]) -> str:
+    own = (own_clause or "").upper().replace(" ", "")
+
+    def clause(m: re.Match[str]) -> str:
+        if own and own.startswith(m.group(0).upper()):
             return m.group(0)
-        red.append(f"outcome word {m.group(0)!r}")
+        red.append(f"clause {m.group(0)!r}")
         return REMOVED
 
-    text = OUTCOME_WORDS.sub(word, text)
-    return Filtered(text.strip(), red)
+    return _outside_ids(text, lambda t: CLAUSE.sub(clause, t))
+
+
+def filter_explanation(text: str, rule_id: str, outcome: str, clause: str | None = None, limit: int = 3900) -> Filtered:
+    """Keep an explanation inside ONE stored result: its own rule id, its own outcome, no compliance statement, no other clause."""
+    text = clean_text(text, 20000)
+    red: list[str] = []
+    text = _sub_rules(text, {_normal(rule_id)}, red, {_normal(rule_id): rule_id})
+    own = re.compile(r"(?:" + OWN_STEMS.get(outcome.upper(), re.escape(outcome)) + r")", re.IGNORECASE)
+
+    def word(m: re.Match[str]) -> str:
+        if own.fullmatch(m.group(0)):
+            return m.group(0)
+        red.append(f"outcome or compliance word {m.group(0)!r}")
+        return REMOVED
+
+    def words(t: str) -> str:
+        t = CLAIM_STEMS.sub(word, t)
+        for pat in (NEEDS_JUDGEMENT, NOT_APPLICABLE):
+            t = pat.sub(lambda m: m.group(0) if own.fullmatch(m.group(0)) else (red.append(f"outcome word {m.group(0)!r}") or REMOVED), t)
+        return t
+
+    text = _outside_ids(text, words)
+    text = _sub_clauses(text, clause, red)
+    return Filtered(text.strip()[:limit], red)
+
+
+def filter_free_text(text: str, allowed_rule_ids: Iterable[str], limit: int = 3900) -> Filtered:
+    """The model's own chat reply. It may mention rule ids of THIS revision's results, but no outcome or compliance wording and no clause number:
+    outcomes are shown only from the stored results."""
+    text = clean_text(text, 20000)
+    red: list[str] = []
+    text = _sub_rules(text, {_normal(r) for r in allowed_rule_ids}, red)
+    def words(t: str) -> str:
+        t = CLAIM_STEMS.sub(lambda m: (red.append(f"outcome or compliance word {m.group(0)!r}") or REMOVED), t)
+        t = NEEDS_JUDGEMENT.sub(lambda m: (red.append(f"outcome word {m.group(0)!r}") or REMOVED), t)
+        return NOT_APPLICABLE.sub(lambda m: (red.append(f"outcome word {m.group(0)!r}") or REMOVED), t)
+
+    text = _outside_ids(text, words)
+    text = _sub_clauses(text, None, red)
+    return Filtered(text.strip()[:limit], red)
 
 
 def check_hypothesis(text: str, rule_id: str) -> tuple[str, str | None]:
@@ -65,7 +134,7 @@ def check_hypothesis(text: str, rule_id: str) -> tuple[str, str | None]:
     text = clean_text(text, 1000)
     if len(text) < 10:
         return text, "a fix hypothesis needs at least a sentence"
-    if COMPLIANCE_CLAIM.search(text):
+    if HYPOTHESIS_CLAIM.search(text) or NEEDS_JUDGEMENT.search(text) or re.search(r"\boutcome\b.{0,20}\b(become|change|turn)", text, re.IGNORECASE):
         return text, "a hypothesis may not claim compliance or a passing result: it is something to verify"
     other = [m.group(0) for m in RULE_ID.finditer(text) if _normal(m.group(0)) != _normal(rule_id)]
     if other:

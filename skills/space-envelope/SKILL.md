@@ -50,7 +50,7 @@ On 3 and 4 `--out` holds no file from this build (files are staged, then moved i
 `<mark>.ifc`, `<mark>.dxf`, `manifest.json` (inputs, spec hash, files with sha256, per-room measures, validation summary, toolchain).
 
 ## Validator checks (`validator.py`, independent re-read of both files; 0.5 mm on coordinates, 0.1 % on areas)
-29 checks, all must pass or no file is returned: `input_files`, `spec_readable`; IFC: `ifc_loads`, `ifc_schema`, `ifc_units`, `ifc_project`, `ifc_storey`, `ifc_space_count`,
+30 checks, all must pass or no file is returned: `input_files`, `spec_readable`; IFC: `ifc_loads`, `ifc_schema`, `ifc_units`, `ifc_project`, `ifc_storey`, `ifc_structure`, `ifc_space_count`,
 `ifc_space_names`, `ifc_space_guids`, `ifc_aggregation`, `ifc_footprints`, `ifc_area_quantity`, `ifc_geometry_area` (the geometry kernel's own footprint area),
 `ifc_heights`, `ifc_plant_flag`, `ifc_use`, `ifc_ceiling_void`; DXF: `dxf_loads`, `dxf_units`, `dxf_layers`, `dxf_entities` (nothing but closed straight
 polylines on the room layers and text on `A-ANNO-TEXT`, at z = 0), `dxf_room_count`, `dxf_outlines`, `dxf_areas`, `dxf_labels` (one per room, inside its own room);

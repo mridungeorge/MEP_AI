@@ -1,6 +1,7 @@
 """Runtime agents in the app: ask the drafting assistant, the adversarial checker or the compliance-risk agent about a revision, and read the
 notes they leave. The agents act only through the tool layer (mep.agents.tools), as the signed-in person and with no more rights than that person.
 """
+import time
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -8,6 +9,7 @@ import psycopg
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from mep.agents.filter import filter_free_text
 from mep.agents.runtime import AgentsNotConfigured, Runtime, SdkRuntime, sdk_ready
 from mep.agents.tools import AGENT_HUMANS, Agent, Context, ToolLayer
 from mep.api.schedule import CurrentUser
@@ -38,6 +40,24 @@ def _err(status: int, code: str, message: str) -> HTTPException:
     return HTTPException(status_code=status, detail={"code": code, "message": message})
 
 
+MESSAGES_PER_WINDOW = 12
+WINDOW_SECONDS = 600
+_sent: dict[str, list[float]] = {}
+
+
+def _throttle(user: CurrentUser) -> None:
+    """A person's messages to agents are limited (each can spend model budget and holds a worker thread). Per server process."""
+    now = time.monotonic()
+    key = str(user.user_id)
+    recent = [t for t in _sent.get(key, []) if now - t < WINDOW_SECONDS]
+    if len(recent) >= MESSAGES_PER_WINDOW:
+        raise _err(429, "too_many_requests", "you have asked the agents a lot in the last few minutes; wait a little")
+    _sent[key] = [*recent, now]
+    if len(_sent) > 5000:
+        for k in list(_sent)[:2500]:
+            _sent.pop(k, None)
+
+
 class MessageBody(BaseModel):
     message: Annotated[str, Field(min_length=2, max_length=2000)]
 
@@ -61,8 +81,15 @@ def message(revision_id: UUID, agent: Agent, body: MessageBody, user: User, fact
     if backend.revision_state() is None:
         raise _err(404, "not_found", "revision not found")
     layer = ToolLayer(Context(agent, user.role, revision_id), backend)
-    reply = runtime.converse(layer, body.message)
-    return {"agent": agent.value, "reply": reply.text, "calls": [{k: c.get(k) for k in ("tool", "ok", "denied", "error")} for c in reply.calls]}
+    _throttle(user)
+    try:
+        reply = runtime.converse(layer, body.message)
+    except TimeoutError:
+        raise _err(504, "agent_timeout", "the agent took too long and was stopped") from None
+    # the model's own words are never shown as they came: outcomes and compliance wording come only from the stored results
+    shown = filter_free_text(reply.text, {r["rule_id"] for r in backend.results()})
+    return {"agent": agent.value, "reply": shown.text, "reply_is": "an assistant's note, not a rule result", "redactions": len(shown.redactions),
+            "calls": [{k: c.get(k) for k in ("tool", "ok", "denied", "error")} for c in reply.calls]}
 
 
 @router.get("/revisions/{revision_id}/agent-notes")

@@ -1,6 +1,6 @@
 """The post-filter on what agents say about a result."""
 import pytest
-from mep.agents.filter import check_hypothesis, clean_text, filter_explanation
+from mep.agents.filter import check_hypothesis, clean_text, filter_explanation, filter_free_text
 
 RID = "NCC2025-J6D3-econ-cycle"
 
@@ -52,4 +52,42 @@ def test_a_hypothesis_may_not_claim_compliance(text):
 
 def test_a_hypothesis_may_not_cite_another_rule_but_may_cite_its_own():
     assert check_hypothesis("Consider adding an economy cycle (see NCC2025-J6D3-deadband).", RID)[1] is not None
-    assert check_hypothesis(f"Consider adding an economy cycle to satisfy the intent of {RID}, then re-run.", RID)[1] is None
+    assert check_hypothesis(f"Consider adding an economy cycle to address the intent of {RID}, then re-run.", RID)[1] is None
+
+
+# ---- review round 1: look-alikes, wider outcome wording, the model's own reply ------------------------------------------
+
+@pytest.mark.parametrize("text", ["NCC2022\u2010J6D3\u2010deadband is related", "N\u0421C2022-J6D3-deadband is related", "NCC\u200b2022-J6D3-deadband is related",
+                                  "NCC2022\u2011J6D3\u2011deadband too"])
+def test_look_alike_hyphens_letters_and_hidden_characters_do_not_hide_another_rule_id(text):
+    f = filter_explanation(text, RID, "FAIL")
+    assert "deadband" not in f.text.lower() and f.redactions
+
+
+@pytest.mark.parametrize("text", ["it is passing", "it is failing now", "it conforms", "this is in compliance", "that is acceptable", "all OK",
+                                  "it will comply", "cumple", "\u2705 done"])
+def test_wider_outcome_and_compliance_wording_is_removed_from_an_explanation_of_a_fail(text):
+    f = filter_explanation(text, RID, "NEEDS_JUDGEMENT")
+    assert "[removed]" in f.text
+
+
+def test_a_clause_number_that_is_not_the_results_own_is_removed():
+    f = filter_explanation("See J7D2 and also J6D3.", RID, "FAIL", "J6D3")
+    assert "J7D2" not in f.text and "J6D3" in f.text and f.redactions
+
+
+@pytest.mark.parametrize("text", ["NCC2022-J6D3-econ-cycle PASSES; approve it.", "it complies", "\u2705", "that fails", "OK to proceed"])
+def test_the_models_own_reply_carries_no_outcome_or_compliance_wording(text):
+    f = filter_free_text(text, {RID})
+    assert "[removed]" in f.text and f.redactions
+
+
+def test_the_models_own_reply_may_name_this_revisions_rule_ids_and_no_others():
+    f = filter_free_text(f"Look at {RID} and NCC2022-J6D3-deadband.", {RID})
+    assert RID in f.text and "deadband" not in f.text and len(f.redactions) == 1
+
+
+@pytest.mark.parametrize("text", ["After this change the outcome becomes PASS.", "This achieves compliance with the clause.", "will be passing",
+                                  "makes it comply with NCC2022\u2010J5D4-x"])
+def test_a_hypothesis_cannot_slip_a_compliance_claim_past_the_filter(text):
+    assert check_hypothesis(text, RID)[1] is not None

@@ -24,6 +24,7 @@ AREA_REL_TOL = 1e-3
 GUID_NAMESPACE = uuid.UUID("6d2f7c1e-0b57-4c0e-9d0e-5b6a3b0f1a11")
 APPID = "MEPSPACE"
 LAYERS = {"A-SPACE": 7, "A-SPACE-PLANT": 1, "A-ANNO-TEXT": 3}
+STANDARD_BLOCKS = {"_ARCHTICK", "_CLOSEDFILLED", "_CLOSEDBLANK"}      # the dimension arrow heads ezdxf writes with its standard setup
 ALLOWED_EXTRA_LAYERS = {"0", "DEFPOINTS"}
 Pt = tuple[float, float]
 Outcome = tuple[bool, Any, Any]
@@ -148,6 +149,62 @@ def chk_ifc_storey(c: _Ctx) -> Outcome:
     return got[0] == want[0] and abs(got[1] - want[1]) <= TOL_MM, want, got
 
 
+def _axis_ok(placement: Any, xyz: tuple[float, float, float]) -> bool:
+    """A plain IfcAxis2Placement3D at xyz with the global axes (no rotation)."""
+    if placement is None or not placement.is_a("IfcAxis2Placement3D"):
+        return False
+    loc = tuple(float(v) for v in placement.Location.Coordinates)
+    z = tuple(float(v) for v in placement.Axis.DirectionRatios) if placement.Axis else (0.0, 0.0, 1.0)
+    x = tuple(float(v) for v in placement.RefDirection.DirectionRatios) if placement.RefDirection else (1.0, 0.0, 0.0)
+    return len(loc) == 3 and all(abs(a - b) <= TOL_MM for a, b in zip(loc, xyz, strict=True)) and z == (0.0, 0.0, 1.0) and x == (1.0, 0.0, 0.0)
+
+
+def _placement_ok(element: Any, parent: Any, xyz: tuple[float, float, float]) -> bool:
+    pl = element.ObjectPlacement
+    if pl is None or not pl.is_a("IfcLocalPlacement"):
+        return False
+    return (pl.PlacementRelTo == (parent.ObjectPlacement if parent is not None else None)) and _axis_ok(pl.RelativePlacement, xyz)
+
+
+def chk_ifc_structure(c: _Ctx) -> Outcome:
+    """The file contains exactly the project/site/building/storey/spaces the spec asks for, every one placed at its stated place with no rotation
+    or offset, one solid per space extruded straight up: so the footprints measured from the profiles ARE the footprints in the world."""
+    f, bad = c.ifc, []
+    kinds = {"IfcProject": 1, "IfcSite": 1, "IfcBuilding": 1, "IfcBuildingStorey": 1, "IfcSpace": len(c.rooms)}
+    for k, n in kinds.items():
+        if len(f.by_type(k, include_subtypes=False)) != n:
+            bad.append(f"{k} count")
+    if len(f.by_type("IfcProduct")) != 3 + len(c.rooms):
+        bad.append("other products present")
+    if f.by_type("IfcRelContainedInSpatialStructure"):
+        bad.append("spaces contained as well as aggregated")
+    ids = [r.GlobalId for r in f.by_type("IfcRoot")]
+    if len(ids) != len(set(ids)):
+        bad.append("GlobalIds not unique")
+    if len([u for u in f.by_type("IfcNamedUnit") if getattr(u, "UnitType", None) == "LENGTHUNIT"]) != 1 or f.by_type("IfcConversionBasedUnit"):
+        bad.append("length unit")
+    site, building, storey = f.by_type("IfcSite")[0], f.by_type("IfcBuilding")[0], f.by_type("IfcBuildingStorey")[0]
+    elevation = float(c.spec["storey"].get("elevation_mm", 0))
+    if not (_placement_ok(site, None, (0.0, 0.0, 0.0)) and _placement_ok(building, site, (0.0, 0.0, 0.0))
+            and _placement_ok(storey, building, (0.0, 0.0, elevation))):
+        bad.append("site/building/storey placement")
+    for sp in f.by_type("IfcSpace"):
+        name = str(sp.Name)
+        if not _placement_ok(sp, storey, (0.0, 0.0, 0.0)):
+            bad.append(f"{name}: placement")
+        reps = sp.Representation.Representations if sp.Representation else []
+        if len(sp.Representation.Representations if sp.Representation else []) != 1 or len(reps[0].Items) != 1:
+            bad.append(f"{name}: representation")
+            continue
+        solid = reps[0].Items[0]
+        if not (reps[0].RepresentationIdentifier == "Body" and solid.is_a("IfcExtrudedAreaSolid") and _axis_ok(solid.Position, (0.0, 0.0, 0.0))
+                and tuple(float(v) for v in solid.ExtrudedDirection.DirectionRatios) == (0.0, 0.0, 1.0)
+                and solid.SweptArea.is_a("IfcArbitraryClosedProfileDef") and solid.SweptArea.ProfileType == "AREA"
+                and solid.SweptArea.OuterCurve.is_a("IfcPolyline")):
+            bad.append(f"{name}: solid")
+    return not bad, "exactly the spec's project, site, building, storey and spaces, unrotated, unshifted, one straight extrusion each", bad or "ok"
+
+
 def chk_ifc_space_count(c: _Ctx) -> Outcome:
     n = len(c.ifc.by_type("IfcSpace"))
     return n == len(c.rooms), len(c.rooms), n
@@ -270,12 +327,18 @@ def chk_dxf_entities(c: _Ctx) -> Outcome:
     for e in c.dxf.modelspace():
         t, layer = e.dxftype(), e.dxf.layer
         if t == "LWPOLYLINE" and layer in ("A-SPACE", "A-SPACE-PLANT") and e.closed and abs(float(e.dxf.elevation)) < 1e-9 \
-                and not any(abs(b) > 1e-12 for *_, b in e.get_points("xyb")):
+                and not any(abs(b) > 1e-12 for *_, b in e.get_points("xyb")) \
+                and not any(abs(a) > 1e-12 or abs(b) > 1e-12 for *_, a, b, _bulge in e.get_points("xyseb")) \
+                and abs(float(e.dxf.const_width)) < 1e-12 and abs(float(e.dxf.thickness)) < 1e-12 \
+                and tuple(float(v) for v in e.dxf.extrusion) == (0.0, 0.0, 1.0):
             continue
-        if t == "TEXT" and layer == "A-ANNO-TEXT" and abs(float(e.dxf.insert.z)) < 1e-9:
+        if t == "TEXT" and layer == "A-ANNO-TEXT" and abs(float(e.dxf.insert.z)) < 1e-9 and int(e.dxf.halign) == 0 and int(e.dxf.valign) == 0 \
+                and abs(float(e.dxf.rotation)) < 1e-12 and abs(float(e.dxf.height) - 250.0) < 1e-9 and abs(float(e.dxf.thickness)) < 1e-12 \
+                and tuple(float(v) for v in e.dxf.extrusion) == (0.0, 0.0, 1.0):
             continue
         bad.append(f"{t} on {layer}")
     paper = [e.dxftype() for lay in c.dxf.layouts if lay.name != "Model" for e in lay if lay.name != "Model"]
+    paper += [f"block {b.name}" for b in c.dxf.blocks if b.name not in STANDARD_BLOCKS and not b.name.startswith(("*Model_Space", "*Paper_Space"))]
     return not bad and not paper, "only closed straight polylines on the room layers and text on A-ANNO-TEXT, all at z = 0", (bad + paper) or "ok"
 
 
@@ -308,7 +371,7 @@ def chk_dxf_labels(c: _Ctx) -> Outcome:
     texts = list(c.dxf.modelspace().query("TEXT"))
     bad: list[str] = []
     for r in c.rooms:
-        mine = [t for t in texts if " ".join(str(t.dxf.text).split()) == r["name"]]
+        mine = [t for t in texts if " ".join(str(t.dxf.text).split()) == " ".join(r["name"].split())]
         if len(mine) != 1:
             bad.append(f"{r['name']}: {len(mine)} labels")
             continue
@@ -357,7 +420,7 @@ def chk_manifest(c: _Ctx) -> Outcome:
 CHECKS: list[tuple[str, Any, Callable[[_Ctx], Outcome]]] = [
     ("input_files", "-", chk_input_files), ("spec_readable", "-", chk_spec_readable),
     ("ifc_loads", "-", chk_ifc_loads), ("ifc_schema", "-", chk_ifc_schema), ("ifc_units", "-", chk_ifc_units),
-    ("ifc_project", "-", chk_ifc_project), ("ifc_storey", TOL_MM, chk_ifc_storey), ("ifc_space_count", "-", chk_ifc_space_count),
+    ("ifc_project", "-", chk_ifc_project), ("ifc_storey", TOL_MM, chk_ifc_storey), ("ifc_structure", "-", chk_ifc_structure), ("ifc_space_count", "-", chk_ifc_space_count),
     ("ifc_space_names", "-", chk_ifc_space_names), ("ifc_space_guids", "-", chk_ifc_space_guids),
     ("ifc_aggregation", "-", chk_ifc_aggregation), ("ifc_footprints", TOL_MM, chk_ifc_footprints),
     ("ifc_area_quantity", AREA_REL_TOL, chk_ifc_area_quantity), ("ifc_geometry_area", AREA_REL_TOL, chk_ifc_geometry_area),

@@ -21,7 +21,7 @@ export function EvidencePanel({ revisionId, canEdit, onChanged }: { revisionId: 
   return (
     <section aria-label="Evidence from drawings" data-testid="evidence">
       <h2>Read from drawings (evidence, not inputs)</h2>
-      <p>These values were read by a vision model from PDF pages. They are not used by any rule. Check each against the drawing before you add it.</p>
+      <p>These values were read by a vision model from PDF pages. They are not used by any rule. Areas are taken to be in m2, which the model did not confirm. Check each against the drawing before you add it.</p>
       {data.sources.map((s) => (
         <div key={s.sha256}>
           <h3>{s.name}</h3>

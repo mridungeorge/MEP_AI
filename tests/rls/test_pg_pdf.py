@@ -109,14 +109,13 @@ def test_who_may_upload_a_pdf_and_what_is_refused(admin, tmp_path):
     assert up(client, big, huge).status_code == 413
 
 
-def test_a_pdf_uploaded_to_a_frozen_revision_makes_a_child_like_any_model(admin, tmp_path):
+def test_a_pdf_uploaded_to_a_frozen_revision_is_refused_and_makes_no_child(admin, tmp_path):
     client = app(FakeVision())
     f = lin.frozen_parent(admin, client, load_pack(lin.ROOT / "rules"))
+    before = admin.execute("select count(*) from revision where project_id = %s", (f["project"],)).fetchone()[0]
     r = up(client, f, pdf_bytes(tmp_path, "Frozen"))
-    assert r.status_code == 200 and r.json().get("new_revision")
-    child = r.json()["new_revision"]["id"]
-    assert admin.execute("select count(*) from space where revision_id = %s", (child,)).fetchone()[0] == 0        # a PDF never makes a space
-    assert admin.execute("select count(*) from extraction where revision_id = %s and source_kind = 'pdf'", (child,)).fetchone()[0] > 0
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "pdf_on_frozen"
+    assert admin.execute("select count(*) from revision where project_id = %s", (f["project"],)).fetchone()[0] == before
 
 
 @pytest.mark.parametrize("name", ["drawing.pdf", "weird name (1).PDF"])

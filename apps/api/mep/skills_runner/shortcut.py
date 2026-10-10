@@ -109,7 +109,7 @@ def _duct_fab(text: str, p: Parsed) -> None:
 # ------------------------------------------------------------------------------------------------------ space-envelope
 def _space_envelope(text: str, p: Parsed) -> None:
     low = text.lower()
-    sm = re.search(r"\b(level|storey|story|floor)\s+([A-Za-z0-9]+)", text, re.IGNORECASE)
+    sm = re.search(r"\b(level|storey|story|floor)\s+(\d+[A-Za-z]?|[GB]\d?|ground|basement|roof|mezzanine)\b", text, re.IGNORECASE)
     if sm:
         p.put("storey.name", f"{sm.group(1).capitalize()} {sm.group(2)}", sm.group(0))
     fm = re.search(NUM + r"\s*(m|mm)?\s*(?:floor[ -]?to[ -]?floor|f2f|ftf)", low) or re.search(r"(?:floor[ -]?to[ -]?floor|f2f)\s*[=:]?\s*" + NUM + r"\s*(m|mm)?", low)
@@ -121,10 +121,13 @@ def _space_envelope(text: str, p: Parsed) -> None:
             p.assumptions.append(f"floor to floor {v} had no unit: read as metres ({mm:g} mm)")
     rooms: list[dict[str, Any]] = []
     cursor = 0.0
-    segments = [s for s in re.split(r"[;\n]", text) if s.strip()]
+    # a comma that is followed by "Name 3 x 4" starts another room
+    segments = [s for s in re.split(r"[;\n]|,\s*(?=[A-Za-z][^,;0-9]*[,:]?\s*\d+(?:\.\d+)?\s*[x\u00d7*]\s*\d)", text) if s.strip()]
     for seg in segments:
         rm = re.match(r"\s*(?P<name>[A-Za-z][^0-9]*?)\s*[,:]?\s*" + NUM.replace("(", "(?P<w>", 1) + X + NUM.replace("(", "(?P<d>", 1) + r"\s*(?P<u>mm|m)?", seg, re.IGNORECASE)
         if not rm or re.match(r"\s*(level|storey|story|floor)\b", seg, re.IGNORECASE):
+            if not re.search(r"floor[ -]?to[ -]?floor|f2f|ftf|^\s*(level|storey|story|floor)\b", seg, re.IGNORECASE):
+                p.assumptions.append(f"not read (check it): {seg.strip()[:80]}")
             continue
         name = rm.group("name").strip(" ,-")
         w, d, unit = _f(rm.group("w")), _f(rm.group("d")), (rm.group("u") or "").lower()
@@ -246,6 +249,10 @@ def parse_shortcut(skill: str, text: str) -> Parsed:
     if skill not in PARSERS:
         raise KeyError(skill)
     p = Parsed()
+    if re.search(r"\d[,\u00a0 ]\d{3}(?!\d)(?=\s*(?:mm|m\b|[x\u00d7*]|dia|$)|\s*[x\u00d7*])", text[:2000]) and re.search(r"\d,\d{3}(?!\d)", text[:2000]):
+        p.assumptions.append("a number with a thousands separator (like 1,200) was found: nothing was read; write it as 1200")
+        p.missing = missing_fields(skill, p.spec)
+        return p
     PARSERS[skill](text[:2000], p)
     p.missing = missing_fields(skill, p.spec)
     return p

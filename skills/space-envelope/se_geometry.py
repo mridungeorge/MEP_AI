@@ -94,8 +94,21 @@ def point_in_polygon(p: Pt, poly: list[Pt], strict: bool = False) -> bool:
     return inside
 
 
+_TRI_CACHE: dict[tuple[Pt, ...], list[tuple[Pt, Pt, Pt]]] = {}
+
+
 def triangulate(poly: list[Pt]) -> list[tuple[Pt, Pt, Pt]]:
-    """Ear clipping of a simple polygon (any orientation) into triangles."""
+    """Ear clipping of a simple polygon (any orientation) into triangles. Cached per outline (a build compares every pair of rooms)."""
+    key = tuple(poly)
+    hit = _TRI_CACHE.get(key)
+    if hit is None:
+        if len(_TRI_CACHE) > 512:
+            _TRI_CACHE.clear()
+        hit = _TRI_CACHE[key] = _triangulate(poly)
+    return hit
+
+
+def _triangulate(poly: list[Pt]) -> list[tuple[Pt, Pt, Pt]]:
     pts = list(poly) if signed_area(poly) > 0 else list(poly)[::-1]
     tris: list[tuple[Pt, Pt, Pt]] = []
     guard = 0

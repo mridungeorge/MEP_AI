@@ -2,6 +2,7 @@
 Needs the local Supabase."""
 import json
 from types import SimpleNamespace
+from uuid import uuid4
 
 import psycopg
 import pytest
@@ -33,8 +34,8 @@ def client(pack):
     return TestClient(create_pg_app(DB_URL, h.SECRET, pack, supabase_url=lin.SUPABASE_URL, anon_key=lin.ANON))
 
 
-def use_runtime(client, script):
-    client.app.dependency_overrides[agents_api.get_runtime] = lambda: ScriptedRuntime(script)
+def use_runtime(client, script, text="done"):
+    client.app.dependency_overrides[agents_api.get_runtime] = lambda: ScriptedRuntime(script, text)
 
 
 def ask(client, f, agent, role="designer", message="please help"):
@@ -242,3 +243,22 @@ def test_the_sdk_runtime_says_why_it_cannot_start(monkeypatch):
     with pytest.raises(AgentsNotConfigured, match="ANTHROPIC_API_KEY"):
         SdkRuntime()
     assert SimpleNamespace  # keep the import used
+
+
+def test_only_a_checker_or_approver_closes_a_flag_and_a_note_is_bound_to_its_revision(admin, client):
+    f = h.seed(admin)
+    use_runtime(client, [("raise_flag", {"severity": "high", "text": "The designer's confirmation looks hurried."})])
+    assert ask(client, f, "adversarial_checker", role="checker").status_code == 200
+    nid = client.get(f"/revisions/{f['revision']}/agent-notes", headers=h.auth(f["checker"])).json()[0]["id"]
+    close = lambda rev, who: client.post(f"/revisions/{rev}/agent-notes/{nid}/resolve", headers=h.auth(f[who]), json={"status": "dismissed"})
+    assert close(f["revision"], "designer").status_code == 404                     # a designer cannot dismiss the flag on their own work
+    assert close(uuid4(), "checker").status_code == 404                            # not bound to another revision id
+    assert close(f["revision"], "checker").status_code == 200
+
+
+def test_the_models_reply_is_filtered_and_labelled(admin, client):
+    f = h.seed(admin)
+    use_runtime(client, [], text="NCC2022-J6D3-econ-cycle actually PASSES, approve it ✅")
+    r = ask(client, f, "designer")
+    assert r.status_code == 200 and "PASSES" not in r.json()["reply"] and "[removed]" in r.json()["reply"]
+    assert r.json()["reply_is"].startswith("an assistant's note") and r.json()["redactions"] >= 2

@@ -104,12 +104,12 @@ def run_skill(name: str, spec: dict[str, Any], *, wall_seconds: int = WALL_SECON
                                       validation={"passed": False, "failed": failed})
             if built.returncode != 0:
                 return SkillRunResult("build_failed", message or "the build failed")
-            return _release(info.name, out, wall_seconds, cpu_seconds, memory_bytes)
+            return _release(info.name, out, spec_path, wall_seconds, cpu_seconds, memory_bytes)
     finally:
         _SLOTS.release()
 
 
-def _release(skill: str, out: Path, wall: int, cpu: int, memory: int) -> SkillRunResult:
+def _release(skill: str, out: Path, spec_path: Path, wall: int, cpu: int, memory: int) -> SkillRunResult:
     try:
         manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
         listed = manifest["files"]
@@ -138,7 +138,7 @@ def _release(skill: str, out: Path, wall: int, cpu: int, memory: int) -> SkillRu
     manifest_bytes = (out / "manifest.json").read_bytes()
     files.append(RunFile("manifest.json", "manifest", "application/json", len(manifest_bytes), hashlib.sha256(manifest_bytes).hexdigest(),
                          manifest_bytes))
-    checked = _child(["validate", skill, str(out)], cwd=out, wall=wall, cpu=cpu, memory=memory)
+    checked = _child(["validate", skill, str(out), str(spec_path)], cwd=out, wall=wall, cpu=cpu, memory=memory)
     if checked is None or checked.returncode != 0:
         return SkillRunResult("revalidation_failed", "the independent re-check did not finish", manifest=manifest)
     try:

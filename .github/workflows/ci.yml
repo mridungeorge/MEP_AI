@@ -25,7 +25,7 @@ jobs:
       - run: pnpm --filter @mep/web run test
       - run: uv run pytest tests/rules tests/engine tests/ingest tests/api tests/diff tests/review tests/db
       # the drafting skills: space-envelope on the locked environment, duct-fab with the CAD kernel added for this step only
-      - run: uv run --with cadquery pytest tests/skills
+      - run: uv run --with cadquery==2.8.0 --with cadquery-ocp==7.9.3.1.1 pytest tests/skills
       - run: pnpm exec supabase start && pnpm exec supabase db reset
       - run: uv run pytest tests/rls
       - run: pnpm --filter @mep/web exec playwright install --with-deps chromium

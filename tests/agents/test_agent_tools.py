@@ -223,3 +223,23 @@ def test_text_with_hidden_characters_is_cleaned_before_it_is_stored():
     L, b = layer(Agent.ADVERSARIAL_CHECKER, "checker")
     L.call("raise_flag", {"severity": "low", "text": "Looks wrong" + chr(0x202E) + chr(0x200B) + chr(0) + " near the plant room"})
     assert b.notes_added[0]["body"] == "Looks wrong near the plant room"
+
+
+def test_a_failure_inside_a_tool_is_recorded_and_the_model_gets_a_generic_answer():
+    l, b = layer(Agent.DESIGNER)
+
+    def boom(_model):
+        raise RuntimeError("Failing row contains (firm_id, secret)")
+    l.handlers["raise_flag"] = boom
+    r = l.call("read_results", {})
+    assert r.ok
+    l.handlers["read_results"] = boom
+    r = l.call("read_results", {})
+    assert not r.ok and "Failing row" not in (r.error or "") and "could not complete" in (r.error or "")
+    assert b.calls[-1][2].startswith("failed: RuntimeError") and "secret" not in b.calls[-1][2]
+
+
+def test_an_explanation_is_cut_to_the_stored_limit_after_filtering():
+    l, b = layer(Agent.DESIGNER)
+    r = l.call("explain_result", {"result_id": str(RESULT_ID), "explanation": "pass " * 800})
+    assert r.ok and all(len(n["body"]) <= 4000 for n in b.notes_added)

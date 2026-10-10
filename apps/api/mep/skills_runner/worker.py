@@ -26,9 +26,33 @@ def apply_limits() -> None:
             resource.setrlimit(limit, (n, n + 5 if limit == resource.RLIMIT_CPU else n))
 
 
-def revalidate(skill: str, outdir: Path) -> dict[str, Any]:
+def _same_inputs(info: Any, manifest: dict[str, Any], submitted: Path) -> str | None:
+    """A skill that normalises its spec must have built from the spec that was SUBMITTED: normalise it again here and compare with the
+    manifest's `inputs` (what the validator is given). Returns a problem, or None."""
+    spec = importlib.util.spec_from_file_location("resubmit_build", info.build_script)
+    assert spec and spec.loader
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = mod
+    sys.path.insert(0, str(info.build_script.parent))
+    spec.loader.exec_module(mod)
+    normalise = getattr(mod, "normalise_spec", None)
+    if normalise is None:
+        return None
+    try:
+        again = normalise(json.loads(submitted.read_text(encoding="utf-8")))
+    except Exception as exc:  # noqa: BLE001 - the submitted spec no longer normalises: the build cannot have been of it
+        return f"the submitted spec does not normalise on re-check ({type(exc).__name__})"
+    if json.dumps(again, sort_keys=True) != json.dumps(manifest.get("inputs"), sort_keys=True):
+        return "the manifest's inputs are not the spec that was submitted"
+    return None
+
+
+def revalidate(skill: str, outdir: Path, submitted: Path | None = None) -> dict[str, Any]:
     info = get_skill(skill)
     manifest = json.loads((outdir / "manifest.json").read_text(encoding="utf-8"))
+    mismatch = _same_inputs(info, manifest, submitted) if submitted is not None else None
+    if mismatch:
+        return {"passed": False, "checks": [{"name": "inputs_match_submitted_spec", "passed": False}], "failed": ["inputs_match_submitted_spec"]}
     spec = importlib.util.spec_from_file_location(f"revalidate_{skill.replace('-', '_')}", info.validator)
     assert spec and spec.loader
     mod = importlib.util.module_from_spec(spec)
@@ -51,8 +75,8 @@ def main(argv: list[str]) -> int:
         except SystemExit as exc:
             return int(exc.code or 0) if isinstance(exc.code, int | type(None)) else 4
         return 0
-    if len(argv) == 3 and argv[0] == "validate":
-        print(json.dumps(revalidate(argv[1], Path(argv[2]))))
+    if len(argv) in (3, 4) and argv[0] == "validate":
+        print(json.dumps(revalidate(argv[1], Path(argv[2]), Path(argv[3]) if len(argv) == 4 else None)))
         return 0
     print("usage: worker build <skill> <spec.json> <outdir> | validate <skill> <outdir>", file=sys.stderr)
     return 64

@@ -4,6 +4,7 @@ revision, downloads of released files, and feeding a built IFC/DXF into the revi
 A file is returned to anybody only if its artifact is `released`, which happens only when the skill's validator AND the runner's second,
 separate re-check both passed. Nothing here decides compliance.
 """
+import json
 from typing import Annotated, Any, Literal, Protocol
 from uuid import UUID
 
@@ -104,6 +105,10 @@ def set_defaults(name: str, body: DefaultsBody, user: User, svc: Service) -> dic
     bad = sorted(set(body.defaults) - allowed)
     if bad:
         raise _err(422, "not_a_default", "these fields are engineer inputs and cannot have a firm default: " + ", ".join(bad))
+    fields = skill_form.default_fields(skill_form.build_form(_skill(name).schema))
+    problems = [f"{p}: {why}" for p, v in body.defaults.items() if (why := skill_form.default_problem(fields[p], v))]
+    if problems or len(json.dumps(body.defaults)) > 4000:
+        raise _err(422, "bad_default", "; ".join(problems[:5]) or "the defaults are too large")
     svc.set_firm_defaults(name, body.defaults)
     return {"saved": True, "defaults": body.defaults}
 

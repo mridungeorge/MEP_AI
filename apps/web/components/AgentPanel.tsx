@@ -60,7 +60,7 @@ export function AgentPanel({ revisionId, agents, kinds, title }: { revisionId: s
         </p>
       ))}
       {busy && <p>The agent is working…</p>}
-      {reply && <p data-testid="agent-reply"><strong>Agent:</strong> {reply}</p>}
+      {reply && <p data-testid="agent-reply"><strong>Assistant&apos;s note (not a rule result):</strong> {reply}</p>}
       {message && <p role="alert">{message}</p>}
       {open.length > 0 && (
         <ul data-testid="agent-notes">

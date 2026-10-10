@@ -95,7 +95,7 @@ class PgAgentBackend:
     def resolve_note(self, note_id: UUID, status: str) -> None:
         """A person closes an open note (answered / dismissed). Notes are otherwise append-only."""
         with self._as_user() as conn:
-            conn.execute("select agent_note_resolve(%s, %s)", (note_id, status))
+            conn.execute("select agent_note_resolve(%s, %s, %s)", (self._rev, note_id, status))
 
     # ---- writes: notes and the call log only ----------------------------------------------------------------------------
     def add_note(self, agent: str, kind: str, body: str, *, skill: str | None = None, result_id: UUID | None = None,

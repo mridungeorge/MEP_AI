@@ -107,3 +107,56 @@ def test_hostile_sentences_are_read_quickly_or_not_at_all(hostile):
         t = time.monotonic()
         parse_shortcut(skill, hostile)
         assert time.monotonic() - t < 2.0
+
+
+# ---- review round 1 -----------------------------------------------------------------------------------------------------
+
+def test_a_second_room_in_a_comma_list_is_read_and_its_height_is_not_taken_from_the_other():
+    p = parse_shortcut("space-envelope", "Office 6 x 4 m, 2.7 m high, Meeting 3 x 3 m")
+    assert [r["name"] for r in p.spec["rooms"]] == ["Office", "Meeting"] and "height_mm" not in p.spec["rooms"][1]
+
+
+def test_a_trailing_height_belongs_to_the_room_before_it_and_is_shown_as_understood():
+    p = parse_shortcut("space-envelope", "Office 6 x 4 m, Meeting 3 x 3 m, 2.4 m high")
+    assert [r.get("height_mm") for r in p.spec["rooms"]] == [None, 2400]
+    assert any(u["field"] == "rooms[1].height_mm" for u in p.understood)
+
+
+def test_a_segment_nothing_could_be_read_from_is_listed_not_dropped():
+    p = parse_shortcut("space-envelope", "Office 6 x 4 m; some stray words with no size")
+    assert any("not read" in a and "stray words" in a for a in p.assumptions)
+
+
+@pytest.mark.parametrize("skill,text", [("space-envelope", "Office 12,000 x 8,000"), ("duct-fab", "1,200x600 to 300 dia")])
+def test_thousands_separators_are_refused_not_misread(skill, text):
+    p = parse_shortcut(skill, text)
+    assert p.spec == {} and any("thousands separator" in a for a in p.assumptions)
+
+
+def test_floor_to_floor_is_not_a_storey_name():
+    p = parse_shortcut("space-envelope", "3.6 m floor to floor; Office 6 x 4 m")
+    assert "name" not in p.spec.get("storey", {})
+    assert parse_shortcut("space-envelope", "Level 2, 3.6 m floor to floor").spec["storey"]["name"] == "Level 2"
+
+
+def test_a_firm_default_is_checked_against_its_field_and_cannot_break_a_spec():
+    form = skill_form.build_form(get_skill("space-envelope").schema)
+    fields = skill_form.default_fields(form)
+    assert fields
+    for f in fields.values():
+        if f["kind"] in ("number", "integer"):
+            assert skill_form.default_problem(f, "a string") and skill_form.default_problem(f, True) and skill_form.default_problem(f, float("nan"))
+        if f["kind"] == "text":
+            assert skill_form.default_problem(f, "x" * 5000) and skill_form.default_problem(f, 5)
+    schema = get_skill("space-envelope").schema
+    out, _ = skill_form.apply_defaults(schema, {"storey": "not an object", "rooms": []}, {"storey.elevation_mm": 0})
+    assert out["storey"] == "not an object"
+
+
+def test_a_use_default_is_not_applied_to_a_plant_room():
+    schema = get_skill("space-envelope").schema
+    if "rooms[].use" not in skill_form.default_paths(skill_form.build_form(schema)):
+        pytest.skip("use has no firm default on this card")
+    spec = {"rooms": [{"name": "A", "kind": "room"}, {"name": "P", "kind": "plant_room"}]}
+    out, _ = skill_form.apply_defaults(schema, spec, {"rooms[].use": "Office"})
+    assert out["rooms"][0]["use"] == "Office" and "use" not in out["rooms"][1]

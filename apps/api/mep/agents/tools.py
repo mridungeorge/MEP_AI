@@ -238,6 +238,9 @@ class ToolLayer:
         except Refused as exc:
             self._record(tool, True, f"refused: {exc}", args)
             return ToolResult(False, error=str(exc))
+        except Exception as exc:  # noqa: BLE001 - a failure inside a tool (database, kernel, bug) is recorded, and the model gets a generic answer
+            self._record(tool, True, f"failed: {type(exc).__name__}", args)         # never the exception text: it can hold row contents
+            return ToolResult(False, error="the server could not complete that call")
         self._record(tool, True, "ok", args)
         return ToolResult(True, data=data)
 

@@ -7,6 +7,7 @@ Field kinds: number, integer, text, enum, group (a nested object), list (repeati
 by a `type` key), conditional (a group chosen by another field's value). Nothing here evaluates anything or decides compliance.
 """
 import copy
+import math
 import re
 from typing import Any
 
@@ -128,6 +129,51 @@ def default_paths(form: list[Field], spec: Schema | None = None) -> set[str]:
     return out
 
 
+def default_fields(form: list[Field]) -> dict[str, Field]:
+    """path -> field, for every field that may carry a firm default."""
+    out: dict[str, Field] = {}
+
+    def walk(fields: list[Field]) -> None:
+        for f in fields:
+            if f.get("firm_default"):
+                out[f["path"]] = f
+            if f["kind"] == "group":
+                walk(f["fields"])
+            elif f["kind"] == "list":
+                walk(f["item"])
+            elif f["kind"] in ("choice", "conditional"):
+                for case in f["cases"].values():
+                    walk(case)
+
+    walk(form)
+    return out
+
+
+def default_problem(field: Field, value: Any) -> str | None:
+    """Why `value` cannot be a firm default for `field` (type, range, options, length), or None."""
+    kind = field["kind"]
+    if kind == "enum":
+        return None if value in field["options"] else f"must be one of {', '.join(map(str, field['options']))}"
+    if kind in ("number", "integer"):
+        if isinstance(value, bool) or not isinstance(value, int | float) or not math.isfinite(value) or abs(value) > 1e9:
+            return "must be a number"
+        if kind == "integer" and float(value) != int(value):
+            return "must be a whole number"
+        if field.get("min") is not None and value < field["min"]:
+            return f"must be at least {field['min']}"
+        if field.get("max") is not None and value > field["max"]:
+            return f"must be at most {field['max']}"
+        return None
+    if kind == "text":
+        if not isinstance(value, str) or len(value) > int(field.get("max_length") or 200):
+            return "must be short text"
+        pattern = field.get("pattern")
+        if pattern and not re.fullmatch(pattern, value):
+            return "has the wrong form"
+        return None
+    return "cannot have a firm default"
+
+
 def apply_constants(schema: Schema, spec: Schema) -> Schema:
     """Fill the fixed fields of the card (`spec_version`, `units`: a `const` in the schema) that the form never shows."""
     out = copy.deepcopy(spec)
@@ -159,7 +205,7 @@ def apply_defaults(schema: Schema, spec: Schema, defaults: Schema) -> tuple[Sche
         if path.startswith("rooms[]."):                              # a per-room default
             sub = path.removeprefix("rooms[].")
             for i, room in enumerate(out.get("rooms") or []):
-                if isinstance(room, dict) and room.get(sub) is None:
+                if isinstance(room, dict) and room.get(sub) is None and not (sub == "use" and room.get("kind") == "plant_room"):
                     room[sub] = value
                     filled.append(f"rooms[{i}].{sub}")
             continue
@@ -169,9 +215,12 @@ def apply_defaults(schema: Schema, spec: Schema, defaults: Schema) -> tuple[Sche
         if _get(out, parts) is None:
             node = out
             for p in parts[:-1]:
+                if not isinstance(node.get(p, {}), dict):               # the spec put something else there: leave it to the card's own check
+                    break
                 node = node.setdefault(p, {})
-            node[parts[-1]] = value
-            filled.append(path)
+            else:
+                node[parts[-1]] = value
+                filled.append(path)
     return out, filled
 
 

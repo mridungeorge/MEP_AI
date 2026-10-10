@@ -80,7 +80,7 @@ function One({ f, props }: { f: FormField; props: Props }) {
       return (
         <label style={{ display: "block", margin: "6px 0" }}>
           <Label f={f} /> one corner per line: x, y
-          <textarea {...common} rows={5} defaultValue={formatPoints(value)}
+          <textarea key={formatPoints(value)} {...common} rows={5} defaultValue={formatPoints(value)}
                     onBlur={(e) => { const p = parsePoints(e.target.value); set(p === null ? undefined : p); }} />
           <Hint f={f} path={path} props={props} />
         </label>

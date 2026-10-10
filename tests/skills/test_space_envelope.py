@@ -59,7 +59,7 @@ def test_example_builds_validates_and_matches_the_expected_manifest(build_mod, n
     got = build_mod.build(_spec(name), tmp_path)
     for key in ("skill", "skill_version", "inputs", "spec_sha256", "measures", "validation"):
         assert got[key] == expected[key], key
-    assert len(got["validation"]["checks"]) == 29 and got["validation"]["passed"] is True
+    assert len(got["validation"]["checks"]) == 30 and got["validation"]["passed"] is True
     if got["toolchain"] != expected["toolchain"]:
         pytest.skip(f"toolchain {got['toolchain']} differs from {expected['toolchain']}: regenerate the expected manifest after review")
     assert got["files"] == expected["files"]
@@ -199,7 +199,7 @@ def _validate(validator, spec, out: Path, with_manifest: bool = False):
 def test_the_untouched_output_passes_every_check(validator, good):
     out, spec = good
     r = _validate(validator, spec, out, with_manifest=True)
-    assert r.passed and r.failed == [] and len(r.checks) == 29
+    assert r.passed and r.failed == [] and len(r.checks) == 30
 
 
 def _edit_ifc(out: Path, pattern: str, repl: str, count: int = 1) -> None:
@@ -275,3 +275,91 @@ def test_a_build_the_validator_rejects_releases_nothing(build_mod, tmp_path, mon
         build_mod.build(_spec("office_floor"), out)
     assert "cross_ifc_dxf" in e.value.result.failed
     assert not out.exists() or not list(out.iterdir())
+
+
+# ---- review round 1: the world geometry is checked, not just the local profiles ----------------------------------------
+
+def _ifc_edit(out: Path, fn) -> None:
+    import ifcopenshell
+    p = out / "PLANT-ROOF.ifc"
+    f = ifcopenshell.open(str(p))
+    fn(f)
+    f.write(str(p))
+
+
+def _shift_first_space(f) -> None:
+    sp = f.by_type("IfcSpace")[0]
+    sp.ObjectPlacement.RelativePlacement.Location.Coordinates = (50000.0, 0.0, 0.0)
+
+
+def _lift_solid(f) -> None:
+    f.by_type("IfcExtrudedAreaSolid")[0].Position.Location.Coordinates = (0.0, 0.0, 9000.0)
+
+
+def _rotate_space(f) -> None:
+    sp = f.by_type("IfcSpace")[0]
+    sp.ObjectPlacement.RelativePlacement.RefDirection = f.createIfcDirection((0.0, 1.0, 0.0))
+
+
+def _extra_wall(f) -> None:
+    f.createIfcWall(ifcopenshell_guid(), None, "stray")
+
+
+def ifcopenshell_guid() -> str:
+    import ifcopenshell.guid
+    return ifcopenshell.guid.new()
+
+
+def _flip_extrusion(f) -> None:
+    f.by_type("IfcExtrudedAreaSolid")[0].ExtrudedDirection.DirectionRatios = (0.0, 0.0, -1.0)
+
+
+def _second_length_unit(f) -> None:
+    proj = f.by_type("IfcProject")[0]
+    units = list(proj.UnitsInContext.Units)
+    proj.UnitsInContext.Units = [f.createIfcSIUnit(UnitType="LENGTHUNIT", Name="METRE"), *units]
+
+
+def _storey_z(f) -> None:
+    f.by_type("IfcBuildingStorey")[0].ObjectPlacement.RelativePlacement.Location.Coordinates = (0.0, 0.0, 99000.0)
+
+
+@pytest.mark.parametrize("label,mutate", [
+    ("space placement moved 50 m", _shift_first_space), ("solid position lifted", _lift_solid), ("space rotated", _rotate_space),
+    ("stray wall", _extra_wall), ("extrusion flipped", _flip_extrusion), ("second length unit", _second_length_unit),
+    ("storey placement not its elevation", _storey_z),
+])
+def test_the_validator_rejects_a_changed_placement_unit_or_extra_entity_in_the_ifc(validator, good, label, mutate):
+    out, spec = good
+    _ifc_edit(out, mutate)
+    r = _validate(validator, spec, out)
+    assert not r.passed and "ifc_structure" in r.failed, label
+
+
+@pytest.mark.parametrize("label,mutate", [
+    ("extrusion mirrored", lambda d: setattr(d.modelspace().query("LWPOLYLINE")[0].dxf, "extrusion", (0, 0, -1))),
+    ("constant width", lambda d: setattr(d.modelspace().query("LWPOLYLINE")[0].dxf, "const_width", 3000)),
+    ("label rotated", lambda d: setattr(d.modelspace().query("TEXT")[0].dxf, "rotation", 45)),
+    ("label height", lambda d: setattr(d.modelspace().query("TEXT")[0].dxf, "height", 100000)),
+    ("junk block", lambda d: d.blocks.new("JUNK").add_line((0, 0), (1, 1))),
+])
+def test_the_validator_rejects_hidden_dxf_drawing_attributes(validator, good, label, mutate):
+    out, spec = good
+    _edit_dxf(out, mutate)
+    r = _validate(validator, spec, out)
+    assert not r.passed and "dxf_entities" in r.failed, label
+
+
+def test_a_room_name_with_a_double_space_builds(build_mod, tmp_path):
+    spec = _spec("plant_room_l_shape")
+    spec["rooms"][0]["name"] = "AHU  plant room"
+    assert build_mod.build(spec, tmp_path / "o")["validation"]["passed"] is True
+
+
+def test_a_spec_with_too_many_outline_points_is_refused(build_mod):
+    spec = _spec("plant_room_l_shape")
+    ring = [[i * 10, 0] for i in range(64)]
+    room = {"name": "R0", "kind": "room", "height_mm": 2400, "outline": {"type": "polygon", "points_mm": ring}}
+    spec["rooms"] = [dict(room, name=f"R{i}") for i in range(20)]
+    with pytest.raises(Exception, match="outline points|more than"):
+        build_mod.normalise_spec(spec)

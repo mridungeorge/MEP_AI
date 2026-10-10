@@ -62,6 +62,9 @@ def _require_finite(node: Any, path: str = "<root>", depth: int = 0) -> None:
             _require_finite(v, f"{path}[{i}]", depth + 1)
 
 
+MAX_TOTAL_VERTICES = 1200
+
+
 def normalise_spec(spec_in: dict[str, Any]) -> dict[str, Any]:
     """Validate against the card and return the spec the writers and the validator share: defaults applied, outlines as
     counter-clockwise point lists, rooms in the order given."""
@@ -77,6 +80,8 @@ def normalise_spec(spec_in: dict[str, Any]) -> dict[str, Any]:
         raise SpecError("mark: a reserved file name")
     storey = spec["storey"]
     storey.setdefault("elevation_mm", 0)
+    if sum(len(r["outline"]["points_mm"]) if r["outline"]["type"] != "rectangle" else 4 for r in spec["rooms"]) > MAX_TOTAL_VERTICES:
+        raise SpecError(f"rooms: more than {MAX_TOTAL_VERTICES} outline points in all")
     seen: dict[str, str] = {}
     rooms = []
     for i, room in enumerate(spec["rooms"]):
