@@ -2,7 +2,7 @@
 import { supabase } from "./supabase";
 import type {
   ApiErrorBody, BuildingPart, ConfirmResponse, Gate1State, ImportResponse, RowRef,
-  AdminOverview, BillingOverview, NewProject, NotificationPrefs, ProjectHistory, ProjectRow, PendingRegistration, MyInvitation, AgentNote, AgentReply, VisionJob, CardPreview, EvidenceResponse, Lineage, Me, ShortcutResult, SkillCard, SkillRunRow, SkillRunSummary, SkillSummary, Package, ShareLinkView, Worksheet, RevisionDiff, RevisionResults, RevisionSummary, RunRulesResponse, SpaceInput, SpaceRow, SystemInputInput, SystemInputRow, UploadResponse,
+  AdminOverview, BillingOverview, FixesResponse, NewProject, NotificationPrefs, ProjectHistory, ProjectRow, PendingRegistration, MyInvitation, AgentNote, AgentReply, VisionJob, CardPreview, EvidenceResponse, Lineage, Me, ShortcutResult, SkillCard, SkillRunRow, SkillRunSummary, SkillSummary, Package, ShareLinkView, Worksheet, RevisionDiff, RevisionResults, RevisionSummary, RunRulesResponse, SpaceInput, SpaceRow, SystemInputInput, SystemInputRow, UploadResponse,
 } from "./types";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -192,6 +192,10 @@ export const api = {
   billingCheckout: (plan_id: string) => apiFetch<{ url: string }>("/billing/checkout", json("POST", { plan_id })),
   billingPortal: () => apiFetch<{ url: string }>("/billing/portal", json("POST", {})),
   createProject: (p: NewProject) => apiFetch<{ project_id: string; revision_id: string }>("/projects", json("POST", p)),
+  fixes: (r: string, subject: string, rule: string) => apiFetch<FixesResponse>(`${rev(r)}/results/${encodeURIComponent(subject)}/${encodeURIComponent(rule)}/fixes`),
+  makeFixScratch: (r: string, subject: string, rule: string, option: string) =>
+    apiFetch<{ scratch_id: string; accepted: boolean }>(`${rev(r)}/results/${encodeURIComponent(subject)}/${encodeURIComponent(rule)}/fixes/${option}/scratch`, json("POST", {})),
+  applyFixScratch: (r: string, scratch: string) => apiFetch<{ applied: boolean; needs: string }>(`${rev(r)}/fix-scratch/${scratch}/apply`, json("POST", {})),
   askAgent: (r: string, agent: string, message: string) => apiFetch<AgentReply>(`${rev(r)}/agents/${agent}/message`, json("POST", { message })),
   agentNotes: (r: string, kind?: string) => apiFetch<AgentNote[]>(`${rev(r)}/agent-notes${kind ? `?kind=${kind}` : ""}`),
   resolveAgentNote: (r: string, id: string, status: "answered" | "dismissed") =>

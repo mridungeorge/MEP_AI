@@ -384,3 +384,10 @@ export interface BillingOverview {
   projects: number; active_seats: number;
 }
 export interface NewProject { address: string; state: string; ncc_edition: string; climate_zone?: number; approval_date?: string }
+
+/** GET /revisions/{id}/results/{subject}/{rule}/fixes */
+export interface FixOptionView {
+  id: string; label: string; kind: string; input: string; from: string | number | boolean | null; to: string | number | boolean; unit: string | null;
+  target_after: string; dependent_rules: string[]; accepted: boolean; moves: { rule_id: string; before: string; after: string }[]; conflicts: string[];
+}
+export interface FixesResponse { subject_id: string; rule_id: string; outcome: string; label: string; options: FixOptionView[]; rule_text_hypotheses: string[]; note: string }

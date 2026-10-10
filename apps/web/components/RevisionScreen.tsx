@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, api } from "@/lib/api";
 import type { Lineage, RevisionDiff, RevisionResults, SpaceDiffItem } from "@/lib/types";
+import { FixPanel } from "./FixPanel";
 import { NewRevisionPanel } from "./NewRevisionPanel";
 
 function refusal(e: unknown): string {
@@ -116,10 +117,11 @@ export function RevisionScreen({ projectId, revisionId }: { projectId: string; r
         <h2>Results {results.source === "carried_from_parent" ? "(carried from the previous revision; not re-run yet)" : ""}</h2>
         {results.results.length === 0 ? <p>No results yet.</p> : (
           <table>
-            <thead><tr><th>Subject</th><th>Rule</th><th>Outcome</th><th></th></tr></thead>
+            <thead><tr><th>Subject</th><th>Rule</th><th>Outcome</th><th></th><th></th></tr></thead>
             <tbody>{results.results.map((r) => (
               <tr key={`${r.subject_id}-${r.rule_id}-${r.part ?? ""}`} data-stale={r.stale}>
                 <td>{r.subject_id}</td><td>{r.rule_id}</td><td>{r.outcome}</td><td>{r.stale ? "STALE: re-run needed" : ""}</td>
+                <td>{r.outcome === "FAIL" && !frozen && <FixPanel revisionId={revisionId} subject={r.subject_id} rule={r.rule_id} onApplied={() => window.location.reload()} />}</td>
               </tr>))}</tbody>
           </table>
         )}
