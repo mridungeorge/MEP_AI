@@ -19,7 +19,7 @@ import psycopg
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response
 from psycopg.rows import dict_row
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, model_validator
 from starlette.concurrency import run_in_threadpool
 
 from mep import clash
@@ -29,6 +29,9 @@ from mep.engine import units
 
 router = APIRouter()
 LENGTH_UNITS = Literal["mm", "m", "in", "ft"]
+MAX_MODELS = 10
+MAX_CLASHES = 2000
+NO_CONTROL = r"^[^\x00-\x1f\x7f]+$"
 
 
 def get_dsn() -> str:
@@ -59,23 +62,24 @@ class RunBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     kind: Literal["duct", "fitting", "terminal"]
-    tag: str = Field(min_length=1, max_length=60)
-    system_tag: str | None = Field(default=None, max_length=60)
+    tag: str = Field(min_length=1, max_length=60, pattern=NO_CONTROL)
+    system_tag: str | None = Field(default=None, max_length=60, pattern=NO_CONTROL)
     space_id: UUID | None = None
     shape: Literal["rect", "round"] | None = None
-    width: float | None = Field(default=None, gt=0)
-    depth: float | None = Field(default=None, gt=0)
-    diameter: float | None = Field(default=None, gt=0)
+    width: FiniteFloat | None = Field(default=None, gt=0)
+    depth: FiniteFloat | None = Field(default=None, gt=0)
+    diameter: FiniteFloat | None = Field(default=None, gt=0)
     section_unit: LENGTH_UNITS = "mm"
-    length: float | None = Field(default=None, gt=0)
+    length: FiniteFloat | None = Field(default=None, gt=0)
     length_unit: LENGTH_UNITS = "m"
-    insulation: float = Field(default=0, ge=0)
+    insulation: FiniteFloat = Field(default=0, ge=0)
     insulation_unit: LENGTH_UNITS = "mm"
-    fitting_type: str | None = Field(default=None, max_length=60)
+    fitting_type: str | None = Field(default=None, max_length=60, pattern=NO_CONTROL)
     quantity: int = Field(default=1, ge=1, le=10000)
-    airflow_ls: float | None = Field(default=None, ge=0, le=1_000_000)
-    start_mm: tuple[float, float, float] | None = None
-    end_mm: tuple[float, float, float] | None = None
+    airflow_ls: FiniteFloat | None = Field(default=None, ge=0, le=1_000_000)
+    start: tuple[FiniteFloat, FiniteFloat, FiniteFloat] | None = None
+    end: tuple[FiniteFloat, FiniteFloat, FiniteFloat] | None = None
+    coord_unit: LENGTH_UNITS = "mm"
 
     @model_validator(mode="after")
     def _complete(self) -> "RunBody":
@@ -85,13 +89,14 @@ class RunBody(BaseModel):
                 raise ValueError("a duct needs a shape, a length and its section (width and depth, or a diameter)")
         if self.kind == "fitting" and not self.fitting_type:
             raise ValueError("a fitting needs its type")
-        if (self.start_mm is None) != (self.end_mm is None):
+        if (self.start is None) != (self.end is None):
             raise ValueError("give both ends of the run or neither")
         return self
 
 
 def _columns(b: RunBody) -> dict[str, Any]:
-    start, end = b.start_mm or (None, None, None), b.end_mm or (None, None, None)
+    start = tuple(to_mm(v, b.coord_unit) for v in b.start) if b.start else (None, None, None)
+    end = tuple(to_mm(v, b.coord_unit) for v in b.end) if b.end else (None, None, None)
     return {"kind": b.kind, "tag": b.tag.strip(), "system_tag": b.system_tag, "space_id": b.space_id, "shape": b.shape if b.kind == "duct" else None,
             "width_mm": to_mm(b.width, b.section_unit) if b.kind == "duct" and b.shape == "rect" else None,
             "depth_mm": to_mm(b.depth, b.section_unit) if b.kind == "duct" and b.shape == "rect" else None,
@@ -191,7 +196,7 @@ def ceiling_void(revision_id: UUID, user: RevUser, repo: Repo, dsn: Dsn) -> dict
         raise _err(404, "not_found", "revision not found")
     with _as_user(dsn, user) as conn:
         clearance = float(conn.execute("select void_clearance_mm from firm where id = %s", (user.firm_id,)).fetchone()["void_clearance_mm"])
-        spaces = conn.execute("select id, name, ceiling_void_mm_value as void from space where revision_id = %s and firm_id = %s order by name", (revision_id, user.firm_id)).fetchall()
+        spaces = conn.execute("select id, name, ceiling_void_mm_value as void, confirmed_by is not null as confirmed from space where revision_id = %s and firm_id = %s order by name", (revision_id, user.firm_id)).fetchall()
     ducts = [r for r in runs_of(dsn, user, revision_id) if r["kind"] == "duct" and r["space_id"]]
     rows = []
     for s in spaces:
@@ -205,9 +210,13 @@ def ceiling_void(revision_id: UUID, user: RevUser, repo: Repo, dsn: Dsn) -> dict
         if void is None:
             rows.append({"space_id": str(s["id"]), "space": s["name"], "ceiling_void_mm": None, "status": "NO DATA", "reason": "the space has no ceiling void figure", "deepest_duct": worst["tag"]})
             continue
+        status = "CLASH" if need > void else "CLEAR"
+        if status == "CLEAR" and not s["confirmed"]:
+            status = "NO DATA"                                      # an unconfirmed void figure is not a basis for saying CLEAR
         rows.append({"space_id": str(s["id"]), "space": s["name"], "ceiling_void_mm": void, "deepest_duct": worst["tag"], "duct_depth_mm": section_depth(worst),
                      "insulation_each_face_mm": float(worst["insulation_mm"]), "clearance_mm": clearance, "required_mm": need, "margin_mm": round(void - need, 3),
-                     "status": "CLASH" if need > void else "CLEAR"})
+                     "void_confirmed": bool(s["confirmed"]), "status": status,
+                     **({} if s["confirmed"] else {"reason": "the ceiling void figure is not confirmed at Gate 1"})})
     return {"note": "Warnings only. The deepest single duct is checked; crossings and stacked services are not modelled. A CLASH is a prompt to check, not a finding.",
             "clearance_mm": clearance, "spaces": rows}
 
@@ -255,6 +264,8 @@ def quantities(revision_id: UUID, user: RevUser, repo: Repo, dsn: Dsn) -> dict[s
 
 
 def _safe(v: Any) -> Any:
+    if isinstance(v, str):
+        v = clash.clean(v) or ""
     return "'" + v if isinstance(v, str) and v[:1] in ("=", "+", "-", "@", "\t", "\r") else v
 
 
@@ -307,14 +318,18 @@ async def upload_model(revision_id: UUID, user: RevUser, repo: Repo, dsn: Dsn, d
     data = await file.read(clash.MAX_BYTES + 1)
     if len(data) > clash.MAX_BYTES:
         raise _err(413, "too_large", "a model is at most 100 MiB")
-    if not data.lstrip()[:20].startswith(b"ISO-10303-21"):
+    if not data[:64].lstrip().startswith(b"ISO-10303-21"):
         raise _err(422, "not_ifc", "that is not an IFC (STEP) file")
     digest = hashlib.sha256(data).hexdigest()
+    with psycopg.connect(dsn, row_factory=dict_row) as conn:
+        held = conn.execute("select count(*) as n from clash_model where revision_id = %s and firm_id = %s", (revision_id, user.firm_id)).fetchone()
+    if held is not None and held["n"] >= MAX_MODELS:
+        raise _err(409, "too_many_models", f"at most {MAX_MODELS} models per revision")
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / "model.ifc"
         path.write_bytes(data)
         try:
-            boxes, skipped, problems = await run_in_threadpool(clash.read_boxes, path)
+            boxes, skipped, problems = await run_in_threadpool(clash.read_boxes_isolated, path)
         except clash.ClashIfcError as exc:
             raise _err(422, "unreadable_ifc", str(exc)) from None
     name = (file.filename or "model.ifc")[:200]
@@ -351,7 +366,7 @@ def clashes_of(dsn: str, user: Any, revision_id: UUID) -> dict[str, Any]:
     return {"note": "Warnings only. Boxes are axis-aligned, so a diagonal or bent element can raise a false alarm; ducts need entered coordinates to be checked.",
             "clearance_mm": clearance, "ducts_checked": sum(1 for d in ducts if d["x0"] is not None), "ducts_without_coordinates": sum(1 for d in ducts if d["x0"] is None),
             "models": [{"id": str(m["id"]), "discipline": m["discipline"], "file_name": m["file_name"], "elements": m["element_count"], "skipped": m["skipped"],
-                        "problems": m["problems"]} for m in models], "clashes": found}
+                        "problems": m["problems"]} for m in models], "clashes": found[:MAX_CLASHES], "clashes_total": len(found), "truncated": len(found) > MAX_CLASHES}
 
 
 @router.get("/revisions/{revision_id}/clash")

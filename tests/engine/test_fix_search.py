@@ -99,3 +99,8 @@ def test_the_cross_rule_rerun_withdraws_an_option_that_breaks_another_rule(pack)
     s3 = Subject("ahu-3", [MIN_ID, CAP_ID], values(1.0))                              # the 5 K cap is happy with 2 K: accepted
     r3 = cross_rule_rerun(subject=s3, project=PROJECT, changes={"control_deadband": c(2.0, "K")}, pack=pack, graph=graph, target_rule=MIN_ID)
     assert not r3.withdrawn and not r3.conflicts
+
+
+def test_the_option_id_depends_on_the_starting_value():
+    from mep.engine.fix_search import FixOption
+    assert FixOption("R", "x", 80, 100, "L/s", "number").id != FixOption("R", "x", 140, 100, "L/s", "number").id

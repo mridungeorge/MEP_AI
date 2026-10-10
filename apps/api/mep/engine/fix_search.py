@@ -38,7 +38,7 @@ class FixOption:
 
     @property
     def id(self) -> str:
-        return hashlib.sha256(f"{self.rule_id}|{self.input_name}|{self.to_value!r}".encode()).hexdigest()[:16]
+        return hashlib.sha256(f"{self.rule_id}|{self.input_name}|{self.from_value!r}|{self.to_value!r}".encode()).hexdigest()[:16]
 
     @property
     def label(self) -> str:

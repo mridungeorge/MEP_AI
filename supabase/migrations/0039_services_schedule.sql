@@ -24,11 +24,12 @@ create table duct_run (
   created_by uuid not null,
   created_at timestamptz not null default now(),
   constraint duct_run_revision_fk foreign key (revision_id, firm_id) references revision (id, firm_id),
-  constraint duct_run_space_fk foreign key (space_id) references space (id),
+  constraint duct_run_space_fk foreign key (space_id) references space (id) on delete set null,
   constraint duct_run_user_fk foreign key (created_by, firm_id) references app_user (id, firm_id),
   check (kind <> 'duct' or (shape is not null and length_m is not null and ((shape = 'rect' and width_mm is not null and depth_mm is not null)
                                                                          or (shape = 'round' and diameter_mm is not null)))),
   check (kind <> 'fitting' or fitting_type is not null),
+  check (x0 is null or (abs(x0) < 1e9 and abs(y0) < 1e9 and abs(z0) < 1e9 and abs(x1) < 1e9 and abs(y1) < 1e9 and abs(z1) < 1e9)),
   check ((x0 is null) = (x1 is null) and (y0 is null) = (y1 is null) and (z0 is null) = (z1 is null) and (x0 is null) = (y0 is null) and (y0 is null) = (z0 is null))
 );
 create index duct_run_revision on duct_run (revision_id, kind, tag);
@@ -75,6 +76,7 @@ create policy clash_element_select on clash_element for select using (firm_id = 
 revoke all on clash_model, clash_element from anon;
 revoke insert, update, delete, truncate, trigger, references on clash_model, clash_element from authenticated;
 create trigger clash_model_frozen before insert on clash_model for each row execute function reject_if_revision_frozen();
+create trigger clash_element_frozen before insert on clash_element for each row execute function reject_if_revision_frozen();
 
 -- the firm administrator sets the clearance (mm) kept around ducts in the ceiling void and in clash-lite
 drop function admin_set_settings(text, text, int, numeric);

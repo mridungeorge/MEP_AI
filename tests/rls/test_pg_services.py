@@ -28,7 +28,9 @@ def setup(admin, client):
         if void is not None:
             body["ceiling_void_mm"] = void
         assert client.post(f"{h.base(f)}/gate1/spaces", json=body, headers=d).status_code == 200
-    spaces = {s["name"]: s["id"] for s in client.get(f"{h.base(f)}/gate1", headers=d).json()["spaces"]}
+    view = client.get(f"{h.base(f)}/gate1", headers=d).json()
+    spaces = {s["name"]: s["id"] for s in view["spaces"]}
+    assert h.confirm(client, f, [{"kind": "space", "id": s["id"], "etag": s["etag"]} for s in view["spaces"] if s["name"] == "Office"]).status_code == 200
     return f, d, spaces
 
 
@@ -107,3 +109,14 @@ def test_a_frozen_revision_takes_no_change(admin, client):
     f, d, sp = setup(admin, client)
     admin.execute("update revision set frozen_at = now(), status = 'frozen' where id = %s", (f["revision"],))
     assert client.post(f"{h.base(f)}/services", json=duct("D1", sp["Office"]), headers=d).status_code == 409
+
+
+def test_an_unconfirmed_void_is_never_called_clear_and_control_characters_are_refused(admin, client):
+    f, d, sp = setup(admin, client)
+    url = f"{h.base(f)}/services"
+    client.post(url, json=duct("D1", sp["Store"]), headers=d)
+    admin.execute("update space set ceiling_void_mm_value = 900 where id = %s", (sp["Store"],))
+    row = next(r for r in client.get(f"{h.base(f)}/ceiling-void", headers=d).json()["spaces"] if r["space"] == "Store")
+    assert row["status"] == "NO DATA" and row["void_confirmed"] is False
+    assert client.post(url, json=duct("bad\x01tag", sp["Office"]), headers=d).status_code == 422
+    assert client.post(url, content='{"kind":"duct","tag":"N","shape":"round","diameter":200,"length":1,"start":[NaN,0,0],"end":[1,0,0]}', headers=d | {"Content-Type": "application/json"}).status_code == 422

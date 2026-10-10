@@ -26,6 +26,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from mep.api.fixes import options_for
 from mep.api.revisions import DESIGNER_ROLES, Graph, Pack, Repo, _err
 from mep.api.revisions import User as RevUser
+from mep.clash import clean as clash_clean
 from mep.engine import units
 
 router = APIRouter()
@@ -58,7 +59,11 @@ def _view(dsn: str, user: Any, revision_id: UUID) -> tuple[list[dict[str, Any]],
 
 
 def _likely(repo: Any, pack: Any, graph: Any, revision_id: UUID, firm_id: UUID, subject: str, rule: str) -> bool:
-    _, options, _ = options_for(repo, pack, graph, revision_id, firm_id, subject, rule)
+    """True only when the rule FAILS on today's inputs and no single engineer-decided change makes it pass without another rule still failing or getting worse.
+    A stored FAIL that the live inputs no longer reproduce is stale (re-run), not a pathway finding."""
+    result, options, _ = options_for(repo, pack, graph, revision_id, firm_id, subject, rule)
+    if result.get("live_outcome") != "FAIL":
+        return False
     return not any(o["accepted"] for o in options)
 
 
@@ -199,6 +204,8 @@ def package_json(revision_id: UUID, user: RevUser, repo: Repo, pack: Pack, graph
 
 def safe_cell(v: Any) -> Any:
     """A spreadsheet cell: text that starts like a formula is stored as text, so opening the file never runs anything."""
+    if isinstance(v, str):
+        v = clash_clean(v) or ""
     if isinstance(v, str) and v[:1] in ("=", "+", "-", "@", "\t", "\r"):
         return "'" + v
     if isinstance(v, dict | list):

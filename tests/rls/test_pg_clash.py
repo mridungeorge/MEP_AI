@@ -65,11 +65,14 @@ def test_upload_detect_and_export(admin, client):
     ok = client.post(f"{url}/clash/models", headers=d, data={"discipline": "fire"}, files={"file": ("fire.ifc", data)})
     assert ok.status_code == 200 and ok.json()["elements"] == len(boxes)
     assert client.post(f"{url}/clash/models", headers=d, data={"discipline": "fire"}, files={"file": ("fire.ifc", data)}).status_code == 409
-    duct = {"kind": "duct", "tag": "D1", "shape": "rect", "width": 400, "depth": 300, "length": 2, "start_mm": centre, "end_mm": [centre[0] + 1000, centre[1], centre[2]]}
-    far = {**duct, "tag": "D2", "start_mm": [centre[0] + 9e6, 0, 0], "end_mm": [centre[0] + 9e6 + 1000, 0, 0]}
-    bare = {k: v for k, v in duct.items() if k not in ("start_mm", "end_mm")} | {"tag": "D3"}
+    duct = {"kind": "duct", "tag": "D1", "shape": "rect", "width": 400, "depth": 300, "length": 2, "start": centre, "end": [centre[0] + 1000, centre[1], centre[2]]}
+    far = {**duct, "tag": "D2", "start": [centre[0] + 9e6, 0, 0], "end": [centre[0] + 9e6 + 1000, 0, 0]}
+    bare = {k: v for k, v in duct.items() if k not in ("start", "end")} | {"tag": "D3"}
     for body in (duct, far, bare):
         assert client.post(f"{url}/services", headers=d, json=body).status_code == 200
+    nan = client.post(f"{url}/services", headers=d, content='{"kind":"duct","tag":"N","shape":"round","diameter":200,"length":1,"start":[NaN,0,0],"end":[1,0,0]}',
+                      ).status_code
+    assert nan in (401, 422)                                                                      # not finite: refused before it can hide a clash
     view = client.get(f"{url}/clash", headers=d).json()
     assert view["ducts_checked"] == 2 and view["ducts_without_coordinates"] == 1
     assert {c["duct_tag"] for c in view["clashes"]} == {"D1"} and all(c["level"] == "WARNING" for c in view["clashes"])

@@ -40,5 +40,6 @@ $$ begin
             jsonb_build_object('scratch', new.id, 'subject', new.subject_id, 'rule', new.rule_id, 'option', new.option, 'accepted', new.accepted, 'by', new.created_by));
   return new;
 end $$;
+create trigger fix_scratch_frozen before insert on fix_scratch for each row execute function reject_if_revision_frozen();
 create trigger fix_scratch_audit_ins after insert on fix_scratch for each row execute function fix_scratch_audit();
 create trigger fix_scratch_audit_upd after update on fix_scratch for each row execute function fix_scratch_audit();

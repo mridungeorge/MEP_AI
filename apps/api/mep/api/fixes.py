@@ -17,9 +17,10 @@ from psycopg.rows import dict_row
 from mep.api.gate1 import _project
 from mep.api.revisions import DESIGNER_ROLES, Graph, Pack, Repo, _err, _subjects
 from mep.api.revisions import User as RevUser
-from mep.engine.cross_rule import cross_rule_rerun
+from mep.engine.cross_rule import _outcomes, cross_rule_rerun
 from mep.engine.fix_search import FixOption, candidate_fixes
-from mep.engine.model import InputValue, Provenance
+from mep.engine.model import InputValue, Outcome, Provenance
+from mep.engine.rule_eval import evaluate_rule
 from mep.engine.runner import _inputs_for
 
 router = APIRouter()
@@ -47,14 +48,19 @@ def options_for(repo: Any, pack: Any, graph: Any, revision_id: UUID, firm_id: UU
     raw: list[FixOption] = []
     if result["outcome"] == "FAIL":
         project = _project(data["project"], revision_id, firm_id)
+        live = evaluate_rule(rule, _inputs_for(subject, project, rule)).outcome
+        result = {**result, "live_outcome": live.value}
         raw = candidate_fixes(rule, _inputs_for(subject, project, rule))
         for o in raw:
             change = {o.input_name: InputValue(o.to_value, o.unit, Provenance.ENGINEER_CONFIRMED)}
             cross = cross_rule_rerun(subject=subject, project=project, changes=change, pack=pack, graph=graph, target_rule=rule_id)
+            after = _outcomes(subject, project, pack, sorted({*cross.dependents, rule_id}), change)
+            still_failing = [r for r, oc in after.items() if oc == Outcome.FAIL]
             out.append({"id": o.id, "label": o.label, "kind": o.kind, "input": o.input_name, "from": o.from_value, "to": o.to_value, "unit": o.unit,
-                        "target_after": "PASS", "dependent_rules": cross.dependents, "accepted": not cross.withdrawn,
+                        "target_after": "PASS", "dependent_rules": cross.dependents, "accepted": not cross.withdrawn and not still_failing,
+                        "still_failing": still_failing,
                         "moves": [{"rule_id": m.rule_id, "before": m.before.value, "after": m.after.value} for m in cross.moves],
-                        "conflicts": [c.describe() for c in cross.conflicts]})
+                        "conflicts": [c.describe() for c in cross.conflicts] + [f"{r} would still FAIL" for r in still_failing]})
     return result, out, raw
 
 
@@ -121,7 +127,12 @@ def apply_scratch(revision_id: UUID, scratch_id: UUID, user: RevUser, repo: Repo
     row = next((i for i in (view or {}).get("inputs", []) if i.get("system") == sc["subject_id"] and i.get("name") == chosen["input"]), None)
     if row is None:
         raise _err(409, "not_editable", "that input is not a hand-editable row of this system")
+    try:                                                       # claim the scratch change first: a second concurrent apply loses here
+        claimed = _write(dsn, "update fix_scratch set status = 'applied', applied_at = now() where id = %s and status = 'proposed' returning id", (scratch_id,))
+    except psycopg.errors.Error:
+        claimed = None
+    if claimed is None:
+        raise _err(409, "already_applied", "this scratch change was already applied")
     repo.upsert_input(revision_id, user.firm_id, row["id"], {"name": chosen["input"], "system": sc["subject_id"], "value": chosen["to"], "unit": chosen["unit"]})
-    _write(dsn, "update fix_scratch set status = 'applied', applied_at = now() where id = %s returning id", (scratch_id,))
     return {"applied": True, "needs": "Confirm the changed value at Gate 1, re-run the rules, and take the revision through the gates again.",
             "input": chosen["input"], "value": chosen["to"]}
