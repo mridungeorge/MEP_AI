@@ -22,6 +22,7 @@ function Header({ email }: { email: string | undefined }) {
       <a href="/" style={{ fontWeight: 600, textDecoration: "none", color: "inherit" }}>MEP Co-pilot</a>
       <a href="/projects">Projects</a>
       <a href="/notifications">Notifications</a>
+      <a href="/standards">Standards</a>
       {me?.is_admin && <a href="/admin">Admin</a>}
       {me?.is_admin && <a href="/billing">Billing</a>}
       {me?.platform_admin && <a href="/platform">Registrations</a>}

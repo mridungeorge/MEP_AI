@@ -95,3 +95,13 @@ def test_the_endpoint_follows_the_signed_package(admin, client, pack):
     admin.execute("update building_part set building_class = '5' where project_id = %s", (f["project"],))
     admin.execute("set session_replication_role = origin")
     assert client.get(f"/revisions/{rev}/nsw-declaration", headers=de).json()["detail"]["code"] == "class_not_covered"
+
+
+def test_standards_slots_through_the_api_say_licence_required(admin, client):
+    f = h.seed(admin)
+    d = h.auth(f["designer"])
+    got = client.get("/standards", headers=d).json()["slots"]
+    assert {s["standard"] for s in got} == {"AS 1668.2", "AS/NZS 3000", "AS/NZS 3008", "AS 4254"} and all(s["state"] == "LICENCE_REQUIRED" and s["rules_loaded"] == 0 for s in got)
+    per = client.get(f"/revisions/{f['revision']}/standards", headers=d).json()["slots"]
+    assert all(s["results"] == [] and s["evaluated"] is False for s in per)
+    assert client.get(f"/revisions/{h.seed(admin)['revision']}/standards", headers=d).status_code == 404

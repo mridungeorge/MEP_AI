@@ -432,3 +432,6 @@ export interface CommissioningImport {
   batch_id: string; tolerance_pct: number; counts: Record<string, number>; note: string;
   readings: { terminal: string; system: string; design_ls: number | null; measured_ls: number | null; variance_pct: number | null; flag: string }[];
 }
+
+/** GET /standards */
+export interface StandardSlot { id: string; standard: string; title: string; discipline: string; licence_held: boolean; rules_loaded: number; state: "LICENCE_REQUIRED" | "NO_RULES" | "READY"; message: string }

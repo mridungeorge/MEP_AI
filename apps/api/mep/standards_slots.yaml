@@ -1,0 +1,29 @@
+# Slots for licensed standards. A slot is a PLACE where a rule pack can go later; it is not a rule pack.
+# No rule from any of these standards is encoded (CLAUDE.md rules 5 and 6): clause references and thresholds come only from a licensed copy, read by an engineer.
+# `licence_held` is changed by a person only, after the firm holds the licensed standard AND an engineer has agreed to encode from it. The guard test
+# (tests/rules/test_standards_slots.py) fails if any rule file sits in a slot whose licence_held is false.
+slots:
+  - id: as1668-2
+    standard: "AS 1668.2"
+    title: "The use of ventilation and airconditioning in buildings: mechanical ventilation in buildings"
+    discipline: mechanical
+    pack_dir: licensed/as1668-2
+    licence_held: false
+  - id: as-nzs-3000
+    standard: "AS/NZS 3000"
+    title: "Electrical installations (Australian/New Zealand Wiring Rules)"
+    discipline: electrical
+    pack_dir: licensed/as-nzs-3000
+    licence_held: false
+  - id: as-nzs-3008
+    standard: "AS/NZS 3008"
+    title: "Electrical installations: selection of cables"
+    discipline: electrical
+    pack_dir: licensed/as-nzs-3008
+    licence_held: false
+  - id: as4254
+    standard: "AS 4254"
+    title: "Ductwork for air-handling systems in buildings"
+    discipline: mechanical
+    pack_dir: licensed/as4254
+    licence_held: false
