@@ -4,7 +4,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 if ! command -v pnpm >/dev/null 2>&1; then echo "ci.sh: pnpm required"; exit 1; fi
 [ -d node_modules ] || pnpm install --frozen-lockfile
-if command -v uv >/dev/null 2>&1 && uv sync --group dev --locked >/dev/null 2>&1 && uv run python -c "" >/dev/null 2>&1; then
+if command -v uv >/dev/null 2>&1 && uv sync --group dev --extra agents --locked >/dev/null 2>&1 && uv run python -c "" >/dev/null 2>&1; then
   run() { uv run "$@"; }
 else
   echo "ci.sh: WARNING uv cannot launch its venv here; using the system interpreter (not pinned to 3.12)" >&2
