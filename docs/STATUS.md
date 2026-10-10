@@ -5,13 +5,42 @@ local devcontainer gate is the reference (tag `sprint-2-gate`). GitHub CI has ne
 Updated: 2026-10-09 (recovery after a device change; see "Recovery 2026-10-09")
 
 ## Resume here (updated 2026-10-12)
-Done: 2.5, 3, 4a, 4a.1, 4b, **Phase 5 pilot hardening** (`sprint-5-gate`). Next: the user's by-hand staging checklist was given; nothing else is queued. A new phase needs a new prompt.
+Done and tagged: 2.5, 3, 4a, 4a.1, 4b, 5. **Phases 6-9 are the standing order** (user prompt: run 6, 7, 8, 9 in order without stopping, then write
+`docs/review-pack.md` and STOP; do not encode AS 1668.2, AS/NZS 3000, 3008 or AS 4254).
+Phase 6 (product shell): items 1-8 built, GitHub CI green on `1fafd3a`; adversarial review round 1 in progress; then `sprint-6-gate`.
+**Local environment is fragile:** the Windows host has ~2 GB free RAM and ~7 GB free disk (Docker holds ~45 GB: 8 GB of unused images, 7.7 GB build cache; WSL has
+no memory cap). Claude Code stopped one long test run for low memory and said not to re-launch it unasked. Until the user frees space (suggested: prune unused
+images + a `.wslconfig` memory cap), run only SMALL local test batches and use GitHub CI (it runs the whole suite and e2e) as the full check. A clean-clone
+`scripts/ci.sh` was NOT run locally for Phase 6 for that reason: CI mirrors it.
 Notes: the local Supabase signs tokens with ES256 (JWKS). Mail for magic links goes to Mailpit (`http://127.0.0.1:54324`). Run everything in
 the devcontainer; `~/ws` is a synced work copy (never `uv sync` there); clean gates run from `git clone` copies (`~/gate3`). On the Windows
 host put `AppData/Local/Python/bin` (under the user profile) first on PATH (the WindowsApps `python` stub fails). `.env.example` files cannot
 be written here (permission rule): the templates are `deploy/env.api.example` and `deploy/env.web.example`. DO NOT run `docker build` in the
 devcontainer: it hung Docker Desktop (restarted once); `deploy/api/Dockerfile` is unverified by a build (read-reviewed; uv image 0.12.24 matches the lock).
 Existing open revisions have results without an input fingerprint (`inputs_hash` NULL): re-run once before freezing.
+
+## Phase 6 product shell (2026-10-12)
+- 6.1 Firm admin (0029, `api/admin.py`, `/admin`): `app_user.is_admin/active/email`; invitations joined only by a CONFIRMED matching address
+  (`accept_invitation`); roles, admin flag, deactivation (deactivated = nobody: `current_firm_id()` returns null, API 403 `deactivated`); the last admin cannot go;
+  firm settings (name, signer independence, spot-check sample size, near-miss default (stored; the engine does not use it yet)); title block (DXF) and layer
+  standard (JSON) uploads (`firm_template`, newest of each kind is the active one; used by the Phase 8 drafting skills).
+- 6.2 Registration (0030, `api/platform.py`, `/platform`): the firm admin SUBMITS number + register (NER/RPEQ/STATE); a platform administrator (`platform_admin`, set in
+  the database) VERIFIES with a note; cannot decide their own or one they submitted; ledgered; `scripts/admin_users.py register-approver` is break-glass (needs
+  `--reason`; the ledger says `registration_path: break_glass`; any other direct change reads `direct`).
+- 6.3 Projects dashboard (0031, `api/projects.py`, `/projects`, `/projects/{id}`): list + filters (state, edition, status, search), revision history, who signed what.
+  `POST /projects` creates a project (billing-gated, 0034).
+- 6.4 E-mail (0032, `api/notifications.py`): the database writes an outbox (review requested -> checkers, ready for Gate 3 -> approvers, signed, changes requested,
+  share link opened); per-person preferences; Resend sender in a background thread; e-mails carry a link, never results. Needs `RESEND_API_KEY`.
+- 6.5 Observability (`observability.py`, `lib/sentry.ts`): Sentry (API, dispatcher, web) with PII scrubbing, JSON logs with request ids, `/healthz` + `/readyz`,
+  uptime runbook. Needs `SENTRY_DSN` (optional).
+- 6.6 Data safety (0033, `scripts/dataops.py`, `docs/runbooks/backup-restore.md`): backup, restore into a scratch DB with row/ledger/file comparison,
+  per-firm export, retire (erases personal data + drawings, keeps the signed record and ledger), purge after >= 7 years. Found and fixed: purge left the
+  append-only guards switched off.
+- 6.7 Billing (0034, `api/billing.py`, `/billing`): Stripe TEST mode only (`sk_test_` enforced), plans in `apps/api/billing/plans.json`, trial, signed webhook,
+  gate on NEW projects only (signed work never locked). Needs `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, price ids.
+- 6.8 `/terms`, `/privacy`: placeholders marked LEGAL REVIEW REQUIRED (no legal text drafted).
+- Not done / limits: the near-miss firm default is stored but not applied by the engine; no email-verified self-signup (people join by invitation only); the
+  platform-admin console is minimal; billing has no invoices UI; Sentry/Resend/Stripe paths are tested with fakes only (no live keys exist).
 
 ## Phase 5 pilot hardening (2026-10-12): no new features
 - (1) Evidence spaces: "Add as a space" from a drawing reading is `evidence_add_space` (0022): the space stays `extracted`, links to the extraction row, the
