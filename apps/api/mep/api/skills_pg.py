@@ -15,6 +15,7 @@ import psycopg
 from psycopg.rows import dict_row
 
 from mep.api.schedule import CurrentUser
+from mep.skills_runner.firm_sheet import FirmTemplates, apply_to_result
 from mep.skills_runner.jobs import enqueue_and_wait
 from mep.skills_runner.runner import SkillRunResult, SkillUnavailable, run_skill
 
@@ -52,8 +53,26 @@ class PgSkills:
         if mode not in ("local", "queue"):
             raise SkillUnavailable(f"MEP_SKILL_EXECUTOR={mode!r} is not understood (use queue)")
         if mode == "queue":
-            return enqueue_and_wait(self._dsn, firm_id=self._user.firm_id, revision_id=revision_id, user_id=self._user.user_id, skill=skill, spec=spec)
-        return run_skill(skill, spec, attachments=self._attachments(revision_id, spec))
+            result = enqueue_and_wait(self._dsn, firm_id=self._user.firm_id, revision_id=revision_id, user_id=self._user.user_id, skill=skill, spec=spec)
+        else:
+            result = run_skill(skill, spec, attachments=self._attachments(revision_id, spec))
+        return apply_to_result(result, skill, spec, self._firm_templates()) if result.released else result
+
+    def _firm_templates(self) -> FirmTemplates | None:
+        """The firm's latest title block and layer standard (uploaded by an administrator); None when it has neither."""
+        with self._service() as conn:
+            rows = conn.execute("select distinct on (kind) kind, name, content from firm_template where firm_id = %s order by kind, created_at desc",
+                                (self._user.firm_id,)).fetchall()
+        out = FirmTemplates()
+        for r in rows:
+            if r["kind"] == "title_block":
+                out.title_block, out.title_block_name = bytes(r["content"]), r["name"]
+            else:
+                try:
+                    out.layer_standard, out.layer_standard_name = json.loads(bytes(r["content"]).decode("utf-8")), r["name"]
+                except ValueError:
+                    continue
+        return out if out.any else None
 
     def _attachments(self, revision_id: UUID, spec: dict[str, Any]) -> dict[str, bytes] | None:
         """The architect's model for a skill that is given one (ifc-mep): looked up by the checksum in the card, within this revision and firm."""

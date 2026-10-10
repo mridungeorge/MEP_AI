@@ -219,8 +219,12 @@ def validate_layer_standard(data: bytes) -> str:
             assert LAYER_NAME.match(name) and isinstance(spec, dict)
             assert isinstance(spec.get("color"), int) and not isinstance(spec.get("color"), bool) and 1 <= spec["color"] <= 255
             assert spec.get("linetype", "CONTINUOUS") in ("CONTINUOUS", "DASHED", "DASHDOT", "CENTER", "HIDDEN", "PHANTOM", "DOT")
+        mapping = doc.get("map", {})
+        assert isinstance(mapping, dict) and len(mapping) <= 200
+        assert all(isinstance(k, str) and LAYER_NAME.match(k) and isinstance(v, str) and LAYER_NAME.match(v) for k, v in mapping.items())
+        assert not (set(mapping) & set(mapping.values()))
     except (ValueError, KeyError, TypeError, AssertionError):
-        raise _err(422, "invalid_template", 'a layer standard is JSON like {"layers": {"A-DUCT": {"color": 3, "linetype": "CONTINUOUS"}}}') from None
+        raise _err(422, "invalid_template", 'a layer standard is JSON like {"layers": {"A-DUCT": {"color": 3, "linetype": "CONTINUOUS"}}, "map": {"M-DUCT-RECT": "A-DUCT"}} ("map" optional: skill layer to your layer)') from None
     return "application/json"
 
 
