@@ -17,7 +17,7 @@ import tempfile
 import threading
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 from mep.skills_runner.registry import MEDIA_TYPES, availability, get_skill
 
@@ -63,6 +63,25 @@ def _env(cpu: int, memory: int) -> dict[str, str]:
             "MEP_WORKER_FSIZE": str(FILE_BYTES)}
 
 
+class Executor(Protocol):
+    """Where a build and its independent re-check run. Both get the same layout: `work/in/spec.json` (read-only to the job) and `work/out/`
+    (the only place a build may write). Each call is a fresh, separate process or container. None means it ran out of time."""
+
+    def build(self, skill: str, work: Path, *, wall: int, cpu: int, memory: int) -> subprocess.CompletedProcess[str] | None: ...
+    def validate(self, skill: str, work: Path, *, wall: int, cpu: int, memory: int) -> subprocess.CompletedProcess[str] | None: ...
+
+
+class LocalExecutor:
+    """Child processes of this server with CPU, memory and file-size limits: no isolation of the network or the filesystem. For development,
+    tests and a server where no container runtime exists."""
+
+    def build(self, skill: str, work: Path, *, wall: int, cpu: int, memory: int) -> subprocess.CompletedProcess[str] | None:
+        return _child(["build", skill, str(work / "in" / "spec.json"), str(work / "out")], cwd=work, wall=wall, cpu=cpu, memory=memory)
+
+    def validate(self, skill: str, work: Path, *, wall: int, cpu: int, memory: int) -> subprocess.CompletedProcess[str] | None:
+        return _child(["validate", skill, str(work / "out"), str(work / "in" / "spec.json")], cwd=work, wall=wall, cpu=cpu, memory=memory)
+
+
 def _child(args: list[str], *, cwd: Path, wall: int, cpu: int, memory: int) -> subprocess.CompletedProcess[str] | None:
     with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
         try:
@@ -77,11 +96,13 @@ def _child(args: list[str], *, cwd: Path, wall: int, cpu: int, memory: int) -> s
 
 
 def run_skill(name: str, spec: dict[str, Any], *, wall_seconds: int = WALL_SECONDS, cpu_seconds: int = CPU_SECONDS,
-              memory_bytes: int = MEMORY_BYTES) -> SkillRunResult:
+              memory_bytes: int = MEMORY_BYTES, executor: Executor | None = None) -> SkillRunResult:
     info = get_skill(name)                                    # raises UnknownSkill for anything not enabled
-    ok, why = availability(name)
-    if not ok:
-        raise SkillUnavailable(f"{name} {why}")
+    executor = executor or LocalExecutor()
+    if isinstance(executor, LocalExecutor):                   # a container executor brings its own packages
+        ok, why = availability(name)
+        if not ok:
+            raise SkillUnavailable(f"{name} {why}")
     text = json.dumps(spec, sort_keys=True)
     if len(text.encode()) > MAX_SPEC_BYTES:
         return SkillRunResult("spec_rejected", "the spec card is larger than 1 MB")
@@ -90,9 +111,14 @@ def run_skill(name: str, spec: dict[str, Any], *, wall_seconds: int = WALL_SECON
     try:
         with tempfile.TemporaryDirectory() as td:
             work = Path(td)
-            spec_path, out = work / "spec.json", work / "out"
-            spec_path.write_text(text, encoding="utf-8")
-            built = _child(["build", info.name, str(spec_path), str(out)], cwd=work, wall=wall_seconds, cpu=cpu_seconds, memory=memory_bytes)
+            (work / "in").mkdir()
+            (work / "out").mkdir()
+            os.chmod(work, 0o755)
+            os.chmod(work / "in", 0o755)
+            os.chmod(work / "out", 0o777)                    # the job may run as another user and must be able to write here, and only here
+            (work / "in" / "spec.json").write_text(text, encoding="utf-8")
+            os.chmod(work / "in" / "spec.json", 0o644)
+            built = executor.build(info.name, work, wall=wall_seconds, cpu=cpu_seconds, memory=memory_bytes)
             if built is None:
                 return SkillRunResult("timeout", f"the build took longer than {wall_seconds} s and was stopped")
             message = (built.stderr.strip().splitlines() or [""])[-1][:300] if built.stderr else ""
@@ -104,12 +130,13 @@ def run_skill(name: str, spec: dict[str, Any], *, wall_seconds: int = WALL_SECON
                                       validation={"passed": False, "failed": failed})
             if built.returncode != 0:
                 return SkillRunResult("build_failed", message or "the build failed")
-            return _release(info.name, out, spec_path, wall_seconds, cpu_seconds, memory_bytes)
+            return _release(info.name, work, executor, wall_seconds, cpu_seconds, memory_bytes)
     finally:
         _SLOTS.release()
 
 
-def _release(skill: str, out: Path, spec_path: Path, wall: int, cpu: int, memory: int) -> SkillRunResult:
+def _release(skill: str, work: Path, executor: Executor, wall: int, cpu: int, memory: int) -> SkillRunResult:
+    out = work / "out"
     try:
         manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
         listed = manifest["files"]
@@ -138,7 +165,7 @@ def _release(skill: str, out: Path, spec_path: Path, wall: int, cpu: int, memory
     manifest_bytes = (out / "manifest.json").read_bytes()
     files.append(RunFile("manifest.json", "manifest", "application/json", len(manifest_bytes), hashlib.sha256(manifest_bytes).hexdigest(),
                          manifest_bytes))
-    checked = _child(["validate", skill, str(out), str(spec_path)], cwd=out.parent, wall=wall, cpu=cpu, memory=memory)
+    checked = executor.validate(skill, work, wall=wall, cpu=cpu, memory=memory)
     if checked is None or checked.returncode != 0:
         return SkillRunResult("revalidation_failed", "the independent re-check did not finish", manifest=manifest)
     try:

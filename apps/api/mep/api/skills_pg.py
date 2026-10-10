@@ -5,6 +5,7 @@ decides what is listed and the artifact_blob policy releases a file only when it
 """
 import hashlib
 import json
+import os
 from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any
@@ -14,7 +15,8 @@ import psycopg
 from psycopg.rows import dict_row
 
 from mep.api.schedule import CurrentUser
-from mep.skills_runner.runner import SkillRunResult
+from mep.skills_runner.jobs import enqueue_and_wait
+from mep.skills_runner.runner import SkillRunResult, run_skill
 
 
 class SkillsRefused(Exception):
@@ -40,6 +42,13 @@ class PgSkills:
 
     def _service(self) -> psycopg.Connection[dict[str, Any]]:
         return psycopg.connect(self._dsn, autocommit=False, row_factory=dict_row)
+
+    # ---- running ------------------------------------------------------------------------------------------------------
+    def execute(self, revision_id: UUID, skill: str, spec: dict[str, Any]) -> SkillRunResult:
+        """MEP_SKILL_EXECUTOR=queue: the build runs in the separate drafting worker (a job in the queue). Otherwise in a child process here."""
+        if os.environ.get("MEP_SKILL_EXECUTOR") == "queue":
+            return enqueue_and_wait(self._dsn, firm_id=self._user.firm_id, revision_id=revision_id, user_id=self._user.user_id, skill=skill, spec=spec)
+        return run_skill(skill, spec)
 
     # ---- confirmed card versions ---------------------------------------------------------------------------------------
     def confirm_card(self, revision_id: UUID, skill: str, digest: str, note_id: UUID | None) -> None:

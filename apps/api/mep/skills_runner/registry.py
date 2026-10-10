@@ -5,6 +5,7 @@ Only the names listed in ENABLED run: a path or name coming from a request is lo
 """
 import importlib.util
 import json
+import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -53,5 +54,7 @@ def list_skills() -> list[SkillInfo]:
 
 def availability(name: str) -> tuple[bool, str]:
     """(True, '') when the Python packages the skill needs are installed here; otherwise why not."""
+    if os.environ.get("MEP_SKILL_EXECUTOR") == "queue":          # the packages live in the worker image, not here
+        return True, ""
     missing = [m for m in REQUIRES.get(name, ()) if importlib.util.find_spec(m) is None]
     return (not missing, "" if not missing else "not installed on this server: " + ", ".join(missing))

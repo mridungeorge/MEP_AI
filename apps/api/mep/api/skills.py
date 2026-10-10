@@ -18,7 +18,7 @@ from mep.api.skills_pg import SkillsRefused
 from mep.api.uploads import UploadRefused, UploadService
 from mep.skills_runner import form as skill_form
 from mep.skills_runner.registry import UnknownSkill, availability, get_skill, list_skills
-from mep.skills_runner.runner import SkillRunResult, SkillUnavailable, run_skill
+from mep.skills_runner.runner import SkillRunResult, SkillUnavailable
 from mep.skills_runner.shortcut import missing_fields, parse_shortcut
 
 router = APIRouter()
@@ -29,6 +29,7 @@ class SkillsService(Protocol):
     def firm_defaults(self, skill: str) -> dict[str, Any]: ...
     def set_firm_defaults(self, skill: str, defaults: dict[str, Any]) -> None: ...
     def revision_frozen(self, revision_id: UUID) -> bool | None: ...
+    def execute(self, revision_id: UUID, skill: str, spec: dict[str, Any]) -> SkillRunResult: ...
     def confirm_card(self, revision_id: UUID, skill: str, digest: str, note_id: UUID | None) -> None: ...
     def card_confirmed(self, revision_id: UUID, skill: str, digest: str) -> bool: ...
     def record(self, revision_id: UUID, skill: str, spec: dict[str, Any], result: SkillRunResult, via: str = "user") -> dict[str, Any]: ...
@@ -173,7 +174,7 @@ def perform_run(svc: SkillsService, user: CurrentUser, revision_id: UUID, name: 
     if expected_digest is not None and card_digest(spec) != expected_digest:
         raise SkillsRefused(409, "card_changed", "the card (or the firm defaults) changed since it was confirmed: confirm the new version")
     try:
-        result = run_skill(name, spec)
+        result = svc.execute(revision_id, name, spec)
     except SkillUnavailable as exc:
         raise SkillsRefused(503, "skill_unavailable", str(exc)) from None
     return result, svc.record(revision_id, name, spec, result, via), filled
