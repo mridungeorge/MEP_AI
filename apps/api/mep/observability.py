@@ -12,7 +12,7 @@ import time
 import uuid
 from typing import Any
 
-SENSITIVE_KEYS = re.compile(r"(authorization|cookie|token|secret|password|passwd|api[-_]?key|apikey|dsn|email|jwt|bearer|set-cookie|x-api-key|registration)", re.I)
+SENSITIVE_KEYS = re.compile(r"(authorization|cookie|token|secret|password|passwd|api[-_]?key|apikey|dsn|email|jwt|bearer|set-cookie|x-api-key|registration)", re.IGNORECASE)
 EMAIL = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
 LONG_SECRET = re.compile(r"\b(?:eyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]*|[A-Fa-f0-9]{40,}|sk_[A-Za-z0-9_]{10,}|re_[A-Za-z0-9_]{10,}|whsec_[A-Za-z0-9_]{10,})\b")
 REDACTED = "[redacted]"
