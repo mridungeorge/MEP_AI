@@ -8,6 +8,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="en">
       <body style={{ fontFamily: "system-ui, sans-serif", margin: 0, padding: 16 }}>
         <Shell>{children}</Shell>
+        <footer style={{ marginTop: 32, fontSize: 13 }}><a href="/terms">Terms of use</a> | <a href="/privacy">Privacy</a></footer>
       </body>
     </html>
   );

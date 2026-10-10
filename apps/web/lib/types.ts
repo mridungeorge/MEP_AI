@@ -375,3 +375,12 @@ export interface HistoryRevision {
 export interface ProjectHistory { project: { id: string; address: string; state: string; ncc_edition: string; climate_zone: number | null }; revisions: HistoryRevision[] }
 
 export interface NotificationPrefs { kinds: Record<"review_requested" | "changes_requested" | "signed" | "share_link_opened", boolean> }
+
+/** GET /billing (Stripe TEST mode) */
+export interface BillingOverview {
+  test_mode: boolean; available: boolean; currency: string;
+  plans: { id: string; name: string; seat_cents: number; project_cents: number; max_projects: number | null }[];
+  subscription: { status: "trialing" | "active" | "past_due" | "canceled"; plan_id: string; seats: number; max_projects: number | null; trial_ends_at: string; current_period_end: string | null; has_customer: boolean } | null;
+  projects: number; active_seats: number;
+}
+export interface NewProject { address: string; state: string; ncc_edition: string; climate_zone?: number; approval_date?: string }

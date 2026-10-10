@@ -1,0 +1,11 @@
+{
+  "_note": "Plans are configuration, not code. Prices are in AUD cents and are TEST-MODE placeholders: create matching Prices in the Stripe TEST dashboard and put their ids in the environment (price_env_*). Nothing here is a commercial decision.",
+  "currency": "aud",
+  "trial_days": 14,
+  "plans": [
+    {"id": "starter", "name": "Starter", "seat_cents": 9900, "project_cents": 0, "max_projects": 5,
+     "price_env_seat": "STRIPE_PRICE_STARTER_SEAT", "price_env_project": null},
+    {"id": "studio", "name": "Studio", "seat_cents": 14900, "project_cents": 4900, "max_projects": null,
+     "price_env_seat": "STRIPE_PRICE_STUDIO_SEAT", "price_env_project": "STRIPE_PRICE_STUDIO_PROJECT"}
+  ]
+}

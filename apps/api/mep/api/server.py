@@ -21,6 +21,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from mep.api import admin as admin_api
 from mep.api import agents as agents_api
+from mep.api import billing as billing_api
 from mep.api import evidence as evidence_api
 from mep.api import gate1, revisions, uploads
 from mep.api import me as me_api
@@ -60,7 +61,7 @@ DEMO_JWT_SECRET = "super-secret-jwt-token-with-at-least-32-characters-long"   # 
 
 def create_pg_app(dsn: str, jwt_secret: str, pack: RulePack, cors_origins: list[str] | None = None,
                   supabase_url: str | None = None, anon_key: str | None = None, vision: Any = None, vision_worker: bool = False,
-                  skill_executor: str | None = None, mailer: Any = None) -> FastAPI:
+                  skill_executor: str | None = None, mailer: Any = None, stripe: Any = None) -> FastAPI:
     jwks_url = f"{supabase_url.rstrip('/')}/auth/v1/.well-known/jwks.json" if supabase_url else None
     logging.getLogger("uvicorn.access").addFilter(_RedactShareTokens())
     current_user, token_subject = make_auth(dsn, jwt_secret, jwks_url)
@@ -106,6 +107,10 @@ def create_pg_app(dsn: str, jwt_secret: str, pack: RulePack, cors_origins: list[
     app.include_router(vision_jobs_api.router)
     app.dependency_overrides[vision_jobs_api.current_user] = current_user
     app.dependency_overrides[vision_jobs_api.get_dsn] = lambda: dsn
+    app.include_router(billing_api.router)
+    app.dependency_overrides[billing_api.current_user] = current_user
+    app.dependency_overrides[billing_api.get_dsn] = lambda: dsn
+    app.dependency_overrides[billing_api.get_stripe] = lambda: stripe
     app.include_router(notifications_api.router)
     app.dependency_overrides[notifications_api.current_user] = current_user
     app.dependency_overrides[notifications_api.get_dsn] = lambda: dsn
@@ -163,6 +168,6 @@ def app_from_env() -> FastAPI:
     rules = Path(os.environ.get("MEP_RULES_DIR") or REPO_ROOT / "rules")
     app = create_pg_app(dsn, secret, load_pack(rules), origins, os.environ.get("MEP_SUPABASE_URL"),
                          os.environ.get("MEP_SUPABASE_ANON_KEY"), vision_worker=os.environ.get("MEP_VISION_WORKER", "1") != "0",
-                         skill_executor=skill_executor, mailer=notifications_api.mailer_from_env())
+                         skill_executor=skill_executor, mailer=notifications_api.mailer_from_env(), stripe=billing_api.stripe_from_env())
     app.add_middleware(RequestLogMiddleware)
     return app
