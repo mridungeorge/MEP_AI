@@ -5,8 +5,7 @@ local devcontainer gate is the reference (tag `sprint-2-gate`). GitHub CI has ne
 Updated: 2026-10-09 (recovery after a device change; see "Recovery 2026-10-09")
 
 ## Resume here (updated 2026-10-12, OVERNIGHT RUN: plan in docs/OVERNIGHT_PLAN.md, scheduled task 53299a5d every 30 min)
-Phase 7 items 7.1-7.5 are DONE and pushed; two adversarial review rounds done (see "Phase 7"). NEXT ACTION: Phase 7 close = full `scripts/ci.sh` (or, if the
-host is too low on memory, GitHub CI on the head commit) green, then `git tag sprint-7-gate && git push origin main --tags`; then Phase 8 item 1.
+Phase 7 DONE: tag `sprint-7-gate` (GitHub CI green on f2e7399). NEXT ACTION: Phase 8 item 1 (duct sizing, equal-friction SI, velocity limits as firm settings, feeds duct-fab spec cards, airflow-balance validator).
 Done and tagged: 2.5, 3, 4a, 4a.1, 4b, 5. **Phases 6-9 are the standing order** (user prompt: run 6, 7, 8, 9 in order without stopping, then write
 `docs/review-pack.md` and STOP; do not encode AS 1668.2, AS/NZS 3000, 3008 or AS 4254).
 Phase 6 (product shell) is DONE: tag `sprint-6-gate`. Next: Phase 7 (engineering features), then 8, 9, then `docs/review-pack.md`.
