@@ -78,3 +78,24 @@ def test_other_requests_pass_through_and_a_small_authenticated_upload_reaches_th
     assert status == 200 and body == b"ok"
     status, _, reached = asyncio.run(run_guard(PATHS[0], {}, [], method="GET"))
     assert status == 200 and reached["app"]
+
+
+def test_every_route_that_takes_a_file_or_a_raw_body_is_covered_by_the_guard():
+    import typing
+    from pathlib import Path
+
+    from fastapi import UploadFile
+    from fastapi.routing import APIRoute
+    from mep.api import uploads
+    from mep.api.server import create_pg_app
+    from mep.engine.loader import load_pack
+    app = create_pg_app("postgresql://x", "s" * 32, load_pack(Path(__file__).resolve().parents[2] / "rules"))
+    missing = []
+    for r in app.routes:
+        if not isinstance(r, APIRoute) or "POST" not in r.methods:
+            continue
+        hints = typing.get_type_hints(r.endpoint, include_extras=True)
+        takes_file = any("UploadFile" in repr(h) or h is UploadFile for h in hints.values()) or "Request" in {getattr(h, "__name__", "") for h in hints.values()}
+        if takes_file and uploads._route_limit(r.path) is None:
+            missing.append(r.path)
+    assert missing == []

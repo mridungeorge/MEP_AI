@@ -109,3 +109,16 @@ def test_install_off(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     assert ratelimit.install(FastAPI()) is False
     monkeypatch.delenv("MEP_RATELIMIT")
     assert ratelimit.install(FastAPI()) is True
+
+
+def test_rotating_bearer_values_cannot_reset_the_count_for_one_address():
+    app = FastAPI()
+    app.add_middleware(ratelimit.RateLimitMiddleware, limits={"share": (2, 60.0), "upload": (2, 60.0), "run": (2, 60.0), "auth": (2, 60.0)})
+
+    @app.post("/share/exchange")
+    def ex() -> dict[str, bool]:
+        return {"ok": True}
+
+    c = TestClient(app)
+    codes = [c.post("/share/exchange", headers={"authorization": f"Bearer junk{i}"}).status_code for i in range(14)]
+    assert codes[:10] == [200] * 10 and set(codes[10:]) == {429}                       # 2 per bearer x 5 per address: the address ceiling holds

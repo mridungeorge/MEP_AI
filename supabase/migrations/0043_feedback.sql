@@ -22,6 +22,8 @@ $$
 declare f uuid := public.current_firm_id(); fid uuid;
 begin
   if auth.uid() is null or f is null then raise exception 'sign in to send feedback' using errcode = '42501'; end if;
+  perform pg_advisory_xact_lock(hashtext(auth.uid()::text));
+  if p_message ~ '[\x01-\x08\x0b\x0c\x0e-\x1f\x7f]' or coalesce(p_page, '') ~ '[\x01-\x08\x0b\x0c\x0e-\x1f\x7f]' then raise exception 'control characters are not allowed'; end if;
   if (select count(*) from public.feedback where created_by = auth.uid() and created_at > now() - interval '1 hour') >= 20 then
     raise exception 'too much feedback in the last hour; try again later';
   end if;

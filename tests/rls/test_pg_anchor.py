@@ -74,6 +74,21 @@ def test_edited_removed_or_missing_anchors_are_caught(admin, tmp_path):
     assert any("no anchor in the store" in p for p in mine(anchor.verify_anchors(DB_URL, tmp_path), other["firm"]))
 
 
+def test_the_chain_is_recomputed_outside_the_database_and_a_deleted_ledger_is_noticed(admin, tmp_path):
+    f = firm_with_events(admin)
+    anchor.export_anchors(DB_URL, tmp_path)
+    import psycopg
+    from psycopg.rows import dict_row
+    with psycopg.connect(DB_URL, row_factory=dict_row) as conn:
+        assert anchor.recompute_chain(conn, str(f["firm"])) == []
+    # the ledger of this firm vanishes entirely (rows and head)
+    admin.execute("set session_replication_role = replica")
+    admin.execute("delete from ledger_event where firm_id = %s", (f["firm"],))
+    admin.execute("delete from ledger_head where firm_id = %s", (f["firm"],))
+    admin.execute("set session_replication_role = origin")
+    assert any("the ledger was deleted" in p for p in mine(anchor.verify_anchors(DB_URL, tmp_path), f["firm"]))
+
+
 def test_a_firm_whose_chain_does_not_verify_is_not_anchored(admin, tmp_path, capsys):
     f = firm_with_events(admin)
     admin.execute("set session_replication_role = replica")

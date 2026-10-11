@@ -47,3 +47,18 @@ other retention rule; a longer period is set only by passing a larger number at 
 5. **Erasure requests**: how to handle a person's request to erase data while the signed record and ledger must be kept.
 6. **Storage objects**: confirm that uploaded drawings are deleted from Storage on retirement and who is responsible for it.
 7. **Customer-facing text**: `/terms` and `/privacy` are placeholders; this document does not replace them.
+
+
+## Addendum: data added in Phases 7 to 10 (technical description, LEGAL REVIEW REQUIRED)
+
+What `retire-firm` does NOT erase today, and therefore stays until `purge-firm` (after the retention period):
+
+- Performance Solution evidence (`perf_evidence`, including uploaded evidence files) and pathway notes: append-only records.
+- Commissioning batches and readings, including the technician names typed on the sheet: append-only records.
+- In-app feedback (`feedback`): free text and the sender's user id; append-only.
+- Fix scratch records and the services schedule of frozen revisions (part of the signed record).
+- Uploaded architect files held in Supabase Storage (`uploads/<firm>/...`): `retire-firm` removes database rows only; deleting Storage objects needs the service key and is NOT done by the script.
+
+What `retire-firm` does erase in addition to the earlier list: stored architect models (`base_model`) and clash models (`clash_model`, `clash_element`).
+
+Open decisions for the owner: whether feedback text and technician names should be anonymised at retirement (needs a documented exception to the append-only guard), and whether the script should delete Storage objects (needs the service key in the operator's environment).

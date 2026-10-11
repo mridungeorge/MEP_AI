@@ -113,11 +113,12 @@ def test_firm_settings_are_validated_and_ledgered(admin, client):
     assert client.put("/admin/firm", headers=hdr(f["checker"]), json=body).status_code == 403
 
 
-def dxf_bytes() -> bytes:
+def dxf_bytes(with_insert: bool = False) -> bytes:
     doc = ezdxf.new("R2010")
-    blk = doc.blocks.new("TITLEBLOCK")
-    blk.add_line((0, 0), (420, 0))
-    doc.modelspace().add_blockref("TITLEBLOCK", (0, 0))
+    doc.modelspace().add_line((0, 0), (420, 0))
+    if with_insert:
+        doc.blocks.new("TITLEBLOCK").add_line((0, 0), (420, 0))
+        doc.modelspace().add_blockref("TITLEBLOCK", (0, 0))
     out = io.StringIO()
     doc.write(out)
     return out.getvalue().encode()
@@ -137,6 +138,7 @@ def test_title_block_and_layer_standard_uploads(admin, client):
                 json.dumps({"layers": {}}).encode()):
         assert up("layer_standard", bad).status_code == 422
     assert up("title_block", b"garbage").status_code == 422
+    assert up("title_block", dxf_bytes(with_insert=True)).status_code == 422                      # inserted blocks could expand without limit
     assert up("layer_standard", layers, hdr(f["checker"])).status_code == 403
     assert up("layer_standard", b"x" * (2 * 1024 * 1024 + 1)).status_code in (413, 422)
     ov = client.get("/admin/overview", headers=d).json()["templates"]

@@ -20,7 +20,7 @@ from mep.api.revisions import User as RevUser
 from mep.engine.cross_rule import _outcomes, cross_rule_rerun
 from mep.engine.fix_search import FixOption, candidate_fixes
 from mep.engine.model import InputValue, Outcome, Provenance
-from mep.engine.rule_eval import evaluate_rule
+from mep.engine.rule_eval import ExtractedInputError, evaluate_rule
 from mep.engine.runner import _inputs_for
 
 router = APIRouter()
@@ -49,7 +49,10 @@ def options_for(repo: Any, pack: Any, graph: Any, revision_id: UUID, firm_id: UU
     if result["outcome"] == "FAIL":
         project = _project(data["project"], revision_id, firm_id)
         live_inputs = _inputs_for(subject, project, rule)
-        ev = evaluate_rule(rule, live_inputs)
+        try:
+            ev = evaluate_rule(rule, live_inputs)
+        except ExtractedInputError:                                  # an input went back to 'extracted' after the run: the stored FAIL is stale, not an error
+            return {**result, "live_outcome": "STALE_INPUTS_CHANGED"}, [], []
         same = json.loads(json.dumps(ev.inputs_used, default=str)) == json.loads(json.dumps(result.get("inputs_used"), default=str))
         # the stored FAIL is only reproduced by today's inputs when they are the inputs it was run on; otherwise (an unconfirmed edit since) say so
         result = {**result, "live_outcome": ev.outcome.value if same else "STALE_INPUTS_CHANGED"}
@@ -59,9 +62,10 @@ def options_for(repo: Any, pack: Any, graph: Any, revision_id: UUID, firm_id: UU
             cross = cross_rule_rerun(subject=subject, project=project, changes=change, pack=pack, graph=graph, target_rule=rule_id)
             after = _outcomes(subject, project, pack, sorted({*cross.dependents, rule_id}), change)
             still_failing = [r for r, oc in after.items() if oc == Outcome.FAIL]
+            needs_judgement = [r for r, oc in after.items() if oc == Outcome.NEEDS_JUDGEMENT]
             out.append({"id": o.id, "label": o.label, "kind": o.kind, "input": o.input_name, "from": o.from_value, "to": o.to_value, "unit": o.unit,
                         "target_after": "PASS", "dependent_rules": cross.dependents, "accepted": not cross.withdrawn and not still_failing,
-                        "still_failing": still_failing,
+                        "still_failing": still_failing, "needs_judgement": needs_judgement,
                         "moves": [{"rule_id": m.rule_id, "before": m.before.value, "after": m.after.value} for m in cross.moves],
                         "conflicts": [c.describe() for c in cross.conflicts] + [f"{r} would still FAIL" for r in still_failing]})
     return result, out, raw
@@ -72,8 +76,8 @@ def fixes(revision_id: UUID, subject_id: str, rule_id: str, user: RevUser, repo:
     result, options, _ = options_for(repo, pack, graph, revision_id, user.firm_id, subject_id, rule_id)
     return {"subject_id": subject_id, "rule_id": rule_id, "outcome": result["outcome"], "label": "Hypothesis: verify", "options": options,
             "rule_text_hypotheses": result.get("fix_hypotheses", []),
-            "note": "Each option is the smallest single change the rule engine finds that makes this rule pass. It is accepted only if every other rule that "
-                    "reads the same input still passes. Applying it creates an UNCONFIRMED change that goes through Gate 1 and the gates again."}
+            "note": "Each option is the smallest single change the rule engine finds that makes this rule pass. It is accepted only if no other rule that "
+                    "reads the same input fails or gets worse; rules that would then need a person's judgement are listed. Applying it creates an UNCONFIRMED change that goes through Gate 1 and the gates again."}
 
 
 def _write(dsn: str, sql: str, args: tuple[Any, ...]) -> dict[str, Any] | None:
@@ -135,7 +139,7 @@ def apply_scratch(revision_id: UUID, scratch_id: UUID, user: RevUser, repo: Repo
     if repo.upsert_input(revision_id, user.firm_id, row["id"], {"name": chosen["input"], "system": sc["subject_id"], "value": chosen["to"], "unit": chosen["unit"]}) is None:
         raise _err(409, "not_editable", "the input row is gone or the revision changed: reload")
     try:
-        claimed = _write(dsn, "update fix_scratch set status = 'applied', applied_at = now() where id = %s and status = 'proposed' returning id", (scratch_id,))
+        claimed = _write(dsn, "update fix_scratch set status = 'applied', applied_at = now(), applied_by = %s where id = %s and status = 'proposed' returning id", (user.user_id, scratch_id))
     except psycopg.errors.Error:
         claimed = None
     if claimed is None:

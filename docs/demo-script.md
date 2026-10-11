@@ -56,3 +56,18 @@ stamped **NOT INDEPENDENTLY CHECKED**. I'd rather the stamp be honest than the p
 - **Reset**: the ledger is append-only, so a demo project cannot be deleted. Make a fresh set instead:
   `seed_demo.py --firm-name "Demo Mechanical (synthetic) 2" --designer ... --checker ... --approver ...` with new addresses (plus-addressing works).
 - Never demonstrate with a real client's drawings.
+
+## Extended run sheet for Phases 6 to 10 (add 30 to 45 minutes)
+
+Do the 15-minute sheet above first, then, with the same sessions:
+
+| Min | Who | Screen | Do | Say |
+|---|---|---|---|---|
+| +0 | designer | Revision page, results | On a FAIL open **Fix hypotheses**; press **Apply as an unconfirmed change**; try **Run rules** (refused until Gate 1 is done again). | "The tool finds the smallest single change the rules accept, checks every other rule that reads the same input, and still makes you confirm it. It is a hypothesis, labelled so." |
+| +5 | designer | Performance Solution | Set the pathway on a failed result, add one piece of evidence, download the XLSX. | "Evidence you supply is kept with the revision. It is never a rule result and no rule reads it." |
+| +10 | designer | Services | Add two ducts with airflows and one terminal; read the ceiling-void table, sizing and airflow balance; upload a fire IFC for clash-lite; export BCF. | "Warnings only. A void that was never confirmed at Gate 1 cannot say CLEAR." |
+| +20 | designer | 3D preview, Drafting | Upload the architect IFC; run `hvac-dxf` from the Services draft, then `ifc-mep`; open both in the 3D preview. Change a duct size in the card and run again. | "The server fills the sizing schedule; a drawing that disagrees with it, or an IFC that altered the architect's model, is refused by an independent validator." |
+| +30 | approver | Review (after Gate 3) | Open the **NSW declaration** draft (NSW class 2 project only) and the **Commissioning** sheet; import two measured values with a tolerance you choose. | "The draft states nothing and lodges nothing; the practitioner completes it. Measured values are records." |
+| +35 | admin | Admin, Standards, Help | Show feedback list, the licensed-standard slots (all "licence required") and the user guide. | "Nothing from AS 1668.2 or the electrical standards is encoded; the slots wait for a licence." |
+
+See `docs/review-pack.md` for the complete list of what exists, what is synthetic and what is not yet reviewed.

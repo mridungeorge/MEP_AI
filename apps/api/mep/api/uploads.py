@@ -24,12 +24,16 @@ router = APIRouter()
 _UPLOAD_PATH = re.compile(r"/uploads/?$")
 MiB = 1024 * 1024
 # every other route that takes a file body, with the most it may carry (the handlers check again; this stops the body being read at all)
-_FILE_ROUTES = ((_UPLOAD_PATH, MAX_UPLOAD_BYTES), (re.compile(r"/base-model/?$"), 100 * MiB), (re.compile(r"/clash/models/?$"), 100 * MiB),
-                (re.compile(r"/commissioning/import/?$"), 5 * MiB), (re.compile(r"/performance/[^/]+/[^/]+/evidence/?$"), 10 * MiB), (re.compile(r"/admin/templates/?$"), 2 * MiB))
+_FILE_ROUTES = ((_UPLOAD_PATH, None), (re.compile(r"/base-model/?$"), 100 * MiB), (re.compile(r"/clash/models/?$"), 100 * MiB),
+                (re.compile(r"/commissioning/import/?$"), 5 * MiB), (re.compile(r"/performance/[^/]+/[^/]+/evidence/?$"), 10 * MiB), (re.compile(r"/admin/templates/?$"), 2 * MiB),
+                (re.compile(r"/schedule/import/?$"), 5 * MiB), (re.compile(r"/schedule/systems/?$"), 1 * MiB))
 
 
 def _route_limit(path: str) -> int | None:
-    return next((cap for rx, cap in _FILE_ROUTES if rx.search(path)), None)
+    for rx, cap in _FILE_ROUTES:
+        if rx.search(path):
+            return MAX_UPLOAD_BYTES if cap is None else cap          # None = the architect-file limit, read now so it can be changed (and tested)
+    return None
 
 
 class UploadGuard:

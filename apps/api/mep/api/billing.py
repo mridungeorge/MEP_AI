@@ -81,9 +81,11 @@ class StripeClient:
             raise _err(502, "stripe_refused", "the payment provider refused the request")
         return r.json()  # type: ignore[no-any-return]
 
-    def checkout(self, firm_id: str, customer: str | None, items: list[tuple[str, int]], trial_days: int | None) -> str:
+    def checkout(self, firm_id: str, customer: str | None, items: list[tuple[str, int]], trial_days: int | None, plan_id: str | None = None) -> str:
         data: dict[str, Any] = {"mode": "subscription", "client_reference_id": firm_id, "subscription_data[metadata][firm_id]": firm_id,
                                 "success_url": f"{self.app_url}/billing?checkout=done", "cancel_url": f"{self.app_url}/billing?checkout=cancelled"}
+        if plan_id:
+            data["subscription_data[metadata][plan_id]"] = plan_id           # the webhook reads the plan (and its project limit) from here
         if customer:
             data["customer"] = customer
         if trial_days:
@@ -160,7 +162,7 @@ def apply_event(conn: psycopg.Connection[Any], event: dict[str, Any]) -> str:
         sub = _sub_of_invoice(obj)
         if sub:
             row = conn.execute("update subscription set status = %s, stripe_last_event_at = greatest(stripe_last_event_at, %s), updated_at = now()"
-                               " where stripe_subscription_id = %s and stripe_last_event_at <= %s returning firm_id",
+                               " where stripe_subscription_id = %s and stripe_last_event_at <= %s and status <> 'canceled' returning firm_id",
                                ("past_due" if kind.endswith("failed") else "active", created, sub, created)).fetchone()
             return "updated" if row else "ignored"
     return "ignored"
@@ -256,7 +258,7 @@ def checkout(body: CheckoutBody, user: User, dsn: Dsn, stripe: Annotated[Any, De
     items = [(seat_price, seats)]
     if plan["price_env_project"] and os.environ.get(plan["price_env_project"]):
         items.append((os.environ[plan["price_env_project"]], projects))
-    url = stripe.checkout(str(user.firm_id), customer, items, None)
+    url = stripe.checkout(str(user.firm_id), customer, items, None, plan_id=plan["id"])
     return {"url": url}
 
 

@@ -20,7 +20,7 @@ export function FixPanel({ revisionId, subject, rule, onApplied }: { revisionId:
           <ul>{data.options.map((o) => (
             <li key={o.id} data-accepted={o.accepted}>
               {o.label}{" "}
-              {o.accepted ? <span>Passes every dependent rule ({o.dependent_rules.length}).</span> : <strong>Withdrawn: {o.conflicts.length > 0 ? o.conflicts.join("; ") : "it does not satisfy every dependent rule."}</strong>}{" "}
+              {o.accepted ? <span>Breaks no dependent rule ({o.dependent_rules.length}){o.needs_judgement && o.needs_judgement.length > 0 ? `; ${o.needs_judgement.length} would then need a person's judgement: ${o.needs_judgement.join(", ")}` : ""}.</span> : <strong>Withdrawn: {o.conflicts.length > 0 ? o.conflicts.join("; ") : "it does not satisfy every dependent rule."}</strong>}{" "}
               <button type="button" disabled={!o.accepted} onClick={() => {
                 setMessage(null);
                 void api.makeFixScratch(revisionId, subject, rule, o.id).then((s) => api.applyFixScratch(revisionId, s.scratch_id)).then((r) => { setMessage(r.needs); onApplied(); }).catch(fail);

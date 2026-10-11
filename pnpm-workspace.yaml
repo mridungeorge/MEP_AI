@@ -1,2 +1,17 @@
 packages:
   - "apps/web"
+overrides:
+  postcss: ">=8.5.18"
+auditConfig:
+  # every entry is explained in docs/allowlist-audit.md (all are `next` advisories fixed only in next >= 15.5.24; the upgrade is an open owner decision)
+  ignoreGhsas:
+    - GHSA-p293-qw3h-jr36
+    - GHSA-2xp9-vwfh-vxw4
+    - GHSA-h25m-26qc-wcjf
+    - GHSA-q4gf-8mx6-v5v3
+    - GHSA-8h8q-6873-q5fj
+    - GHSA-c4j6-fc7j-m34r
+    - GHSA-36qx-fr4f-26g5
+    - GHSA-m99w-x7hq-7vfj
+    - GHSA-89xv-2m56-2m9x
+    - GHSA-p9j2-gv94-2wf4

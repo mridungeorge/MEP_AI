@@ -6,13 +6,13 @@ export interface OnboardingStep { id: "create" | "upload" | "gate1" | "run" | "r
 /** Short help text per screen. Each states what the product actually does; none says anything is compliant. */
 export const HELP = {
   gate1: "Values read from the architect model or a drawing are shown as 'extracted': they are only what the file says and the rules will not use them. "
-    + "A designer checks each row and confirms it; only 'confirmed' values (and values you typed yourself) are ever used by the rules.",
+    + "A designer checks each row and confirms it; only 'confirmed' values are ever used by the rules (a value you type or edit yourself becomes unconfirmed until you confirm it).",
   run: "Every rule in the library is a DRAFT until a human engineer approves it. A run shows each result with its clause reference and the DRAFT banner; "
     + "the software applies the encoded rules but never decides compliance.",
   review: "Approve: you have checked the line and agree with it. Reject: the line is wrong and must be fixed. Request changes: send it back to the designer with your reason. "
     + "A reason is required for every decision. An accepted FAIL needs a category and is acknowledged again by the approver.",
   signoff: "The approver types the registration number again at Gate 3 and it must match the number already on file for them, which a platform administrator "
-    + "verified against the public register. It is recorded in the signed package and the audit ledger to show who took responsibility.",
+    + "verified against the public register (in a demonstration setup the number may be a placeholder). It is recorded in the signed package and the audit ledger to show who took responsibility.",
   drafting: "A card must be confirmed (every required field filled by a person) before it can be built. Files are released to you only if every validator passes; "
     + "otherwise the run is listed as not released and no file is returned.",
   services: "Warnings only. Sizing, ceiling-void margins and clash-lite results are design aids for you to check; none of them is a compliance result.",

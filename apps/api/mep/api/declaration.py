@@ -15,10 +15,17 @@ from mep.review import declaration as decl
 router = APIRouter()
 
 
+def _fail_keys(dsn: str, user: Any, revision_id: UUID) -> list[dict[str, Any]]:
+    with _as_user(dsn, user) as conn:
+        return conn.execute("select subject_id, rule_id from rule_result where revision_id = %s and firm_id = %s and current and result = 'FAIL'", (revision_id, user.firm_id)).fetchall()
+
+
 def _pathways(dsn: str, user: Any, revision_id: UUID) -> list[dict[str, Any]]:
     with _as_user(dsn, user) as conn:
         paths = conn.execute("select subject_id, rule_id, pathway, note from result_pathway where revision_id = %s and firm_id = %s", (revision_id, user.firm_id)).fetchall()
         ev = conn.execute("select subject_id, rule_id, title from perf_evidence where revision_id = %s and firm_id = %s order by created_at", (revision_id, user.firm_id)).fetchall()
+    live = {(r["subject_id"], r["rule_id"]) for r in _fail_keys(dsn, user, revision_id)}
+    paths = [p for p in paths if (p["subject_id"], p["rule_id"]) in live]            # only for results that are FAIL in this revision now
     return [{"subject": p["subject_id"], "rule_id": p["rule_id"], "pathway": p["pathway"], "note": p["note"],
              "evidence": [{"title": e["title"]} for e in ev if (e["subject_id"], e["rule_id"]) == (p["subject_id"], p["rule_id"])]} for p in paths]
 

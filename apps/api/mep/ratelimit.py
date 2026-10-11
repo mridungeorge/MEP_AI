@@ -24,6 +24,7 @@ ROUTE_CLASSES: dict[str, tuple[frozenset[str], re.Pattern[str]]] = {
     "auth": (frozenset({"GET", "POST", "PUT", "DELETE"}), re.compile(r"^/(invitations(/|$)|me(/|$))")),
 }
 
+IP_CEILING_FACTOR = 5          # one address may make this many times the per-user limit (offices share addresses; a rotating bearer string cannot reset it)
 # (max requests, window seconds); generous for normal use
 DEFAULT_LIMITS: dict[str, tuple[int, float]] = {
     "upload": (30, 60.0),
@@ -117,6 +118,9 @@ class RateLimitMiddleware:
         key = f"{name}:{client_key(headers, client[0] if client else None)}"
         limit, window = self.limits[name]
         wait = self.limiter.check(key, limit, window)
+        if wait == 0.0:                                          # and every request also counts against its network address, whatever bearer string it carries
+            hops = [h.strip() for h in headers.get("x-forwarded-for", "").split(",") if h.strip()]
+            wait = self.limiter.check(f"{name}:ipceiling:{hops[-1] if hops else (client[0] if client else '?')}", limit * IP_CEILING_FACTOR, window)
         if wait == 0.0:
             await self.app(scope, receive, send)
             return

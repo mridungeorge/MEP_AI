@@ -17,7 +17,9 @@ create table fix_scratch (
   applied_at timestamptz,
   constraint fix_scratch_revision_fk foreign key (revision_id, firm_id) references revision (id, firm_id),
   constraint fix_scratch_user_fk foreign key (created_by, firm_id) references app_user (id, firm_id),
-  check ((status = 'applied') = (applied_at is not null))
+  applied_by uuid,
+  check ((status = 'applied') = (applied_at is not null)),
+  check ((status = 'applied') = (applied_by is not null))
 );
 create index fix_scratch_revision on fix_scratch (revision_id, created_at desc);
 alter table fix_scratch enable row level security;
@@ -27,7 +29,7 @@ revoke insert, update, delete, truncate, trigger, references on fix_scratch from
 create function fix_scratch_guard() returns trigger language plpgsql set search_path = public, pg_temp as
 $$
 begin
-  if tg_op = 'DELETE' or (to_jsonb(new) - 'status' - 'applied_at') is distinct from (to_jsonb(old) - 'status' - 'applied_at') or old.status = 'applied' then
+  if tg_op = 'DELETE' or (to_jsonb(new) - 'status' - 'applied_at' - 'applied_by') is distinct from (to_jsonb(old) - 'status' - 'applied_at' - 'applied_by') or old.status = 'applied' then
     raise exception 'a scratch change is a record: it can only be marked applied, once';
   end if;
   return new;
@@ -37,7 +39,7 @@ create function fix_scratch_audit() returns trigger language plpgsql security de
 $$ begin
   insert into public.ledger_event (firm_id, revision_id, kind, payload)
     values (new.firm_id, new.revision_id, case when tg_op = 'INSERT' then 'fix_proposed' else 'fix_applied' end,
-            jsonb_build_object('scratch', new.id, 'subject', new.subject_id, 'rule', new.rule_id, 'option', new.option, 'accepted', new.accepted, 'by', new.created_by));
+            jsonb_build_object('scratch', new.id, 'subject', new.subject_id, 'rule', new.rule_id, 'option', new.option, 'accepted', new.accepted, 'by', case when tg_op = 'INSERT' then new.created_by else coalesce(new.applied_by, new.created_by) end));
   return new;
 end $$;
 create trigger fix_scratch_frozen before insert on fix_scratch for each row execute function reject_if_revision_frozen();

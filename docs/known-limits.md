@@ -81,3 +81,20 @@ This list is not a compliance statement. All rules remain `draft`.
 - TAS/NSW is not caught by the jurisdiction gate without a per-subject class or an engineer ruling.
 - The evaluator allows `==` between a dimensionless quantity and a bare number, and ordered text comparison.
 - Golden coverage: 11 results over 6 projects; no golden for a rejected override, a missing unit or offset temperatures.
+
+
+## Added by the consolidated review (Phase 10.10): found, not fixed overnight
+
+None of these is a blocker; each is a decision or a larger change. Severity as reported by the reviewers.
+
+- (major) Fix search treats every engineer-confirmed number as a design lever, including measured plant facts; rules should declare which inputs are levers (`fix_lever`), and conjunctive checks need multi-input options.
+- (major) The "Performance Solution pathway likely" flag looks at one nearest-boundary option; a better single-input value may exist that it does not try.
+- (minor) Performance and fixes endpoints recompute the fix search twice per FAIL on each load (cost grows with the number of FAILs); concurrent applies of different fixes on one system are not serialised.
+- (major) Clash-lite upload has no process-wide concurrency cap and its model-count check can race; the load test was not run.
+- (minor) hvac-dxf/ifc-mep airflow balance gates use terminals and tolerance supplied by the card (only the duct schedule is server-filled); the firm-sheet templates are not part of the confirmed card digest.
+- (minor) Commissioning sheets/PDFs have no validator of their own; measured values carry no unit column (they are L/s by the column header).
+- (minor) A verified registration number cannot be revoked (no revoke function); an approver demoted later keeps the number on file.
+- (minor) Anchors link backwards only: deleting the newest anchor file is not noticed unless the store enforces object lock; nothing schedules the anchoring yet (a cron entry is the operator's).
+- (major, owner decision) The web app is on Next 14.2; ten advisories are fixed only in Next >= 15.5.24 (a major upgrade). They are listed in `docs/allowlist-audit.md` and are the top security item before any real firm is onboarded.
+- (minor) The rate limiter is per process and in memory; add an edge limiter in production. Trivy and pip-audit steps in CI have never run to completion on a real image.
+- (minor, round 2) A dependent rule reading another input that went back to `extracted` still raises inside the cross-rule re-run (fails closed with a 500, not a message); an unknown Stripe plan id sets unlimited projects and plan changes in the Billing Portal keep the old limit (plan comes from checkout metadata); title blocks with nested inserts only in block definitions or paperspace, and layer maps differing only in case, are not refused at upload; the per-address rate ceiling trusts the rightmost X-Forwarded-For hop (confirm the edge appends it); `applied_by` has no composite FK.

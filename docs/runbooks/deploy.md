@@ -32,8 +32,9 @@ firms (daily backups, no pausing, custom SMTP limits). Railway Hobby (about US$5
 3. Project Settings > Database > Connection string > **Session pooler**: copy it, put your database password in. This is `MEP_DB_URL`
    (port 5432, host `aws-0-ap-southeast-2.pooler.supabase.com`). Do not use the transaction pooler (6543); do not use the direct string
    (IPv6 only from Railway).
-4. Authentication > Sign In / Providers: **disable "Allow new users to sign up"** (people are invited by the seed/admin scripts only).
-   Email provider stays on; "Confirm email" can stay on.
+4. Authentication > Sign In / Providers > Email: **"Allow new users to sign up" ON** and **"Confirm email" ON (required, not optional)**. People join a firm
+   only through an invitation addressed to their *confirmed* e-mail; with confirmation off a stranger could register someone else's address and take their
+   invitation. Prefer magic-link/OTP sign-in and switch password sign-up off. (The local `supabase/config.toml` has confirmations off for development only.)
 5. Authentication > SMTP Settings: enable custom SMTP with your Resend/SMTP details and a From address on your verified domain.
 6. Authentication > URL Configuration: set **Site URL** to your Vercel production URL (you get it in Step 4; come back and set it) and add
    `https://<your-app>.vercel.app/**` to Redirect URLs.

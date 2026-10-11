@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, api } from "@/lib/api";
-import type { AdminOverview } from "@/lib/types";
+import type { AdminOverview, FeedbackRow } from "@/lib/types";
 
 const ROLES = ["designer", "checker", "approver"] as const;
 
@@ -74,6 +74,7 @@ export function AdminScreen() {
         <TemplateUpload onUpload={(kind, name, file) => void act(() => api.adminAddTemplate(kind, name, file), "Template uploaded.")} />
         <ul data-testid="admin-templates">{data.templates.map((t) => <li key={t.id}>{t.kind.replace("_", " ")}: {t.name} ({t.sha256.slice(0, 10)}…) {t.created_at.slice(0, 10)}</li>)}</ul>
       </section>
+      <FeedbackList />
     </main>
   );
 }
@@ -137,5 +138,19 @@ function TemplateUpload({ onUpload }: { onUpload: (kind: string, name: string, f
       <input aria-label="Template name" placeholder="name" value={name} onChange={(e) => setName(e.target.value)} />{" "}
       <input type="file" aria-label="Template file" disabled={!name.trim()} onChange={(e) => { const f = e.target.files?.[0]; if (f) onUpload(kind, name.trim(), f); e.target.value = ""; }} />
     </p>
+  );
+}
+
+/** What members sent with the Send feedback button (newest first). */
+function FeedbackList() {
+  const [rows, setRows] = useState<FeedbackRow[] | null>(null);
+  useEffect(() => { void api.adminFeedback().then((r) => setRows(r.feedback)).catch(() => setRows([])); }, []);
+  return (
+    <section aria-label="Feedback">
+      <h2>Feedback from your team</h2>
+      {rows === null ? <p>Loading…</p> : rows.length === 0 ? <p>No feedback yet.</p> : (
+        <ul>{rows.map((r) => <li key={r.id}><strong>{r.kind}</strong> on {r.page ?? "(unknown page)"} from {r.email ?? "a member"} ({r.created_at.slice(0, 10)}): {r.message}</li>)}</ul>
+      )}
+    </section>
   );
 }

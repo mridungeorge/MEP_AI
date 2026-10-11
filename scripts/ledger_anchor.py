@@ -74,11 +74,29 @@ def export_anchors(dsn: str, store: Path, now: datetime | None = None) -> list[s
     return written
 
 
+def recompute_chain(conn: Any, firm: str) -> list[str]:
+    """Recompute every row hash in Python from the stored fields (the same recipe as ledger_row_hash) and check the links; no database function is trusted."""
+    prev = GENESIS
+    expected = 1
+    for r in conn.execute("select seq, id, firm_id, revision_id, kind, payload::text as payload, prev_hash, row_hash,"
+                          " to_char(created_at at time zone 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US') as ts from ledger_event where firm_id = %s order by seq", (firm,)).fetchall():
+        if r["seq"] != expected or r["prev_hash"] != prev:
+            return [f"the chain breaks at row {r['seq']} (recomputed outside the database)"]
+        text = f"{prev}|{r['seq']}|{r['id']}|{r['firm_id']}|{r['revision_id'] or ''}|{r['kind']}|{r['payload']}|{r['ts']}"
+        if hashlib.sha256(text.encode()).hexdigest() != r["row_hash"]:
+            return [f"row {r['seq']} does not match its own hash (recomputed outside the database)"]
+        prev, expected = r["row_hash"], expected + 1
+    return []
+
+
 def verify_anchors(dsn: str, store: Path) -> list[str]:
     """Problems found (empty = the database matches every anchor and the anchor chains are intact)."""
     problems: list[str] = []
     with psycopg.connect(dsn, autocommit=True, row_factory=dict_row) as conn:
         firms = [str(r["firm_id"]) for r in conn.execute("select firm_id from ledger_head").fetchall()]
+        for folder in sorted(p.name for p in store.iterdir() if p.is_dir()) if store.is_dir() else []:       # a firm whose whole ledger vanished still has anchors
+            if folder not in firms:
+                problems.append(f"{folder}: anchors exist but the database has no ledger for this firm (the ledger was deleted?)")
         for firm in firms:
             files = anchor_files(store, firm)
             if not files:
@@ -87,6 +105,7 @@ def verify_anchors(dsn: str, store: Path) -> list[str]:
             verdict = conn.execute("select ok, reason from verify_ledger(%s)", (firm,)).fetchone()
             if verdict is None or not verdict["ok"]:
                 problems.append(f"{firm}: the database chain does not verify ({verdict['reason'] if verdict else 'no verdict'})")
+            problems.extend(f"{firm}: {p}" for p in recompute_chain(conn, firm))      # not trusting verify_ledger(): hash the rows' own text here
             prev_hash, prev_seq = GENESIS, 0
             for p in files:
                 raw = p.read_bytes()

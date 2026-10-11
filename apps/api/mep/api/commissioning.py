@@ -29,6 +29,8 @@ def _signed_rows(svc: Any, user: Any, dsn: str, revision_id: UUID) -> list[dict[
         names = {str(r["id"]): r["name"] for r in conn.execute("select id, name from space where revision_id = %s and firm_id = %s", (revision_id, user.firm_id)).fetchall()}
     terminals = [r for r in runs_of(dsn, user, revision_id) if r["kind"] == "terminal"]
     rows = cx.rows_of(terminals, names)
+    if len(rows) > cx.MAX_ROWS:
+        raise _err(422, "too_many_terminals", f"a sheet holds at most {cx.MAX_ROWS} terminals (this revision has {len(rows)}); split the work by system")
     clash = cx.collisions(rows)
     if clash:
         raise _err(409, "tag_collision", "terminal tags collide within a system, so a measured value could not be matched to one terminal: " + ", ".join(clash[:5]))

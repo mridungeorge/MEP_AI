@@ -205,6 +205,8 @@ def validate_title_block(data: bytes) -> str:
         doc = ezdxf.read(io.StringIO(data.decode("utf-8", "replace")))
     except Exception:  # noqa: BLE001 - any parse failure is a refusal, not a crash
         raise _err(422, "invalid_template", "the title block must be a readable DXF drawing") from None
+    if any(e.dxftype() == "INSERT" for e in doc.modelspace()) or len(doc.modelspace()) > 5000:
+        raise _err(422, "invalid_template", "a title block must be plain lines and text (no inserted blocks), at most 5000 entities")
     if len(doc.modelspace()) == 0 and not [b for b in doc.blocks if not b.name.startswith(("*", "_"))]:
         raise _err(422, "invalid_template", "the title block drawing is empty")
     return "image/vnd.dxf"

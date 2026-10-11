@@ -60,3 +60,18 @@ def test_the_engine_refuses_a_rule_dropped_into_an_unlicensed_slot_or_beside_the
         (target / "x.yaml").write_text(text, encoding="utf-8")
         with pytest.raises(RuleLoadError, match=needle):
             load_pack(rules)
+
+
+@pytest.mark.parametrize("document", ["AS 3000:2018", "AS/NZS 1668.2", "AS 1668 Part 2", "ＡＳ 1668.2", "АS 1668.2", "AS 1851-2012"])
+def test_spellings_of_australian_standards_are_refused_outside_a_licensed_slot(tmp_path, document):
+    import shutil
+
+    from mep.engine.loader import RuleLoadError, load_pack
+    rules = tmp_path / "rules"
+    shutil.copytree(RULES, rules)
+    one = next((rules / "ncc2025").rglob("*.yaml"))
+    text = one.read_text(encoding="utf-8")
+    import re
+    one.write_text(re.sub(r"(?m)^(\s*document:).*$", lambda m: f'{m.group(1)} "{document}"', text, count=1), encoding="utf-8")
+    with pytest.raises(RuleLoadError):
+        load_pack(rules)

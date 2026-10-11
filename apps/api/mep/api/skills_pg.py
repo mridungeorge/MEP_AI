@@ -89,7 +89,11 @@ class PgSkills:
         if skill != "hvac-dxf":
             return spec
         from mep.api.sizing_api import schedule_entries
-        everything = {e["tag"]: e for e in schedule_entries(self._dsn, self._user, revision_id)}
+        entries = schedule_entries(self._dsn, self._user, revision_id)
+        dup = sorted({e["tag"] for e in entries if sum(1 for x in entries if x["tag"] == e["tag"]) > 1})
+        if dup:
+            raise SkillsRefused(409, "ambiguous_tag", "two ducts in this revision share a tag, so the schedule is ambiguous: " + ", ".join(map(str, dup[:5])))
+        everything = {e["tag"]: e for e in entries}
         if not everything:
             raise SkillsRefused(409, "no_sizing_schedule", "this revision has no sound sizing schedule to draw from: add airflows to the services schedule first")
         tags = sorted({d.get("tag") for d in spec.get("ducts", []) if isinstance(d, dict)}, key=str)

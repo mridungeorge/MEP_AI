@@ -3,7 +3,7 @@ export default function WelcomePage() {
     <main>
       <h1>MEP Co-pilot</h1>
       <p role="note" data-testid="draft-copy" style={{ border: "2px solid #b45309", padding: 8, fontWeight: 700 }}>DRAFT COPY: wording on this page has not been reviewed.</p>
-      <p>From the architect&apos;s model to a signed compliance package for mechanical services: inputs confirmed by an engineer, rules applied the same way every time, every change traced.</p>
+      <p>From the architect&apos;s model to a traceable, signed checking package for mechanical services (today a demonstration: every rule is a draft and not engineer-approved): inputs confirmed by an engineer, rules applied the same way every time, every change traced.</p>
       <ul>
         <li>Confirm what was read from the architect&apos;s model before anything is checked.</li>
         <li>Rules come from versioned rule files, never from a language model. Today every rule is a DRAFT and not engineer-approved.</li>

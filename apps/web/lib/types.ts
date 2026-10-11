@@ -388,7 +388,7 @@ export interface NewProject { address: string; state: string; ncc_edition: strin
 /** GET /revisions/{id}/results/{subject}/{rule}/fixes */
 export interface FixOptionView {
   id: string; label: string; kind: string; input: string; from: string | number | boolean | null; to: string | number | boolean; unit: string | null;
-  target_after: string; dependent_rules: string[]; accepted: boolean; moves: { rule_id: string; before: string; after: string }[]; conflicts: string[];
+  target_after: string; dependent_rules: string[]; accepted: boolean; needs_judgement?: string[]; moves: { rule_id: string; before: string; after: string }[]; conflicts: string[];
 }
 export interface FixesResponse { subject_id: string; rule_id: string; outcome: string; label: string; options: FixOptionView[]; rule_text_hypotheses: string[]; note: string }
 
@@ -419,7 +419,7 @@ export interface BaseModelRow { id: string; file_name: string; file_sha256: stri
 
 /** GET /revisions/{id}/nsw-declaration */
 export interface NswDeclaration {
-  banner: string; lodged: boolean; kind: string; applies_to: { state: string; classes: string[] };
+  banner: string; lodged: boolean; kind: string; applies_to: { state: string; classes: string[]; basis?: string }; rules_banner?: string | null; independence_notice?: string | null;
   building: { address: string; ncc_edition: string; climate_zone: number; approval_date: string };
   signed_by: { gate: string; role: string; email: string | null; registration_no: string | null; signed_at: string }[];
   accepted_fails: { subject: string; rule_id: string; category: string }[];

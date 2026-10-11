@@ -17,7 +17,10 @@ export function DeclarationPanel({ revisionId }: { revisionId: string }) {
       {d && (
         <div>
           <p role="status" data-testid="declaration-banner" style={{ background: "#fee2e2", color: "#7f1d1d", padding: 8, fontWeight: 700 }}>{d.banner}</p>
+          {d.rules_banner && <p role="status" style={{ background: "#fef3c7", padding: 8, fontWeight: 700 }}>{d.rules_banner}</p>}
+          {d.independence_notice && <p role="status" style={{ background: "#fee2e2", padding: 8, fontWeight: 700 }}>{d.independence_notice}</p>}
           <p>{d.building.address}: NSW, class {d.applies_to.classes.join(", ")}, {d.building.ncc_edition}.</p>
+          {d.applies_to.basis && <p><em>{d.applies_to.basis}</em></p>}
           <ul>{d.signed_by.map((s) => <li key={s.gate}>{s.gate}: {s.role} {s.email ?? ""} {s.registration_no ? `(${s.registration_no})` : ""}</li>)}</ul>
           <p>Accepted FAILs: {d.accepted_fails.length}. Performance solutions recorded: {d.performance_solutions.length}.</p>
           <p>The practitioner must complete:</p>

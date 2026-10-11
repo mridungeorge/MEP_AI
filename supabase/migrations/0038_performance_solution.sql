@@ -78,8 +78,8 @@ begin
   if auth.uid() is null or f is null or public.current_user_role() is distinct from 'designer' then
     raise exception 'only a designer chooses a pathway' using errcode = '42501';
   end if;
-  if not exists (select 1 from public.rule_result where revision_id = p_revision and firm_id = f and subject_id = p_subject and rule_id = p_rule and current) then
-    raise exception 'there is no current result for that system and rule';
+  if not exists (select 1 from public.rule_result where revision_id = p_revision and firm_id = f and subject_id = p_subject and rule_id = p_rule and current and result = 'FAIL') then
+    raise exception 'a pathway is chosen for a current FAIL';
   end if;
   insert into public.result_pathway (firm_id, revision_id, subject_id, rule_id, pathway, note, set_by)
     values (f, p_revision, p_subject, p_rule, p_pathway, p_note, auth.uid())

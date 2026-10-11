@@ -143,6 +143,27 @@ def _guard_licensed(path: Path, rules_dir: Path) -> None:
         raise RuleLoadError(f"{path}: this licensed-standard slot has no recorded licence, so no rule may be loaded from it")
 
 
+def _guard_source(rule: Rule, path: Path, rules_dir: Path) -> None:
+    """A rule whose `source.document` names a licensed standard belongs in that standard's licensed slot, never beside the NCC rules."""
+    import re
+
+    from mep.standards import load_slots
+
+    if path.relative_to(rules_dir).parts[0] == "licensed":
+        return
+    import unicodedata
+
+    src = rule.raw.get("source") or {}
+    lookalikes = str.maketrans("АВЕКМНОРСТХаеорсх", "ABEKMHOPCTXaeopcx")
+    text = unicodedata.normalize("NFKC", f"{src.get('document', '')} {src.get('clause', '')}").translate(lookalikes)
+    if re.search(r"(?<![A-Za-z])AS\s*(/\s*NZS\s*)?[0-9]", text, re.IGNORECASE):
+        raise RuleLoadError(f"{path}: the source cites an Australian Standard; such rules are not encoded here without a licence and belong in a licensed slot")
+    document = re.sub(r"[^A-Z0-9]", "", text.upper())
+    for slot in load_slots():
+        if re.sub(r"[^A-Z0-9]", "", slot["standard"].upper()) in document:
+            raise RuleLoadError(f"{path}: the source names {slot['standard']}, a licensed standard: its rules belong in rules/{slot['pack_dir']}/ once the licence is recorded")
+
+
 def load_pack(rules_dir: Path) -> RulePack:
     validator = _schema(rules_dir)
     pack = RulePack()
@@ -155,6 +176,7 @@ def load_pack(rules_dir: Path) -> RulePack:
         rule = load_rule(path, validator)
         if rule.id.startswith("AS") and "licensed" not in path.relative_to(rules_dir).parts[:1]:
             raise RuleLoadError(f"{path}: a rule of an Australian Standard belongs in its licensed slot (rules/licensed/<slot>/), never beside the NCC rules")
+        _guard_source(rule, path, rules_dir)
         if rule.id in pack.rules:
             raise RuleLoadError(f"duplicate rule id {rule.id}")
         pack.rules[rule.id] = rule
