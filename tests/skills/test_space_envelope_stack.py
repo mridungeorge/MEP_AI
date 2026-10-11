@@ -128,6 +128,21 @@ def test_the_validator_refuses_each_kind_of_damage(build_mod, validator, tmp_pat
             r.RelatedObjects = [o for o in r.RelatedObjects if o != a]
         l2.IsDecomposedBy[0].RelatedObjects = [*l2.IsDecomposedBy[0].RelatedObjects, a]
 
+    def storey_placement(f):
+        next(s for s in f.by_type("IfcBuildingStorey") if s.Name == "Level 2").ObjectPlacement.RelativePlacement.Location.Coordinates = (0.0, 0.0, 0.0)
+
+    def move_space(f):
+        next(s for s in f.by_type("IfcSpace") if s.Name == "Open office L1").ObjectPlacement.RelativePlacement.Location.Coordinates = (7777.0, 0.0, 0.0)
+
+    def void_pset(f):
+        import ifcopenshell.api
+        sp = next(s for s in f.by_type("IfcSpace") if s.Name == "Open office L1")
+        ps = next(p for r in sp.IsDefinedBy for p in [r.RelatingPropertyDefinition] if p.Name == "MEP_SpaceEnvelope")
+        ifcopenshell.api.run("pset.edit_pset", f, pset=ps, properties={"CeilingVoidMm": 5.0})
+
+    ifc_case(storey_placement, "ifc_storey_placement")
+    ifc_case(move_space, "ifc_spaces")
+    ifc_case(void_pset, "ifc_spaces")
     ifc_case(move_storey, "ifc_storeys")
     ifc_case(rename_room, "ifc_spaces")
     ifc_case(drop_room, "ifc_spaces")

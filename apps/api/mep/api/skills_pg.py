@@ -84,6 +84,19 @@ class PgSkills:
                                (revision_id, self._user.firm_id, digest)).fetchone()
         return {"base.ifc": bytes(row["content"])} if row else None
 
+    def server_fill(self, skill: str, revision_id: UUID, spec: dict[str, Any]) -> dict[str, Any]:
+        """Facts that must come from this revision, not from the card: hvac-dxf's sizing schedule. A card carrying a different copy is refused."""
+        if skill != "hvac-dxf":
+            return spec
+        from mep.api.sizing_api import schedule_entries
+        schedule = schedule_entries(self._dsn, self._user, revision_id)
+        if not schedule:
+            raise SkillsRefused(409, "no_sizing_schedule", "this revision has no sound sizing schedule to draw from: add airflows to the services schedule first")
+        given = spec.get("sizing_schedule")
+        if given is not None and (not isinstance(given, list) or sorted(given, key=lambda e: str(e.get("tag")) if isinstance(e, dict) else "") != schedule):
+            raise SkillsRefused(409, "schedule_mismatch", "the card's sizing schedule differs from this revision's sizing schedule (leave it out and the server fills it in)")
+        return {**spec, "sizing_schedule": schedule}
+
     # ---- confirmed card versions ---------------------------------------------------------------------------------------
     def confirm_card(self, revision_id: UUID, skill: str, digest: str, note_id: UUID | None) -> None:
         try:

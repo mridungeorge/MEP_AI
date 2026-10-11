@@ -62,7 +62,7 @@ def test_the_example_builds_validates_and_matches_the_expected_manifest(build_mo
     got = build_mod.build(_spec(), tmp_path / "out", job / "base.ifc")
     for key in ("skill", "skill_version", "inputs", "spec_sha256", "measures", "validation"):
         assert got[key] == expected[key], key
-    assert {"architect_model_preserved", "schema_valid", "connections_match_spec", "connected_ports_meet_with_flow", "duct_geometry"} <= set(got["validation"]["checks"])
+    assert {"architect_model_preserved", "schema_valid", "connections_match_spec", "connected_ports_meet_with_flow", "element_geometry"} <= set(got["validation"]["checks"])
     if got["toolchain"] == expected["toolchain"]:
         assert got["files"] == expected["files"]
 
@@ -164,7 +164,46 @@ def test_the_validator_refuses_each_kind_of_damage(build_mod, validator, job, tm
         wall = next(iter(f.by_type("IfcWall")))
         f.remove(wall)
 
-    check(size, "duct_geometry")
+    def turn_duct(f):
+        d1 = next(e for e in f.by_type("IfcDuctSegment") if e.Tag == "D1")
+        d1.ObjectPlacement.RelativePlacement.RefDirection.DirectionRatios = (0.0, 0.0, 1.0)
+
+    def offset_solid(f):
+        d1 = next(e for e in f.by_type("IfcDuctSegment") if e.Tag == "D1")
+        d1.Representation.Representations[0].Items[0].Position.Location.Coordinates = (0.0, 0.0, 2000.0)
+
+    def move_wall(f):
+        wall = next(iter(f.by_type("IfcWall")))
+        wall.ObjectPlacement.RelativePlacement.Location.Coordinates = (5000.0, 0.0, 0.0)
+
+    def extra_wall(f):
+        import ifcopenshell.api
+        ifcopenshell.api.run("root.create_entity", f, ifc_class="IfcWall", name="STRAY WALL")
+
+    def airflow_9999(f):
+        import ifcopenshell.api
+        import ifcopenshell.util.element as eu
+        for el in f.by_type("IfcDuctSegment"):
+            ps = next(p for r in el.IsDefinedBy for p in [r.RelatingPropertyDefinition] if p.Name == "MEP_Services")
+            ifcopenshell.api.run("pset.edit_pset", f, pset=ps, properties={"AirflowLs": 9999.0})
+        assert eu is not None
+
+    def big_ahu(f):
+        ahu = next(iter(f.by_type("IfcUnitaryEquipment")))
+        ahu.Representation.Representations[0].Items[0].SweptArea.XDim *= 3
+
+    def move_terminal(f):
+        t = next(iter(f.by_type("IfcAirTerminal")))
+        t.ObjectPlacement.RelativePlacement.Location.Coordinates = (6750.0, 4000.0, 2000.0)
+
+    check(size, "element_geometry")
+    check(turn_duct, "element_geometry")
+    check(offset_solid, "element_geometry")
+    check(move_wall, "architect_model_preserved")
+    check(extra_wall, "nothing_else_added")
+    check(airflow_9999, "element_properties_read_back")
+    check(big_ahu, "element_geometry")
+    check(move_terminal, "port_positions")
     check(unlink_ports, "connections_match_spec")
     check(move_port, "connected_ports_meet_with_flow")
     check(wrong_storey, "storey_assignment")

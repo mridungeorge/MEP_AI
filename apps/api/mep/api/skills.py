@@ -154,6 +154,12 @@ def effective_spec(svc: SkillsService, name: str, spec_in: dict[str, Any], use_f
     return skill_form.apply_constants(s.schema, spec), filled
 
 
+def server_filled(svc: Any, name: str, revision_id: UUID, spec: dict[str, Any]) -> dict[str, Any]:
+    """Let the service put revision facts into the card (hvac-dxf's sizing schedule); services without the hook leave the card as it is."""
+    fill = getattr(svc, "server_fill", None)
+    return spec if fill is None else fill(name, revision_id, spec)  # type: ignore[no-any-return]
+
+
 def perform_run(svc: SkillsService, user: CurrentUser, revision_id: UUID, name: str, spec_in: dict[str, Any], *,
                 use_firm_defaults: bool = True, via: str = "user",
                 expected_digest: str | None = None) -> tuple[SkillRunResult, dict[str, Any], list[str]]:
@@ -171,6 +177,7 @@ def perform_run(svc: SkillsService, user: CurrentUser, revision_id: UUID, name: 
     if frozen:
         raise SkillsRefused(409, "revision_frozen", "revision is frozen")
     spec, filled = effective_spec(svc, name, spec_in, use_firm_defaults)
+    spec = server_filled(svc, name, revision_id, spec)
     if expected_digest is not None and card_digest(spec) != expected_digest:
         raise SkillsRefused(409, "card_changed", "the card (or the firm defaults) changed since it was confirmed: confirm the new version")
     try:
@@ -193,6 +200,10 @@ def card_preview(revision_id: UUID, name: str, body: CardBody, user: User, svc: 
     _designer(user)
     _skill(name)
     spec, filled = effective_spec(svc, name, body.spec, body.use_firm_defaults)
+    try:
+        spec = server_filled(svc, name, revision_id, spec)
+    except SkillsRefused as exc:
+        raise _err(exc.status, exc.code, exc.message) from None
     return {"effective_spec": spec, "spec_sha256": card_digest(spec), "firm_defaults_applied": filled,
             "confirmed": svc.card_confirmed(revision_id, name, card_digest(spec))}
 
@@ -203,6 +214,10 @@ def confirm_card(revision_id: UUID, name: str, body: CardBody, user: User, svc: 
     _designer(user)
     _skill(name)
     spec, _ = effective_spec(svc, name, body.spec, body.use_firm_defaults)
+    try:
+        spec = server_filled(svc, name, revision_id, spec)
+    except SkillsRefused as exc:
+        raise _err(exc.status, exc.code, exc.message) from None
     digest = card_digest(spec)
     if body.spec_sha256 is not None and body.spec_sha256 != digest:
         raise _err(409, "card_changed", "the card changed since you were shown it: review the new version")

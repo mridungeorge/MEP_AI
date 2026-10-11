@@ -22,9 +22,29 @@ export const MAX_TRIANGLES = 3_000_000;
 
 export class TooLarge extends Error {}
 
-export function mergeParts(parts: PlacedPart[], opacity = 1): Buffers {
-  let triCount = 0;
-  for (const p of parts) triCount += Math.floor(p.indices.length / 3);
+export function triangleCount(parts: PlacedPart[]): number {
+  let n = 0;
+  for (const p of parts) n += Math.floor(p.indices.length / 3);
+  return n;
+}
+
+/** The middle of a set of parts in IFC model coordinates (after placement), used as ONE shared origin so several models line up. */
+export function partsCentre(parts: PlacedPart[]): [number, number, number] {
+  const min = [Infinity, Infinity, Infinity];
+  const max = [-Infinity, -Infinity, -Infinity];
+  for (const p of parts) {
+    const m = p.transform;
+    for (let v = 0; v + 5 < p.vertices.length; v += 6) {
+      const x = p.vertices[v], y = p.vertices[v + 1], z = p.vertices[v + 2];
+      const w = [m[0] * x + m[4] * y + m[8] * z + m[12], m[1] * x + m[5] * y + m[9] * z + m[13], m[2] * x + m[6] * y + m[10] * z + m[14]];
+      for (let k = 0; k < 3; k++) { if (w[k] < min[k]) min[k] = w[k]; if (w[k] > max[k]) max[k] = w[k]; }
+    }
+  }
+  return min[0] === Infinity ? [0, 0, 0] : [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2];
+}
+
+export function mergeParts(parts: PlacedPart[], opacity = 1, origin: [number, number, number] = [0, 0, 0]): Buffers {
+  const triCount = triangleCount(parts);
   if (triCount > MAX_TRIANGLES) throw new TooLarge(`This model has ${triCount.toLocaleString()} triangles; the preview shows up to ${MAX_TRIANGLES.toLocaleString()}.`);
   const positions = new Float32Array(triCount * 9);
   const normals = new Float32Array(triCount * 9);
@@ -38,9 +58,9 @@ export function mergeParts(parts: PlacedPart[], opacity = 1): Buffers {
         const x = p.vertices[v], y = p.vertices[v + 1], z = p.vertices[v + 2];
         const nx = p.vertices[v + 3], ny = p.vertices[v + 4], nz = p.vertices[v + 5];
         // IFC (x, y, z) -> viewer (x, z, -y), after the placement transform
-        const wx = m[0] * x + m[4] * y + m[8] * z + m[12];
-        const wy = m[1] * x + m[5] * y + m[9] * z + m[13];
-        const wz = m[2] * x + m[6] * y + m[10] * z + m[14];
+        const wx = m[0] * x + m[4] * y + m[8] * z + m[12] - origin[0];
+        const wy = m[1] * x + m[5] * y + m[9] * z + m[13] - origin[1];
+        const wz = m[2] * x + m[6] * y + m[10] * z + m[14] - origin[2];
         const vx = m[0] * nx + m[4] * ny + m[8] * nz;
         const vy = m[1] * nx + m[5] * ny + m[9] * nz;
         const vz = m[2] * nx + m[6] * ny + m[10] * nz;

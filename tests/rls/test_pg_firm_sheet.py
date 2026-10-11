@@ -97,18 +97,50 @@ def client():
     return TestClient(create_pg_app(DB_URL, h.SECRET, load_pack(lin.ROOT / "rules"), supabase_url=lin.SUPABASE_URL, anon_key=lin.ANON))
 
 
-def test_a_firms_templates_give_every_run_a_firm_sheet(admin, client, tmp_path):
+def revision_with_sizing(admin, client):
     f = h.seed(admin)
-    admin.execute("update app_user set is_admin = true where id = %s", (f["designer"],))
     d = h.auth(f["designer"])
+    url = f"/revisions/{f['revision']}/services"
+    for tag, airflow, start, end in (("D1", 600, [0, 0, 0], [6000, 0, 0]), ("D2", 300, [6000, 0, 0], [6000, 4000, 0])):
+        assert client.post(url, headers=d, json={"kind": "duct", "tag": tag, "shape": "rect", "width": 300, "depth": 300, "length": 6, "system_tag": "S1", "airflow_ls": airflow,
+                                                 "start": start, "end": end}).status_code == 200
+    assert client.post(url, headers=d, json={"kind": "terminal", "tag": "T1", "system_tag": "S1", "airflow_ls": 300, "quantity": 2, "start": [6000, 4000, 0], "end": [6000, 4000, 0]}).status_code == 200
+    draft = client.get(f"/revisions/{f['revision']}/sizing/hvac-dxf-draft", headers=d).json()["spec"]
+    card = {**draft, "mark": "L1-SA-LAYOUT", "title_block": HVAC["title_block"]}
+    return f, d, card
+
+
+def test_the_schedule_comes_from_the_server_not_the_card(admin, client):
+    f, d, card = revision_with_sizing(admin, client)
+    url = f"/revisions/{f['revision']}/skills/hvac-dxf"
+    forged = {**card, "sizing_schedule": [{**e, "size": {"shape": "rect", "width_mm": 50, "depth_mm": 50}} for e in card["sizing_schedule"]],
+              "ducts": [{**x, "size": {"shape": "rect", "width_mm": 50, "depth_mm": 50}} for x in card["ducts"]]}
+    refused = client.post(f"{url}/run", headers=d, json={"spec": forged, "use_firm_defaults": False})
+    assert refused.status_code == 409 and refused.json()["detail"]["code"] == "schedule_mismatch"
+    assert client.post(f"{url}/card-preview", headers=d, json={"spec": forged}).status_code == 409
+    no_copy = {k: v for k, v in card.items() if k != "sizing_schedule"}
+    ok = client.post(f"{url}/run", headers=d, json={"spec": no_copy, "use_firm_defaults": False}).json()
+    assert ok["released"] is True                                                         # the server filled the schedule in
+    wrong_draw = {**no_copy, "ducts": [{**x, "size": {"shape": "rect", "width_mm": 900, "depth_mm": 900}} if x["tag"] == "D1" else x for x in card["ducts"]]}
+    bad = client.post(f"{url}/run", headers=d, json={"spec": wrong_draw, "use_firm_defaults": False}).json()
+    assert bad["released"] is False and bad["status"] == "validator_rejected"            # drawn size differs from the server's schedule
+    empty = h.seed(admin)
+    assert client.post(f"/revisions/{empty['revision']}/skills/hvac-dxf/run", headers=h.auth(empty["designer"]), json={"spec": card, "use_firm_defaults": False}).status_code == 409
+
+
+def test_a_firms_templates_give_every_run_a_firm_sheet(admin, client, tmp_path):
+    f, d, card = revision_with_sizing(admin, client)
+    admin.execute("update app_user set is_admin = true where id = %s", (f["designer"],))
     url = f"/revisions/{f['revision']}/skills/hvac-dxf/run"
-    plain = client.post(url, headers=d, json={"spec": HVAC, "use_firm_defaults": False}).json()
+    run = {"spec": card, "use_firm_defaults": False}
+    plain = client.post(url, headers=d, json=run).json()
     assert plain["released"] and [x["name"] for x in plain["files"] if x["role"] == "dxf_firm"] == []
     std = {**STD, "map": {**STD["map"], "NOPE": "A-NOPE"}}
     assert client.post("/admin/templates", headers=d, data={"kind": "layer_standard", "name": "Std"}, files={"file": ("t", json.dumps(std).encode())}).status_code == 200
     assert client.post("/admin/templates", headers=d, data={"kind": "layer_standard", "name": "Bad"}, files={"file": ("t", json.dumps({"layers": {"A": {"color": 3}}, "map": {"X": "X"}}).encode())}).status_code == 422
+    assert client.post("/admin/templates", headers=d, data={"kind": "layer_standard", "name": "Bad"}, files={"file": ("t", json.dumps({"layers": {"A": {"color": 3}}, "map": {"X": "DEFPOINTS"}}).encode())}).status_code == 422
     assert client.post("/admin/templates", headers=d, data={"kind": "title_block", "name": "TB"}, files={"file": ("t", title_block_dxf())}).status_code == 200
-    got = client.post(url, headers=d, json={"spec": HVAC, "use_firm_defaults": False}).json()
+    got = client.post(url, headers=d, json=run).json()
     assert got["released"] and "L1-SA-LAYOUT.firm.dxf" in [x["name"] for x in got["files"]]
     art = next(x for x in got["files"] if x["name"].endswith(".firm.dxf"))
     body = client.get(f"/artifacts/{art['artifact_id']}/download", headers=d)
@@ -117,8 +149,8 @@ def test_a_firms_templates_give_every_run_a_firm_sheet(admin, client, tmp_path):
     assert got["validation"]["firm_sheet"][0]["applied"] is True
     # the original is untouched and another firm gets no firm sheet
     assert next(x for x in got["files"] if x["name"] == "L1-SA-LAYOUT.dxf")["sha256"] == next(x for x in plain["files"] if x["name"] == "L1-SA-LAYOUT.dxf")["sha256"]
-    g = h.seed(admin)
-    other = client.post(f"/revisions/{g['revision']}/skills/hvac-dxf/run", headers=h.auth(g["designer"]), json={"spec": HVAC, "use_firm_defaults": False}).json()
+    g, gd, gcard = revision_with_sizing(admin, client)
+    other = client.post(f"/revisions/{g['revision']}/skills/hvac-dxf/run", headers=gd, json={"spec": gcard, "use_firm_defaults": False}).json()
     assert not [x for x in other["files"] if x["role"] == "dxf_firm"]
 
 
@@ -144,3 +176,26 @@ def test_the_other_drafting_skills_dxf_files_take_the_firm_standard_too(tmp_path
     out = firm_sheet.stamp(src, t, values)
     assert all(c["passed"] for c in firm_sheet.verify(src, out, t, values))
     assert "FIRM-ONE" in {layer.dxf.name for layer in ezdxf.read(io.StringIO(out.decode())).layers}
+
+
+def test_the_firm_sheet_is_byte_stable_refuses_format_codes_and_notices_edited_geometry(tmp_path):
+    src = built_dxf(tmp_path)
+    t = firm_sheet.FirmTemplates(title_block=title_block_dxf(), layer_standard=STD)
+    values = firm_sheet.values_for("hvac-dxf", HVAC)
+    first = firm_sheet.stamp(src, t, values)
+    import time
+    time.sleep(1.1)
+    assert firm_sheet.stamp(src, t, values) == first                                            # no clock, no random guid in the file
+    hostile = firm_sheet.values_for("hvac-dxf", {**HVAC, "title_block": {**HVAC["title_block"], "drawing_title": r"\H9000;HUGE\PCOMPLIANT {x} %%uUNDER"}})
+    assert "\\" not in hostile["TITLE"] and "{" not in hostile["TITLE"] and "%%" not in hostile["TITLE"]
+    # a stamped file whose duct was moved or whose tag text was edited is not accepted
+    doc = ezdxf.read(io.StringIO(first.decode()))
+    next(iter(doc.modelspace().query("LWPOLYLINE[layer=='A-DUCT']"))).translate(9000, 0, 0)
+    buf = io.StringIO()
+    doc.write(buf)
+    assert "firm_sheet_original_entities_kept" in [c["name"] for c in firm_sheet.verify(src, buf.getvalue().encode(), t, values) if not c["passed"]]
+    doc = ezdxf.read(io.StringIO(first.decode()))
+    next(e for e in doc.modelspace().query("TEXT") if e.dxf.text.startswith("D1 ")).dxf.text = "D1 50x50 1 L/s"
+    buf = io.StringIO()
+    doc.write(buf)
+    assert "firm_sheet_original_entities_kept" in [c["name"] for c in firm_sheet.verify(src, buf.getvalue().encode(), t, values) if not c["passed"]]

@@ -72,6 +72,7 @@ def normalise_spec(spec_in: dict[str, Any]) -> dict[str, Any]:
         raise SpecError("mark: a reserved file name")
     for g in ("terminals", "equipment", "connections"):
         spec.setdefault(g, [])
+    spec.setdefault("balance_tolerance_pct", 1)
     tags = [e["tag"] for g in ("ducts", "terminals", "equipment") for e in spec[g]]
     if len(set(tags)) != len(tags):
         raise SpecError("tags must be unique across ducts, terminals and equipment")

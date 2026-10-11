@@ -222,7 +222,7 @@ def validate_layer_standard(data: bytes) -> str:
         mapping = doc.get("map", {})
         assert isinstance(mapping, dict) and len(mapping) <= 200
         assert all(isinstance(k, str) and LAYER_NAME.match(k) and isinstance(v, str) and LAYER_NAME.match(v) for k, v in mapping.items())
-        assert not (set(mapping) & set(mapping.values()))
+        assert not (set(mapping) & set(mapping.values())) and not any(v.upper() in ("0", "DEFPOINTS") for v in mapping.values())
     except (ValueError, KeyError, TypeError, AssertionError):
         raise _err(422, "invalid_template", 'a layer standard is JSON like {"layers": {"A-DUCT": {"color": 3, "linetype": "CONTINUOUS"}}, "map": {"M-DUCT-RECT": "A-DUCT"}} ("map" optional: skill layer to your layer)') from None
     return "application/json"

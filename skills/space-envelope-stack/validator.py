@@ -86,6 +86,18 @@ def validate(spec: dict[str, Any], files: list[Path]) -> ValidationResult:
     st_want = [(s["name"], float(s["elevation_mm"])) for s in spec["storeys"]]
     ok = len(st_in) == len(st_want) and all(a[0] == b[0] and abs(a[1] - b[1]) <= TOL_MM for a, b in zip(st_in, st_want, strict=True))
     check("ifc_storeys", ok, st_want, st_in, TOL_MM)
+    # and where each storey actually sits in the world: placement, not only the Elevation attribute
+    import ifcopenshell.util.element as eu
+    import ifcopenshell.util.placement as pl
+    bad_place = []
+    for st in spec["storeys"]:
+        node = next((s for s in f.by_type("IfcBuildingStorey") if s.Name == st["name"]), None)
+        if node is None:
+            continue
+        m = pl.get_local_placement(node.ObjectPlacement)
+        if abs(float(m[0][3])) > TOL_MM or abs(float(m[1][3])) > TOL_MM or abs(float(m[2][3]) - float(st["elevation_mm"])) > TOL_MM:
+            bad_place.append(f"{st['name']}: placed at ({float(m[0][3]):g}, {float(m[1][3]):g}, {float(m[2][3]):g}), expected z {st['elevation_mm']:g}")
+    check("ifc_storey_placement", not bad_place, "each storey at its elevation", bad_place[:5], TOL_MM)
 
     # spaces per storey: aggregation, names, ids, footprints, areas, heights, plant flags
     problems: list[str] = []
@@ -121,6 +133,17 @@ def validate(spec: dict[str, Any], files: list[Path]) -> ValidationResult:
             plant = room["kind"] == "plant_room"
             if (sp.ObjectType == "PLANT ROOM") != plant:
                 problems.append(f"{room['name']}: plant flag")
+            sm = pl.get_local_placement(sp.ObjectPlacement)
+            stm = pl.get_local_placement(storey.ObjectPlacement)
+            if any(abs(float(sm[i][j]) - float(stm[i][j])) > (TOL_MM if j == 3 else 1e-6) for i in range(3) for j in range(4)):
+                problems.append(f"{room['name']}: placed away from its storey origin")
+            env = eu.get_pset(sp, "MEP_SpaceEnvelope") or {}
+            common = eu.get_pset(sp, "Pset_SpaceCommon") or {}
+            want_void = room.get("ceiling_void_mm")
+            if (abs(float(env.get("ClearHeightMm", -1)) - float(room["height_mm"])) > TOL_MM or bool(env.get("PlantRoom")) != plant
+                    or (want_void is None) != ("CeilingVoidMm" not in env) or (want_void is not None and abs(float(env["CeilingVoidMm"]) - float(want_void)) > TOL_MM)
+                    or common.get("OccupancyType") != (room.get("use") or ("Plant" if plant else "Room"))):
+                problems.append(f"{room['name']}: envelope or common properties differ from the card")
             qto = next((p for r in (sp.IsDefinedBy or []) if r.is_a("IfcRelDefinesByProperties") and r.RelatingPropertyDefinition.is_a("IfcElementQuantity")
                         for p in [r.RelatingPropertyDefinition]), None)
             area = next((q.AreaValue for q in (qto.Quantities if qto else []) if q.Name == "NetFloorArea"), None)

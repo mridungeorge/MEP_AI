@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, api } from "@/lib/api";
 import { loadIfcParts } from "@/lib/ifcload";
-import { type Buffers, TooLarge, mergeParts } from "@/lib/ifcmesh";
+import { type Buffers, MAX_TRIANGLES, TooLarge, mergeParts, partsCentre, triangleCount } from "@/lib/ifcmesh";
 import type { BaseModelRow, SkillRunRow } from "@/lib/types";
 import { IfcViewer } from "./IfcViewer";
 
@@ -33,12 +33,15 @@ export function PreviewScreen({ revisionId }: { revisionId: string }) {
   const show = async () => {
     setBusy(true); setMessage(null); setLayers(null);
     try {
-      const built: Buffers[] = [];
+      const loaded: { kind: Source["kind"]; parts: Awaited<ReturnType<typeof loadIfcParts>> }[] = [];
+      let budget = MAX_TRIANGLES;
       for (const s of sources.filter((x) => chosen.has(x.key))) {
-        const parts = await loadIfcParts(await s.load());
-        built.push(mergeParts(parts, s.kind === "architect" ? 0.3 : 1));
+        const parts = await loadIfcParts(await s.load(), budget);
+        budget -= triangleCount(parts);
+        loaded.push({ kind: s.kind, parts });
       }
-      setLayers(built);
+      const origin = partsCentre((loaded.find((l) => l.kind === "architect") ?? loaded[0])?.parts ?? []);   // ONE origin for every model, so they line up
+      setLayers(loaded.map((l) => mergeParts(l.parts, l.kind === "architect" ? 0.3 : 1, origin)));
     } catch (e) {
       setMessage(e instanceof TooLarge ? e.message : e instanceof ApiError ? e.message : `The 3D preview could not read that file (${e instanceof Error ? e.message : "error"}).`);
     } finally { setBusy(false); }

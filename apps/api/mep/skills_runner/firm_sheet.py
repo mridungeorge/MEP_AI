@@ -41,7 +41,8 @@ def values_for(skill: str, spec: dict[str, Any]) -> dict[str, str]:
     tb = spec.get("title_block") if isinstance(spec.get("title_block"), dict) else {}
 
     def clean(v: Any) -> str:
-        return (CONTROL.sub("", str(v)).strip()[:80]) or "-"
+        text = CONTROL.sub("", str(v)).replace(chr(92), "/").replace("{", "(").replace("}", ")").replace("%%", "%")      # no MTEXT or %% format codes from card text
+        return text.strip()[:80] or "-"
 
     return {"MARK": clean(spec.get("mark", "-")), "SKILL": clean(skill), "PROJECT": clean(tb.get("project", spec.get("mark", "-"))),
             "TITLE": clean(tb.get("drawing_title", skill)), "DRAWING_NO": clean(tb.get("drawing_no", "-")), "REVISION": clean(tb.get("revision", "-")),
@@ -55,9 +56,37 @@ def _read(data: bytes) -> Any:
 
 
 def _write(doc: Any) -> bytes:
-    out = io.StringIO()
-    doc.write(out)
-    return out.getvalue().replace("\r\n", "\n").encode("utf-8")
+    """Written the way the skills write their drawings (fixed meta data, ordered sections), so the same stamp always gives the same bytes."""
+    import sys
+    import tempfile
+    from pathlib import Path
+
+    from mep.skills_runner.registry import REPO_ROOT
+
+    if str(REPO_ROOT) not in sys.path:
+        sys.path.insert(0, str(REPO_ROOT))
+    from skills.cad import cadkit
+
+    with tempfile.TemporaryDirectory() as td:
+        path = Path(td) / "out.dxf"
+        cadkit.save_dxf(doc, path)
+        return path.read_bytes()
+
+
+def _round(v: Any) -> Any:
+    if isinstance(v, float):
+        return round(v, 5) + 0.0
+    if hasattr(v, "__iter__") and not isinstance(v, str | bytes):
+        return tuple(_round(x) for x in v)
+    return v
+
+
+def signature(e: Any, mapping: dict[str, str]) -> str:
+    """What an entity IS apart from its handle: type, mapped layer, every attribute, and the points of a polyline."""
+    attrs = {k: _round(v) for k, v in e.dxfattribs().items() if k not in ("handle", "owner", "layer")}
+    extra = tuple(_round(tuple(p)) for p in e.get_points("xyseb")) if e.dxftype() == "LWPOLYLINE" else ()
+    layer = e.dxf.layer
+    return repr((e.dxftype(), mapping.get(layer, layer), sorted(attrs.items()), extra))
 
 
 def _texts(layout: Any) -> list[tuple[Any, str]]:
@@ -85,7 +114,7 @@ def stamp(dxf: bytes, templates: FirmTemplates, values: dict[str, str]) -> bytes
     if templates.layer_standard:
         std = templates.layer_standard
         for old, new in (std.get("map") or {}).items():
-            if old not in doc.layers:
+            if old not in doc.layers or new.upper() in ("0", "DEFPOINTS"):
                 continue
             src = doc.layers.get(old)
             if new not in doc.layers:
@@ -134,10 +163,10 @@ def verify(original: bytes, stamped: bytes, templates: FirmTemplates, values: di
 
     a, b = _read(original), _read(stamped)
     mapping = dict((templates.layer_standard or {}).get("map") or {})
-    count_a = Counter((e.dxftype(), mapping.get(e.dxf.layer, e.dxf.layer)) for e in a.modelspace())
-    count_b = Counter((e.dxftype(), e.dxf.layer) for e in b.modelspace())
+    count_a = Counter(signature(e, mapping) for e in a.modelspace())
+    count_b = Counter(signature(e, {}) for e in b.modelspace())
     missing = {k: v - count_b.get(k, 0) for k, v in count_a.items() if count_b.get(k, 0) < v}
-    check("firm_sheet_original_entities_kept", not missing, "every original entity, on its mapped layer", {f"{k[0]}@{k[1]}": v for k, v in list(missing.items())[:5]})
+    check("firm_sheet_original_entities_kept", not missing, "every original entity unchanged (geometry, text, attributes), on its mapped layer", [k[:120] for k in list(missing)[:3]])
     if templates.layer_standard:
         std = templates.layer_standard
         left = [old for old in mapping if old in b.layers and old not in mapping.values()]

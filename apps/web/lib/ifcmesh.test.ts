@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAX_TRIANGLES, TooLarge, boundsOf, eyeOf, fitCamera, mergeParts, orbit, viewProjection, zoom } from "./ifcmesh";
+import { MAX_TRIANGLES, TooLarge, boundsOf, eyeOf, fitCamera, mergeParts, orbit, partsCentre, triangleCount, viewProjection, zoom } from "./ifcmesh";
 
 const identity = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
 
@@ -72,5 +72,19 @@ describe("camera", () => {
     expect(Math.abs(y / w)).toBeLessThan(1e-4);
     expect(z / w).toBeGreaterThan(-1);
     expect(z / w).toBeLessThan(1);
+  });
+});
+
+describe("shared origin", () => {
+  it("puts two models on the same origin so they line up", () => {
+    const far = (dx: number) => { const m = [...identity]; m[12] = 500000 + dx; return triangle(m); };
+    const origin = partsCentre([far(0)]);
+    const a = mergeParts([far(0)], 1, origin);
+    const b = mergeParts([far(10)], 1, origin);
+    expect(Math.abs(a.positions[0])).toBeLessThan(5);
+    expect(b.positions[0] - a.positions[0]).toBeCloseTo(10);
+  });
+  it("counts triangles across parts", () => {
+    expect(triangleCount([triangle(), triangle()])).toBe(2);
   });
 });

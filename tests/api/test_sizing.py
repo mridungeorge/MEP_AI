@@ -62,3 +62,19 @@ def test_bad_airflow_is_refused():
     for q in (0, -5, float("nan"), float("inf")):
         with pytest.raises(ValueError):
             sizing.size_duct(q, "rect", S)
+
+
+def test_results_that_cannot_honour_the_settings_are_unsound_not_sized():
+    huge = sizing.size_duct(900000, "rect", S, depth_cap_mm=200)
+    assert huge.unsound and any("range" in n or "friction" in n for n in huge.notes)
+    tiny_cap = sizing.size_duct(500, "rect", S, depth_cap_mm=30)
+    assert tiny_cap.unsound and any("smaller than the size step" in n for n in tiny_cap.notes)
+    assert not sizing.size_duct(500, "rect", S).unsound and not sizing.size_duct(500, "round", S).unsound
+
+
+def test_laminar_flow_uses_the_laminar_friction_law():
+    re = 1000.0
+    d, q = 0.05, 1000.0 * 1.81e-5 * math.pi * 0.05 / (4 * 1.2)           # a flow that gives Re = 1000 in a 50 mm duct
+    v = q / (math.pi * d * d / 4)
+    assert sizing.RHO * v * d / sizing.MU == pytest.approx(re, rel=1e-6)
+    assert sizing.friction_pa_per_m(q, d, 0.0) == pytest.approx(64.0 / re * sizing.RHO * v * v / (2 * d), rel=1e-9)

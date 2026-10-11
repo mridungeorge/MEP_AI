@@ -3,6 +3,9 @@ ifc-mep drafting job as its read-only `base.ifc`. Nothing here decides complianc
 """
 import hashlib
 import json
+import os
+import subprocess
+import sys
 import tempfile
 from pathlib import Path
 from typing import Annotated, Any
@@ -37,6 +40,21 @@ def read_header(path: Path) -> tuple[str, list[dict[str, Any]]]:
     return str(f.schema), storeys
 
 
+def read_header_isolated(path: Path) -> tuple[str, list[dict[str, Any]]]:
+    """read_header in a child process with time, CPU and memory limits: a hostile file cannot take the API down. Raises ValueError for anything unreadable."""
+    try:
+        done = subprocess.run([sys.executable, "-I", "-m", "mep.api.base_model", str(path)], capture_output=True, timeout=130, check=False, cwd=str(path.parent))
+    except subprocess.TimeoutExpired:
+        raise ValueError("reading the model took too long") from None
+    if done.returncode != 0:
+        raise ValueError("not a readable IFC file")
+    try:
+        data = json.loads(done.stdout.strip().splitlines()[-1])
+        return str(data["schema"]), list(data["storeys"])
+    except (ValueError, KeyError, IndexError, TypeError):
+        raise ValueError("not a readable IFC file") from None
+
+
 @router.post("/revisions/{revision_id}/base-model")
 async def upload(revision_id: UUID, user: RevUser, repo: Repo, dsn: Dsn, file: Annotated[UploadFile, File()]) -> dict[str, Any]:
     info = repo.revision_info(revision_id, user.firm_id)
@@ -55,7 +73,7 @@ async def upload(revision_id: UUID, user: RevUser, repo: Repo, dsn: Dsn, file: A
         path = Path(tmp) / "model.ifc"
         path.write_bytes(data)
         try:
-            schema, storeys = await run_in_threadpool(read_header, path)
+            schema, storeys = await run_in_threadpool(read_header_isolated, path)
         except ValueError as exc:
             raise _err(422, "unreadable_ifc", str(exc)) from None
     if not schema.startswith("IFC4"):
@@ -64,6 +82,7 @@ async def upload(revision_id: UUID, user: RevUser, repo: Repo, dsn: Dsn, file: A
     name = ((file.filename or "model.ifc").replace("\\", "/").split("/")[-1])[:200]
     try:
         with psycopg.connect(dsn, row_factory=dict_row) as conn:
+            conn.execute("select 1 from revision where id = %s and firm_id = %s for update", (revision_id, user.firm_id))      # serialises uploads of one revision
             n = conn.execute("select count(*) as n from base_model where revision_id = %s and firm_id = %s", (revision_id, user.firm_id)).fetchone()
             if n is not None and n["n"] >= MAX_MODELS:
                 raise _err(409, "too_many_models", f"at most {MAX_MODELS} architect models per revision")
@@ -96,3 +115,15 @@ def download(model_id: UUID, user: RevUser, dsn: Dsn) -> Response:
         raise _err(404, "not_found", "no such model")
     return Response(content=bytes(row["content"]), media_type="application/octet-stream",
                     headers={"Content-Disposition": 'attachment; filename="model.ifc"', "X-Content-Type-Options": "nosniff", "Cache-Control": "no-store"})
+
+
+if __name__ == "__main__":  # pragma: no cover - the child process
+    if os.name == "posix":
+        import resource
+        resource.setrlimit(resource.RLIMIT_CPU, (120, 120))
+        resource.setrlimit(resource.RLIMIT_AS, (3 * 1024 * 1024 * 1024, 3 * 1024 * 1024 * 1024))
+    try:
+        _schema, _storeys = read_header(Path(sys.argv[1]))
+    except ValueError:
+        sys.exit(2)
+    print(json.dumps({"schema": _schema, "storeys": _storeys}))

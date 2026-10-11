@@ -178,6 +178,7 @@
       "ifc_project",
       "ifc_units",
       "ifc_storeys",
+      "ifc_storey_placement",
       "ifc_spaces",
       "dxf_storey_01",
       "dxf_storey_02"

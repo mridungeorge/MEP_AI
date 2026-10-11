@@ -54,7 +54,7 @@ def friction_factor(re: float, rel_rough: float) -> float:
 def friction_pa_per_m(flow_m3s: float, d_m: float, rough_m: float) -> float:
     v = flow_m3s / (math.pi * d_m * d_m / 4.0)
     re = RHO * v * d_m / MU
-    f = 0.316 / re ** 0.25 if re < 2300 else friction_factor(re, rough_m / d_m)
+    f = 64.0 / re if re < 2300 else friction_factor(re, rough_m / d_m)
     return f * RHO * v * v / (2.0 * d_m)
 
 
@@ -91,6 +91,7 @@ class Sized:
     friction_actual_pa_m: float
     aspect: float | None
     notes: list[str]
+    unsound: bool = False
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -108,7 +109,8 @@ def size_duct(airflow_ls: float, shape: str, s: dict[str, float | None], depth_c
     if shape == "round":
         dia = max(_up(d_mm, step), min_size)
         area = math.pi * (dia / 1000.0) ** 2 / 4.0
-        return Sized(airflow_ls, fr, round(d_mm, 1), "round", None, None, dia, round(q / area, 3), round(friction_pa_per_m(q, dia / 1000.0, rough_m), 4), None, notes)
+        actual = friction_pa_per_m(q, dia / 1000.0, rough_m)
+        return _sound(Sized(airflow_ls, fr, round(d_mm, 1), "round", None, None, dia, round(q / area, 3), round(actual, 4), None, notes), d_mm)
     aspect = float(s["target_aspect"] or 2.0)
     depth = (d_mm * (aspect + 1) ** 0.25) / (1.30 * aspect ** 0.625)
     depth = max(_up(depth, step), min_size)
@@ -126,8 +128,22 @@ def size_duct(airflow_ls: float, shape: str, s: dict[str, float | None], depth_c
     if ratio > float(s["max_aspect"] or 8.0):
         notes.append(f"aspect ratio {ratio:.1f} is above the firm's {s['max_aspect']:g}")
     de = equivalent_diameter(width, depth)
-    return Sized(airflow_ls, fr, round(d_mm, 1), "rect", width, depth, None, round(q / (width * depth / 1e6), 3),
-                 round(friction_pa_per_m(q, de / 1000.0, rough_m), 4), round(ratio, 2), notes)
+    return _sound(Sized(airflow_ls, fr, round(d_mm, 1), "rect", width, depth, None, round(q / (width * depth / 1e6), 3),
+                        round(friction_pa_per_m(q, de / 1000.0, rough_m), 4), round(ratio, 2), notes), d_mm, cap=cap)
+
+
+def _sound(sized: Sized, d_mm: float, cap: float | None = None) -> Sized:
+    """Mark a result UNSOUND when the arithmetic could not honour the settings: friction above the target, beyond the sizing range, or a depth above its limit."""
+    notes = list(sized.notes)
+    if d_mm >= 4990.0:
+        notes.append("beyond the range this sizing covers (5 m equivalent diameter)")
+    if sized.friction_actual_pa_m > sized.friction_target_pa_m * 1.001:
+        notes.append(f"could not meet the friction rate: {sized.friction_actual_pa_m:g} Pa/m against {sized.friction_target_pa_m:g}")
+    if cap is not None and sized.depth_mm is not None and sized.depth_mm > cap + 1e-9:
+        notes.append(f"the depth limit ({cap:g} mm) is smaller than the size step")
+    if sized.width_mm is not None and sized.width_mm >= 20000:
+        notes.append("width reached the 20 m search limit")
+    return Sized(**{**sized.as_dict(), "notes": notes, "unsound": len(notes) > len(sized.notes)})
 
 
 def velocity_note(velocity: float, role: str, s: dict[str, float | None]) -> str:

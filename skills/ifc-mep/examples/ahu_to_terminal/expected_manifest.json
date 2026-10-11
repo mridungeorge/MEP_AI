@@ -8,6 +8,7 @@
     }
   ],
   "inputs": {
+    "balance_tolerance_pct": 1,
     "base_ifc_sha256": "8790a1e193e82b8e7e7f337ec2633cd40f2120590317a1443503a25b079e2e80",
     "connections": [
       {
@@ -110,7 +111,7 @@
   },
   "skill": "ifc-mep",
   "skill_version": "1.0.0",
-  "spec_sha256": "e20245510149ef7a85a8f1f4d5d12ee8185347e143c4c7ef59adffa9fd2d4164",
+  "spec_sha256": "2fea03713cfd6ab0b82a246b3e7895ca32d78e9bc21cd70e1869efe4110b5a61",
   "toolchain": {
     "ifcopenshell": "0.9.0"
   },
@@ -123,8 +124,10 @@
       "nothing_else_added",
       "storey_assignment",
       "system_assignment",
-      "duct_geometry",
+      "element_geometry",
+      "element_properties_read_back",
       "ports_present",
+      "port_positions",
       "connections_match_spec",
       "connected_ports_meet_with_flow",
       "airflow_balance"
