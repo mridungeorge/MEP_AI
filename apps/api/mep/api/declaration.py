@@ -7,8 +7,8 @@ from fastapi.responses import Response
 
 from mep.api.review import Service as ReviewSvc
 from mep.api.review import _run
-from mep.api.revisions import _err
 from mep.api.revisions import User as RevUser
+from mep.api.revisions import _err
 from mep.api.services import Dsn, _as_user
 from mep.review import declaration as decl
 
