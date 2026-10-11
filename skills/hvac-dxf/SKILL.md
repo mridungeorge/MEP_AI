@@ -46,7 +46,7 @@ Needs `ezdxf`, `jsonschema`. Exit codes: 0 built, 2 spec rejected, 3 validator r
 - every duct is drawn once, on the right layer, with the right length, width and position (or centreline in schematic mode).
 - every tag text equals the text rebuilt FROM THE SCHEDULE (so a wrong size or airflow in the drawing is caught).
 - terminals: one symbol and one text each, at their position.
-- airflow balance per system: the trunk (largest duct airflow) equals the sum of terminal airflows within the tolerance, otherwise nothing is released.
+- airflow balance per system: the trunk (largest duct airflow) equals the sum of terminal airflows within the tolerance, otherwise the build is refused.
 - the title block carries every supplied field; manifest checksums match when supplied.
 - Known limits: tags are not checked for overlap with other geometry; a duct can cross another; fittings are not drawn.
 
