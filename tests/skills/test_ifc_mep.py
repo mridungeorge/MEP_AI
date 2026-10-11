@@ -196,6 +196,28 @@ def test_the_validator_refuses_each_kind_of_damage(build_mod, validator, job, tm
         t = next(iter(f.by_type("IfcAirTerminal")))
         t.ObjectPlacement.RelativePlacement.Location.Coordinates = (6750.0, 4000.0, 2000.0)
 
+    def unlink_wall(f):
+        import ifcopenshell.api
+        ifcopenshell.api.run("spatial.unassign_container", f, products=[next(iter(f.by_type("IfcWall")))])
+
+    def wall_pset(f):
+        import ifcopenshell.api
+        wall = next(iter(f.by_type("IfcWall")))
+        ifcopenshell.api.run("pset.edit_pset", f, pset=ifcopenshell.api.run("pset.add_pset", f, product=wall, name="Pset_WallCommon_X"), properties={"FireRating": "240"})
+
+    def wall_into_system(f):
+        import ifcopenshell.guid
+        f.createIfcRelAssignsToGroup(ifcopenshell.guid.new(), None, None, None, [next(iter(f.by_type("IfcWall")))], None, next(iter(f.by_type("IfcDistributionSystem"))))
+
+    def extra_duct_pset(f):
+        import ifcopenshell.api
+        d1 = next(e for e in f.by_type("IfcDuctSegment") if e.Tag == "D1")
+        ifcopenshell.api.run("pset.edit_pset", f, pset=ifcopenshell.api.run("pset.add_pset", f, product=d1, name="Extra"), properties={"A": "b"})
+
+    check(unlink_wall, "architect_relationships_kept")
+    check(wall_pset, "architect_relationships_kept")
+    check(wall_into_system, "architect_relationships_kept")
+    check(extra_duct_pset, "element_properties_read_back")
     check(size, "element_geometry")
     check(turn_duct, "element_geometry")
     check(offset_solid, "element_geometry")

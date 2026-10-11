@@ -118,12 +118,17 @@ def test_the_schedule_comes_from_the_server_not_the_card(admin, client):
     refused = client.post(f"{url}/run", headers=d, json={"spec": forged, "use_firm_defaults": False})
     assert refused.status_code == 409 and refused.json()["detail"]["code"] == "schedule_mismatch"
     assert client.post(f"{url}/card-preview", headers=d, json={"spec": forged}).status_code == 409
+    assert client.post(f"/revisions/{f['revision']}/services", headers=d, json={"kind": "duct", "tag": "D3", "shape": "rect", "width": 300, "depth": 300, "length": 2,
+                                                                                "system_tag": "S9", "airflow_ls": 100}).status_code == 200      # sized, not placed on any plan
     no_copy = {k: v for k, v in card.items() if k != "sizing_schedule"}
     ok = client.post(f"{url}/run", headers=d, json={"spec": no_copy, "use_firm_defaults": False}).json()
     assert ok["released"] is True                                                         # the server filled the schedule in
     wrong_draw = {**no_copy, "ducts": [{**x, "size": {"shape": "rect", "width_mm": 900, "depth_mm": 900}} if x["tag"] == "D1" else x for x in card["ducts"]]}
     bad = client.post(f"{url}/run", headers=d, json={"spec": wrong_draw, "use_firm_defaults": False}).json()
     assert bad["released"] is False and bad["status"] == "validator_rejected"            # drawn size differs from the server's schedule
+    unknown = {**no_copy, "ducts": [*card["ducts"], {**card["ducts"][0], "tag": "D77"}]}
+    refused77 = client.post(f"{url}/run", headers=d, json={"spec": unknown, "use_firm_defaults": False})
+    assert refused77.status_code == 409 and refused77.json()["detail"]["code"] == "duct_not_sized"           # a duct the revision never sized
     empty = h.seed(admin)
     assert client.post(f"/revisions/{empty['revision']}/skills/hvac-dxf/run", headers=h.auth(empty["designer"]), json={"spec": card, "use_firm_defaults": False}).status_code == 409
 

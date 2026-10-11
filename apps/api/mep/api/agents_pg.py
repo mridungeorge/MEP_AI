@@ -18,7 +18,7 @@ from psycopg.rows import dict_row
 from mep.api import gate1
 from mep.api.pg import PgLedger, PgRepository
 from mep.api.schedule import CurrentUser
-from mep.api.skills import card_digest, effective_spec, perform_run
+from mep.api.skills import card_digest, effective_spec, perform_run, server_filled
 from mep.api.skills_pg import PgSkills, SkillsRefused
 from mep.engine.loader import RulePack
 
@@ -119,7 +119,7 @@ class PgAgentBackend:
     def card_digest(self, skill: str, spec: dict[str, Any]) -> str:
         svc = PgSkills(self._dsn, self._user, self._skill_executor)
         try:
-            return card_digest(effective_spec(svc, skill, spec)[0])
+            return card_digest(server_filled(svc, skill, self._rev, effective_spec(svc, skill, spec)[0]))
         except Exception:  # noqa: BLE001 - an unknown skill or a card that cannot be completed has no version
             return card_digest(spec)
 

@@ -28,7 +28,7 @@
     "mark": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,39}$", "description": "File stem." },
     "units": { "const": "mm" },
     "mode": { "enum": ["layout", "schematic"], "description": "layout draws each duct at its true width; schematic draws a centreline." },
-    "balance_tolerance_pct": { "type": "number", "minimum": 0, "maximum": 20, "default": 1 },
+    "balance_tolerance_pct": { "type": "number", "minimum": 0, "maximum": 5, "default": 1 },
     "layers": {
       "type": "object",
       "additionalProperties": false,

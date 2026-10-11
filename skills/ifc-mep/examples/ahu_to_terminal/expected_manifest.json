@@ -121,6 +121,7 @@
       "architect_model_preserved",
       "schema_valid",
       "elements_present_once",
+      "architect_relationships_kept",
       "nothing_else_added",
       "storey_assignment",
       "system_assignment",

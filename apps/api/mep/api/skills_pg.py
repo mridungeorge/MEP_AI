@@ -89,9 +89,14 @@ class PgSkills:
         if skill != "hvac-dxf":
             return spec
         from mep.api.sizing_api import schedule_entries
-        schedule = schedule_entries(self._dsn, self._user, revision_id)
-        if not schedule:
+        everything = {e["tag"]: e for e in schedule_entries(self._dsn, self._user, revision_id)}
+        if not everything:
             raise SkillsRefused(409, "no_sizing_schedule", "this revision has no sound sizing schedule to draw from: add airflows to the services schedule first")
+        tags = sorted({d.get("tag") for d in spec.get("ducts", []) if isinstance(d, dict)}, key=str)
+        unknown = [t for t in tags if t not in everything]
+        if unknown or not tags:
+            raise SkillsRefused(409, "duct_not_sized", "these ducts are not in this revision's sound sizing schedule: " + (", ".join(map(str, unknown)) or "(the card draws no ducts)"))
+        schedule = [everything[t] for t in tags]                    # only the ducts drawn on this sheet
         given = spec.get("sizing_schedule")
         if given is not None and (not isinstance(given, list) or sorted(given, key=lambda e: str(e.get("tag")) if isinstance(e, dict) else "") != schedule):
             raise SkillsRefused(409, "schedule_mismatch", "the card's sizing schedule differs from this revision's sizing schedule (leave it out and the server fills it in)")

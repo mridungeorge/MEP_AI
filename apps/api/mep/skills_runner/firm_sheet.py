@@ -11,12 +11,14 @@ Title block: a DXF drawing; TEXT and MTEXT containing {{MARK}} {{SKILL}} {{PROJE
 import hashlib
 import io
 import re
+import threading
 from collections import Counter
 from dataclasses import dataclass
 from typing import Any
 
 from mep.skills_runner.runner import RunFile, SkillRunResult
 
+_WRITE_LOCK = threading.Lock()
 PLACEHOLDER = re.compile(r"\{\{([A-Z_]{2,20})\}\}")
 CONTROL = re.compile("[\x00-\x1f\x7f\u200b-\u200f\u2028-\u202e\u2060-\u2069\ufeff]")
 KEYS = ("MARK", "SKILL", "PROJECT", "TITLE", "DRAWING_NO", "REVISION", "DATE", "DRAWN_BY", "FIRM", "NOTES")
@@ -41,7 +43,9 @@ def values_for(skill: str, spec: dict[str, Any]) -> dict[str, str]:
     tb = spec.get("title_block") if isinstance(spec.get("title_block"), dict) else {}
 
     def clean(v: Any) -> str:
-        text = CONTROL.sub("", str(v)).replace(chr(92), "/").replace("{", "(").replace("}", ")").replace("%%", "%")      # no MTEXT or %% format codes from card text
+        text = CONTROL.sub("", str(v)).replace(chr(92), "/").replace("{", "(").replace("}", ")")
+        while "%%" in text or "^" in text:                                                         # no MTEXT, %% or ^ format codes from card text
+            text = text.replace("%%", "%").replace("^", "")
         return text.strip()[:80] or "-"
 
     return {"MARK": clean(spec.get("mark", "-")), "SKILL": clean(skill), "PROJECT": clean(tb.get("project", spec.get("mark", "-"))),
@@ -64,10 +68,10 @@ def _write(doc: Any) -> bytes:
     from mep.skills_runner.registry import REPO_ROOT
 
     if str(REPO_ROOT) not in sys.path:
-        sys.path.insert(0, str(REPO_ROOT))
+        sys.path.append(str(REPO_ROOT))                            # appended: nothing at the repo root can shadow an installed module
     from skills.cad import cadkit
 
-    with tempfile.TemporaryDirectory() as td:
+    with _WRITE_LOCK, tempfile.TemporaryDirectory() as td:       # save_dxf flips a global ezdxf option: one writer at a time
         path = Path(td) / "out.dxf"
         cadkit.save_dxf(doc, path)
         return path.read_bytes()
@@ -84,7 +88,11 @@ def _round(v: Any) -> Any:
 def signature(e: Any, mapping: dict[str, str]) -> str:
     """What an entity IS apart from its handle: type, mapped layer, every attribute, and the points of a polyline."""
     attrs = {k: _round(v) for k, v in e.dxfattribs().items() if k not in ("handle", "owner", "layer")}
-    extra = tuple(_round(tuple(p)) for p in e.get_points("xyseb")) if e.dxftype() == "LWPOLYLINE" else ()
+    extra: tuple[Any, ...] = tuple(_round(tuple(p)) for p in e.get_points("xyseb")) if e.dxftype() == "LWPOLYLINE" else ()
+    if e.dxftype() == "MTEXT":
+        extra = (*extra, e.text)
+    xdata = tuple(sorted((app, tuple(tuple(t) for t in tags)) for app, tags in e.xdata.data.items())) if e.xdata is not None else ()
+    extra = (*extra, repr(xdata))
     layer = e.dxf.layer
     return repr((e.dxftype(), mapping.get(layer, layer), sorted(attrs.items()), extra))
 

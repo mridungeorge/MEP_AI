@@ -179,12 +179,39 @@ def validate(spec: dict[str, Any], files: list[Path]) -> ValidationResult:
     missing = sorted(set(expected) - set(found))
     check("elements_present_once", not missing and not problems, sorted(expected), {"missing": missing, "problems": problems[:5]})
     if base is not None:
-        new_roots = [e for e in f if e.is_a("IfcRoot") and e.GlobalId not in {x.GlobalId for x in base if x.is_a("IfcRoot")}]
+        base_guids = {x.GlobalId for x in base if x.is_a("IfcRoot")}
+        new_roots = [e for e in f if e.is_a("IfcRoot") and e.GlobalId not in base_guids]
         stray = sorted({e.is_a() for e in new_roots if not any(e.is_a(c) for c in ALLOWED_NEW_ROOTS)})
         n_new = sum(1 for e in new_roots if any(e.is_a(c) for c in ADDED_CLASSES))
         n_ports = 2 * len(spec["ducts"]) + len(spec.get("terminals", [])) + 2 * len(spec.get("equipment", []))
         n_systems = len({e["system"] for _, items in groups for e in items})
         want = len(expected) + n_ports + n_systems
+        # what the new relationships point at: only new MEP products, ports and systems, never an architect element
+        touched = []
+        for r in new_roots:
+            targets: list[Any] = []
+            if r.is_a("IfcRelAssignsToGroup") or r.is_a("IfcRelDefinesByProperties"):
+                targets = list(r.RelatedObjects) + ([r.RelatingGroup] if r.is_a("IfcRelAssignsToGroup") else [])
+            elif r.is_a("IfcRelNests"):
+                targets = [r.RelatingObject, *r.RelatedObjects]
+            elif r.is_a("IfcRelConnectsPorts"):
+                targets = [r.RelatingPort, r.RelatedPort]
+            elif r.is_a("IfcRelContainedInSpatialStructure"):
+                targets = list(r.RelatedElements)
+            old = [t.GlobalId for t in targets if t is not None and t.GlobalId in base_guids]
+            if old:
+                touched.append(f"{r.is_a()} reaches the architect's {old[0]}")
+        # an architect element keeps its storey; and an architect element gains no property set
+        moved = []
+        for e in base.by_type("IfcElement"):
+            try:
+                after = el_util.get_container(f.by_id(e.id()))
+            except RuntimeError:
+                continue                                              # a removed entity is already reported by the check above
+            before = el_util.get_container(e)
+            if (before.GlobalId if before else None) != (after.GlobalId if after else None):
+                moved.append(f"{e.GlobalId}: container changed")
+        check("architect_relationships_kept", not touched and not moved, "new relationships reach only new MEP objects; architect elements keep their storeys", (touched + moved)[:5])
         check("nothing_else_added", n_new == want and not stray, {"products_ports_systems": want, "other_new_classes": []}, {"products_ports_systems": n_new, "other_new_classes": stray})
 
     # storeys and systems
@@ -254,6 +281,8 @@ def validate(spec: dict[str, Any], files: list[Path]) -> ValidationResult:
                 bad_geo.append(f"{tag}: is {np.linalg.norm(origin - want_origin):.1f} mm from where the spec puts it")
             if np.linalg.norm(m[:3, :3] - rot) > 1e-4:
                 bad_geo.append(f"{tag}: rotated")
+        if set((el_util.get_psets(el) or {}).keys()) != {"MEP_Services"}:
+            bad_pset.append(f"{tag}: property sets {sorted((el_util.get_psets(el) or {}).keys())}, expected only MEP_Services")
         props = el_util.get_pset(el, "MEP_Services") or {}
         if props.get("System") != e["system"]:
             bad_pset.append(f"{tag}: System {props.get('System')!r}")
