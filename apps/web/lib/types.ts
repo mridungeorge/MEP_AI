@@ -435,3 +435,8 @@ export interface CommissioningImport {
 
 /** GET /standards */
 export interface StandardSlot { id: string; standard: string; title: string; discipline: string; licence_held: boolean; rules_loaded: number; state: "LICENCE_REQUIRED" | "NO_RULES" | "READY"; message: string }
+
+/** GET /public/pricing */
+export interface PricingView { banner: string; currency: string; trial_days: number; plans: { id: string; name: string; seat_cents: number; project_cents: number; max_projects: number | null }[] }
+/** GET /admin/feedback */
+export interface FeedbackRow { id: string; kind: string; page: string | null; message: string; created_at: string; email: string | null }

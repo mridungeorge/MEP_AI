@@ -4,6 +4,7 @@ person to look at, never findings of compliance or non-compliance, and a box is 
 
 Units: boxes are in millimetres in the model's own coordinates. A project's duct coordinates must be entered in the same frame as the other models.
 """
+import bisect
 import hashlib
 import io
 import json
@@ -107,19 +108,39 @@ def gap(a: Box, b: Box) -> float:
     return max(per_axis)
 
 
+def _x_index(elements: list[Box]) -> tuple[list[int], list[float], float]:
+    """Element indexes ordered by low x, their low-x values, and the widest x extent: lets detect() look only at boxes near a duct in x."""
+    order = sorted(range(len(elements)), key=lambda i: elements[i].lo[0])
+    return order, [elements[i].lo[0] for i in order], max((e.hi[0] - e.lo[0] for e in elements), default=0.0)
+
+
 def detect(ducts: list[dict[str, Any]], models: list[dict[str, Any]], clearance_mm: float, limit: int | None = None) -> list[dict[str, Any]]:
-    """models: [{"discipline", "file_name", "elements": [Box...]}]. Sorted for a stable output."""
+    """models: [{"discipline", "file_name", "elements": [Box...]}]. Sorted for a stable output.
+
+    A pair is reported when the gap on all three axes is below the clearance, so an element can only matter when its x range is within the
+    clearance of the duct's: the elements are indexed by low x once per model and each duct checks only that window (same pairs, same order
+    as checking every element)."""
     found: list[dict[str, Any]] = []
+    indexes = [_x_index(m["elements"]) for m in models]
     for d in ducts:
         if limit is not None and len(found) > limit:
             break
         db = duct_box(d)
         if db is None:
             continue
-        for m in models:
-            for e in m["elements"]:
+        finite = all(math.isfinite(v) for v in (*db.lo, *db.hi, clearance_mm))
+        for m, (order, los, widest) in zip(models, indexes, strict=True):
+            elements = m["elements"]
+            if finite:
+                a = bisect.bisect_right(los, db.lo[0] - clearance_mm - widest - 1e-6)
+                b = bisect.bisect_left(los, db.hi[0] + clearance_mm + 1e-6)
+                window = sorted(order[a:b])
+            else:
+                window = list(range(len(elements)))
+            for i in window:
                 if limit is not None and len(found) > limit:
                     break
+                e = elements[i]
                 g = gap(db, e)
                 if g < clearance_mm:
                     found.append({"duct_id": str(d["id"]), "duct_tag": d["tag"], "discipline": m["discipline"], "model": m["file_name"], "element_guid": e.guid,

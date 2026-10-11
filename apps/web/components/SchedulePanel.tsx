@@ -55,9 +55,9 @@ export function SchedulePanel({
         <option value="">System…</option>
         {tags.map((t) => <option key={t} value={t}>{t}</option>)}
       </select>{" "}
-      <input placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />{" "}
-      <input placeholder="Value" value={value} onChange={(e) => setValue(e.target.value)} />{" "}
-      <input placeholder="Unit (e.g. L/s)" value={unit} onChange={(e) => setUnit(e.target.value)} />{" "}
+      <input aria-label="Name" placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />{" "}
+      <input aria-label="Value" placeholder="Value" value={value} onChange={(e) => setValue(e.target.value)} />{" "}
+      <input aria-label="Unit" placeholder="Unit (e.g. L/s)" value={unit} onChange={(e) => setUnit(e.target.value)} />{" "}
       <button
         type="button"
         onClick={() =>

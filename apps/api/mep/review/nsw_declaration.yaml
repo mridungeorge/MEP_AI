@@ -1,0 +1,5 @@
+# Which projects the NSW design compliance declaration draft is offered for. The list is DATA, not logic.
+# TODO_FROM_SOURCE: the classes, and the dates from which each applies, must be confirmed by a person against the NSW legislation and Planning Portal guidance.
+# Until then the draft is offered for these classes only as a convenience and says so on its face.
+classes: ["2", "3", "9c"]
+basis: "TODO_FROM_SOURCE: applicability not verified against the legislation; the practitioner confirms it"

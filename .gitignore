@@ -9,3 +9,4 @@ node_modules/
 node_modules/
 .hypothesis/
 apps/web/public/wasm/
+apps/web/public/guide/

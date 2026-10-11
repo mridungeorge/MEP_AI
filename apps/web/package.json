@@ -12,6 +12,7 @@
     "web-ifc": "0.0.66"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.10.2",
     "@playwright/test": "^1.64.0",
     "@types/node": "^26.6.4",
     "@types/react": "^18.3.31",
@@ -20,8 +21,8 @@
     "vitest": "^5.0.3"
   },
   "scripts": {
-    "dev": "node scripts/copy-wasm.mjs && next dev",
-    "build": "node scripts/copy-wasm.mjs && next build",
+    "dev": "node scripts/copy-wasm.mjs && node scripts/copy-guide.mjs && next dev",
+    "build": "node scripts/copy-wasm.mjs && node scripts/copy-guide.mjs && next build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "e2e": "playwright test"

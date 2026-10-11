@@ -1,4 +1,5 @@
 "use client";
+import { HelpTip } from "@/components/HelpTip";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ApiError, api } from "@/lib/api";
 import { applyEdit, canConfirm, canRun, unconfirmedRefs, withEtags } from "@/lib/gate1";
@@ -84,6 +85,7 @@ export function Gate1Screen({ revisionId }: { revisionId: string }) {
   return (
     <main>
       <h1>Gate 1: confirm inputs</h1>
+      <p><HelpTip topic="gate1" label="What do extracted and confirmed mean?" /></p>
       <UploadPanel revisionId={revisionId} onUploaded={reload} />
       <HealthPanel health={state.health} />
       <EvidencePanel revisionId={revisionId} canEdit={state.role === "designer"} onChanged={reload} />
@@ -132,6 +134,7 @@ export function Gate1Screen({ revisionId }: { revisionId: string }) {
         {message && <p role="alert" style={{ color: "#b91c1c" }}>{message}</p>}
       </section>
       <section aria-label="Run rules">
+        <p><HelpTip topic="run" label="What does DRAFT mean?" /></p>
         <button
           type="button"
           disabled={!run.ok}

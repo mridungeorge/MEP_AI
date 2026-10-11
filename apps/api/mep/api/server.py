@@ -21,6 +21,7 @@ import psycopg
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from mep import ratelimit
 from mep.api import admin as admin_api
 from mep.api import agents as agents_api
 from mep.api import base_model as base_model_api
@@ -28,6 +29,7 @@ from mep.api import billing as billing_api
 from mep.api import commissioning as commissioning_api
 from mep.api import declaration as declaration_api
 from mep.api import evidence as evidence_api
+from mep.api import feedback as feedback_api
 from mep.api import fixes as fixes_api
 from mep.api import gate1, revisions, sizing_api, standards_api, uploads
 from mep.api import me as me_api
@@ -74,6 +76,7 @@ def create_pg_app(dsn: str, jwt_secret: str, pack: RulePack, cors_origins: list[
     logging.getLogger("uvicorn.access").addFilter(_RedactShareTokens())
     current_user, token_subject = make_auth(dsn, jwt_secret, jwks_url)
     app = create_app(None, current_user, pack, ledger=PgLedger(dsn))
+    ratelimit.install(app)                       # per user and per client IP on upload, run, share and sign-in routes (off with MEP_RATELIMIT=off)
 
     ready_cache: dict[str, Any] = {"at": -1e9, "ok": False}
     ready_lock = threading.Lock()
@@ -118,6 +121,7 @@ def create_pg_app(dsn: str, jwt_secret: str, pack: RulePack, cors_origins: list[
     app.include_router(vision_jobs_api.router)
     app.dependency_overrides[vision_jobs_api.current_user] = current_user
     app.dependency_overrides[vision_jobs_api.get_dsn] = lambda: dsn
+    app.include_router(feedback_api.router)
     app.include_router(standards_api.router)
     app.include_router(commissioning_api.router)
     app.include_router(declaration_api.router)

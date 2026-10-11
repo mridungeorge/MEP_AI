@@ -42,3 +42,21 @@ def test_the_slot_states_follow_the_flags(tmp_path):
     (folder / "r.yaml").write_text("id: x\n", encoding="utf-8")
     assert standards.slot_state({**slot, "licence_held": True}, tmp_path)["state"] == "READY"
     assert standards.slot_state(slot, tmp_path)["state"] == "LICENCE_REQUIRED"          # a file does not switch a licence on
+
+
+def test_the_engine_refuses_a_rule_dropped_into_an_unlicensed_slot_or_beside_the_ncc_rules(tmp_path):
+    import shutil
+
+    from mep.engine.loader import RuleLoadError, load_pack
+    one = next((RULES / "ncc2025").rglob("*.yaml"))
+    for where, needle in (("licensed/as1668-2", "no recorded licence"), ("as1668", "belongs in its licensed slot")):
+        rules = tmp_path / where.replace("/", "_")
+        shutil.copytree(RULES, rules)
+        target = rules / where
+        target.mkdir(parents=True, exist_ok=True)
+        text = one.read_text(encoding="utf-8")
+        if where == "as1668":
+            text = text.replace(next(ln for ln in text.splitlines() if ln.startswith("id:")), "id: AS1668.2-5.1-made-up")
+        (target / "x.yaml").write_text(text, encoding="utf-8")
+        with pytest.raises(RuleLoadError, match=needle):
+            load_pack(rules)

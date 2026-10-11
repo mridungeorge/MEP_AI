@@ -131,6 +131,18 @@ def load_rule(path: Path, validator: Draft202012Validator) -> Rule:
     return Rule(raw, path, hashlib.sha256(data).hexdigest())
 
 
+def _guard_licensed(path: Path, rules_dir: Path) -> None:
+    """A rule file in rules/licensed/<slot>/ is loaded only when a person has recorded the licence for that slot (apps/api/mep/standards_slots.yaml)."""
+    parts = path.relative_to(rules_dir).parts
+    if parts[0] != "licensed":
+        return
+    from mep.standards import load_slots
+
+    slot = next((s for s in load_slots() if s["pack_dir"] == "/".join(parts[:2])), None)
+    if slot is None or not slot["licence_held"]:
+        raise RuleLoadError(f"{path}: this licensed-standard slot has no recorded licence, so no rule may be loaded from it")
+
+
 def load_pack(rules_dir: Path) -> RulePack:
     validator = _schema(rules_dir)
     pack = RulePack()
@@ -139,7 +151,10 @@ def load_pack(rules_dir: Path) -> RulePack:
             raise RuleLoadError(f"{path}: rule files and folders must not be symbolic links")
         if "schema" in path.parts or path.name in NON_RULE_FILES:
             continue
+        _guard_licensed(path, rules_dir)
         rule = load_rule(path, validator)
+        if rule.id.startswith("AS") and "licensed" not in path.relative_to(rules_dir).parts[:1]:
+            raise RuleLoadError(f"{path}: a rule of an Australian Standard belongs in its licensed slot (rules/licensed/<slot>/), never beside the NCC rules")
         if rule.id in pack.rules:
             raise RuleLoadError(f"duplicate rule id {rule.id}")
         pack.rules[rule.id] = rule

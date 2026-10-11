@@ -29,6 +29,9 @@ def _signed_rows(svc: Any, user: Any, dsn: str, revision_id: UUID) -> list[dict[
         names = {str(r["id"]): r["name"] for r in conn.execute("select id, name from space where revision_id = %s and firm_id = %s", (revision_id, user.firm_id)).fetchall()}
     terminals = [r for r in runs_of(dsn, user, revision_id) if r["kind"] == "terminal"]
     rows = cx.rows_of(terminals, names)
+    clash = cx.collisions(rows)
+    if clash:
+        raise _err(409, "tag_collision", "terminal tags collide within a system, so a measured value could not be matched to one terminal: " + ", ".join(clash[:5]))
     if not rows:
         raise _err(422, "no_terminals", "this revision has no terminals with a design airflow in its services schedule")
     return rows
@@ -48,12 +51,12 @@ def sheet_pdf(revision_id: UUID, user: RevUser, svc: ReviewSvc, dsn: Dsn) -> Res
 
 
 @router.post("/revisions/{revision_id}/commissioning/import")
-async def import_readings(revision_id: UUID, user: RevUser, svc: ReviewSvc, dsn: Dsn, tolerance_pct: Annotated[float, Form(ge=0, le=50)],
-                          file: Annotated[UploadFile, File()]) -> dict[str, Any]:
+def import_readings(revision_id: UUID, user: RevUser, svc: ReviewSvc, dsn: Dsn, tolerance_pct: Annotated[float, Form(ge=0, le=50)],
+                    file: Annotated[UploadFile, File()]) -> dict[str, Any]:
     if user.role not in DESIGNER_ROLES:
         raise _err(403, "forbidden", "only a designer imports site readings")
     rows = _signed_rows(svc, user, dsn, revision_id)
-    data = await file.read(cx.MAX_IMPORT_BYTES + 1)
+    data = file.file.read(cx.MAX_IMPORT_BYTES + 1)
     try:
         parsed = cx.parse_import(data, rows, tolerance_pct)
     except cx.ImportRefused as exc:

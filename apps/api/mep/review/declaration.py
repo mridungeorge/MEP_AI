@@ -8,9 +8,12 @@ Applies to NSW projects with a building part of class 2, 3 or 9c. Available only
 """
 import hashlib
 import io
+import re
+from pathlib import Path
 from typing import Any
 from xml.sax.saxutils import escape
 
+import yaml
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
@@ -18,7 +21,9 @@ from reportlab.lib.units import mm
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 BANNER = "DRAFT: the registered design practitioner must review and lodge on the NSW Planning Portal"
-APPLICABLE_CLASSES = ("2", "3", "9c")
+_APPLICABILITY = yaml.safe_load(Path(__file__).with_name("nsw_declaration.yaml").read_text(encoding="utf-8"))
+APPLICABLE_CLASSES = tuple(str(c).lower() for c in _APPLICABILITY["classes"])
+DECLARATION_WORDS = re.compile(r"\b(i|we)\b[^.\n]{0,60}\b(declare|certify|certifies|warrant|attest)\b|\bhereby\b|\bthe design complies\b", re.IGNORECASE)
 TO_COMPLETE = (
     ("declaration_statement", "The declaration itself (the practitioner's statement under the NSW legislation). Not generated here: it is the practitioner's to write or select."),
     ("practitioner_identity", "The registered design practitioner's name, registration class and number as the Planning Portal requires them."),
@@ -58,7 +63,7 @@ def build(package: dict[str, Any], pathways: list[dict[str, Any]]) -> dict[str, 
     return {
         "banner": BANNER, "lodged": False, "kind": "NSW design compliance declaration (draft)",
         "rules_banner": package.get("banner"),
-        "applies_to": {"state": "NSW", "classes": hit},
+        "applies_to": {"state": "NSW", "classes": hit, "basis": _APPLICABILITY["basis"]},
         "building": {"address": project["address"], "ncc_edition": project["ncc_edition"], "climate_zone": project["climate_zone"], "approval_date": project["approval_date"],
                      "building_parts": project["building_parts"]},
         "scope": {"discipline": "Mechanical services (HVAC)", "revision_id": package["revision"]["id"], "architect_rev": package["revision"]["architect_rev"],
@@ -83,6 +88,11 @@ def to_pdf(d: dict[str, Any]) -> bytes:
         canvas.setFillColor(colors.HexColor("#B00020"))
         canvas.setFont("Helvetica-Bold", 9)
         canvas.drawCentredString(width / 2, height - 10 * mm, d["banner"])
+        if d["rules_banner"]:
+            canvas.drawCentredString(width / 2, height - 14 * mm, d["rules_banner"])
+        if d["independence_notice"]:
+            canvas.setFont("Helvetica-Bold", 7)
+            canvas.drawCentredString(width / 2, height - 18 * mm, str(d["independence_notice"]))
         canvas.setFillColor(colors.black)
         canvas.setFont("Helvetica", 7)
         canvas.drawString(15 * mm, 8 * mm, f"Revision {d['scope']['revision_id']} | ledger anchor {str(d['ledger']['anchor_hash'])[:16]} | page {doc.page}")
@@ -96,7 +106,7 @@ def to_pdf(d: dict[str, Any]) -> bytes:
         t.setStyle(TableStyle([("GRID", (0, 0), (-1, -1), 0.25, colors.grey), ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#EEEEEE")), ("VALIGN", (0, 0), (-1, -1), "TOP")]))
         return t
 
-    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=20 * mm, bottomMargin=14 * mm, leftMargin=15 * mm, rightMargin=15 * mm, title="NSW design compliance declaration (draft)", invariant=1)
+    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=24 * mm, bottomMargin=14 * mm, leftMargin=15 * mm, rightMargin=15 * mm, title="NSW design compliance declaration (draft)", invariant=1)
     b, s = d["building"], d["scope"]
     parts = "; ".join(f"class {p['class']} x{p['storeys']} storeys {p['area_m2']:g} m2" for p in b["building_parts"])
     story: list[Any] = [
@@ -110,26 +120,33 @@ def to_pdf(d: dict[str, Any]) -> bytes:
         Paragraph("Scope of this package", styles["Heading3"]),
         table([["Discipline", s["discipline"]], ["Architect revision", str(s["architect_rev"])], ["Frozen", str(s["frozen_at"])], ["Revision id", str(s["revision_id"])]], [40 * mm, 140 * mm]),
         Spacer(1, 3 * mm),
-        Paragraph("Signed gates", styles["Heading3"]),
-        table([["Gate", "Role", "Signed by", "Registration no.", "Signed at"]]
+        Paragraph("Signed gates (a registration number here is not the practitioner's NSW registration)", styles["Heading3"]),
+        table([["Gate", "Role", "Signed by", "Registration no. (as typed; register not recorded)", "Signed at"]]
               + [[x["gate"], x["role"], x["email"] or "", x["registration_no"] or "(none recorded)", str(x["signed_at"])] for x in d["signed_by"]], [20 * mm, 25 * mm, 55 * mm, 40 * mm, 40 * mm]),
         Spacer(1, 3 * mm),
         Paragraph("Result summary: " + escape(", ".join(f"{k} {v}" for k, v in sorted(d["results_summary"].items())) or "none"), styles["Normal"]),
     ]
-    if d["rules_banner"]:
-        story += [Spacer(1, 2 * mm), Paragraph(escape(f"Rule status: {d['rules_banner']}"), styles["Normal"])]
     if d["independence_notice"]:
         story += [Paragraph(escape(f"{d['independence_notice']}: one person may have held more than one gate in this firm."), styles["Normal"])]
-    story += [Spacer(1, 3 * mm), Paragraph("Accepted FAILs (for the practitioner to address)", styles["Heading3"])]
+    story += [Spacer(1, 3 * mm), Paragraph("Accepted FAILs (for the practitioner to address). Entered by your team, not a statement of this app", styles["Heading3"])]
     story += [table([["System", "Rule", "Category", "Reference"]] + [[x["subject"], x["rule_id"], x["category"], x["reference"] or ""] for x in d["accepted_fails"]], [35 * mm, 70 * mm, 40 * mm, 35 * mm])
               if d["accepted_fails"] else Paragraph("None.", styles["Normal"])]
-    story += [Spacer(1, 3 * mm), Paragraph("Performance solutions recorded", styles["Heading3"])]
+    story += [Spacer(1, 3 * mm), Paragraph("Performance solutions recorded. Entered by your team, not a statement of this app", styles["Heading3"])]
     story += [table([["System", "Rule", "Note", "Evidence recorded"]] + [[x["subject"], x["rule_id"], x["note"] or "", "; ".join(e["title"] for e in x["evidence"]) or "none"] for x in d["performance_solutions"]],
                     [30 * mm, 55 * mm, 50 * mm, 45 * mm]) if d["performance_solutions"] else Paragraph("None recorded.", styles["Normal"])]
     story += [Spacer(1, 3 * mm), Paragraph("Fields the registered design practitioner must complete", styles["Heading3"]),
               table([["Field", "What is needed"]] + [[x["field"], x["note"]] for x in d["fields_to_complete"]], [50 * mm, 130 * mm])]
     doc.build(story, onFirstPage=decorate, onLaterPages=decorate)
     return buf.getvalue()
+
+
+def _user_text(d: dict[str, Any]) -> list[str]:
+    out = [str(d["building"]["address"])]
+    for x in d["accepted_fails"]:
+        out += [str(x.get("reference") or ""), str(x.get("explanation") or ""), str(x.get("category") or "")]
+    for x in d["performance_solutions"]:
+        out += [str(x.get("note") or ""), *[str(e.get("title") or "") for e in x.get("evidence", [])]]
+    return sorted((t for t in out if len(t) > 2), key=len, reverse=True)
 
 
 def validate_pdf(data: bytes, d: dict[str, Any]) -> dict[str, Any]:
@@ -144,11 +161,16 @@ def validate_pdf(data: bytes, d: dict[str, Any]) -> dict[str, Any]:
     flat = " ".join(pages)
     checks["has_pages"] = bool(pages)
     checks["banner_on_every_page"] = all(BANNER in p for p in pages)
+    checks["rules_banner_on_every_page"] = (not d["rules_banner"]) or all(d["rules_banner"] in p for p in pages)
+    checks["independence_notice_when_present"] = (not d["independence_notice"]) or all(str(d["independence_notice"]) in p for p in pages)
     checks["says_not_lodged"] = "has not been lodged" in flat
     checks["names_the_revision"] = str(d["scope"]["revision_id"]) in flat
-    checks["every_signer_listed"] = all((s["registration_no"] or "(none recorded)") in flat for s in d["signed_by"])
+    checks["every_signer_listed"] = all(f"{s['gate']} {s['role']}" in flat and (s["registration_no"] or "(none recorded)") in flat for s in d["signed_by"])
     checks["every_field_to_complete_listed"] = all(x["field"] in flat for x in d["fields_to_complete"])
-    checks["accepted_fails_listed"] = all(x["rule_id"] in flat for x in d["accepted_fails"])
-    checks["performance_solutions_listed"] = all(x["rule_id"] in flat for x in d["performance_solutions"])
-    checks["no_declaration_text"] = "I declare" not in flat and "hereby declare" not in flat.lower()
+    checks["accepted_fails_listed"] = all(f"{x['subject']} {x['rule_id']}" in flat for x in d["accepted_fails"])
+    checks["performance_solutions_listed"] = all(f"{x['subject']} {x['rule_id']}" in flat for x in d["performance_solutions"])
+    generated = flat
+    for t in _user_text(d):                                                 # what the team typed is theirs; the check is on what this app wrote
+        generated = generated.replace(" ".join(t.split()), " ")
+    checks["no_declaration_text"] = DECLARATION_WORDS.search(generated) is None
     return {"passed": all(checks.values()), "checks": checks, "sha256": hashlib.sha256(data).hexdigest()}

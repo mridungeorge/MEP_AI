@@ -1,0 +1,24 @@
+# Glossary
+
+- Accepted FAIL: a FAIL a checker has chosen to accept with a reason category and explanation. The approver must acknowledge it.
+- Agent: an assistant that can leave notes, flags and draft spec cards. It cannot produce or approve a result.
+- BCF: BIM Collaboration Format, the file clash-lite exports.
+- Confirmed: a value a designer has accepted at Gate 1.
+- DRAFT: the status of every rule. Not approved by an engineer.
+- DTS: deemed-to-satisfy, the prescribed pathway, as opposed to a Performance Solution.
+- Extracted: a value read from a file (IFC, DXF, PDF). Not usable by the engine until confirmed.
+- Fix hypothesis: a tested suggestion to verify. Never an answer.
+- Freeze: the designer's Gate 1 sign-off. A frozen revision cannot change.
+- Gate 1, 2, 3: designer confirmation and freeze; checker review; approver sign-off with registration number.
+- Ingest health: a score of how well the uploaded model was read.
+- Ledger: the hash-chained, append-only record of signed actions.
+- NCC: National Construction Code. One edition per project.
+- NEEDS_JUDGEMENT: an outcome that needs an engineer's decision, or a unit mismatch.
+- Near miss: a pass close to its threshold.
+- Performance Solution: an alternative to the deemed-to-satisfy pathway, supported by evidence you supply.
+- Provenance: where a value came from (extracted, hand entered, engineer supplied, confirmed).
+- Revision: one issue of the architect's model, with its own inputs and results.
+- Skill: a drafting tool that builds files from a spec card.
+- Spec card: the form of inputs for a skill, with units.
+- Spot check: the random sample of clean passes a checker must examine before bulk approval.
+- Stale: a result whose inputs or rules changed since it was produced.

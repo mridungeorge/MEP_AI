@@ -25,6 +25,10 @@ def _pathways(dsn: str, user: Any, revision_id: UUID) -> list[dict[str, Any]]:
 
 def _build(svc: Any, user: Any, dsn: str, revision_id: UUID) -> dict[str, Any]:
     package = _run(svc.package, revision_id)
+    with _as_user(dsn, user) as conn:
+        newer = conn.execute("select 1 from revision where parent_revision_id = %s and firm_id = %s limit 1", (revision_id, user.firm_id)).fetchone()
+    if newer is not None:
+        raise _err(409, "superseded", "a newer revision was made from this one: draft the declaration from the latest signed revision")
     try:
         return decl.build(package, _pathways(dsn, user, revision_id))
     except decl.NotApplicable as exc:

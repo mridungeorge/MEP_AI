@@ -22,6 +22,14 @@ router = APIRouter()
 # any POST whose path ends in /uploads (or /uploads/): FastAPI's UUID parameter also accepts the 32-hex, braced and urn:uuid
 # spellings, and the app may be mounted under a prefix, so the guard must not depend on the canonical form
 _UPLOAD_PATH = re.compile(r"/uploads/?$")
+MiB = 1024 * 1024
+# every other route that takes a file body, with the most it may carry (the handlers check again; this stops the body being read at all)
+_FILE_ROUTES = ((_UPLOAD_PATH, MAX_UPLOAD_BYTES), (re.compile(r"/base-model/?$"), 100 * MiB), (re.compile(r"/clash/models/?$"), 100 * MiB),
+                (re.compile(r"/commissioning/import/?$"), 5 * MiB), (re.compile(r"/performance/[^/]+/[^/]+/evidence/?$"), 10 * MiB), (re.compile(r"/admin/templates/?$"), 2 * MiB))
+
+
+def _route_limit(path: str) -> int | None:
+    return next((cap for rx, cap in _FILE_ROUTES if rx.search(path)), None)
 
 
 class UploadGuard:
@@ -32,11 +40,12 @@ class UploadGuard:
         self.app = app
 
     async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
-        if scope["type"] != "http" or scope["method"] != "POST" or not _UPLOAD_PATH.search(scope["path"]):
+        cap = _route_limit(scope["path"]) if scope["type"] == "http" and scope["method"] == "POST" else None
+        if cap is None:
             await self.app(scope, receive, send)
             return
         headers = {k.decode("latin-1").lower(): v.decode("latin-1") for k, v in scope["headers"]}
-        limit = MAX_UPLOAD_BYTES + BODY_MARGIN
+        limit = cap + BODY_MARGIN
         if not headers.get("authorization", "").lower().startswith("bearer "):
             await self._reply(send, 401, "unauthenticated", "a bearer token is required")
             return

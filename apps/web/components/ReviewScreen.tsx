@@ -1,4 +1,6 @@
 "use client";
+import { HelpTip } from "@/components/HelpTip";
+import { EmptyState } from "@/components/EmptyState";
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, api } from "@/lib/api";
 import type { Me, Package, ReviewLine, ShareLinkView, Worksheet } from "@/lib/types";
@@ -135,6 +137,7 @@ export function ReviewScreen({ revisionId }: { revisionId: string }) {
   return (
     <main>
       <h1>Review and sign-off: Rev {ws.revision.architect_rev}</h1>
+      <p><HelpTip topic="review" label="What does each decision do?" /></p>
       {me.independence_notice && (
         <p role="status" data-testid="independence-notice-live" style={{ background: "#fee2e2", color: "#7f1d1d", padding: 8, fontWeight: 700 }}>
           {me.independence_notice}: this firm lets one person hold more than one gate.
@@ -168,6 +171,7 @@ export function ReviewScreen({ revisionId }: { revisionId: string }) {
 
       <AgentPanel revisionId={revisionId} title="Flags and risks raised by agents" agents={[...REVIEW_AGENTS]} kinds={REVIEW_KINDS} />
 
+      {ws.results.length === 0 && <EmptyState title="No results to review." next="Run the rules at Gate 1 first; results appear here once a run exists." />}
       <table data-testid="review-table">
         <thead><tr><th>System</th><th>Rule / clause</th><th>Outcome</th><th>Class</th><th>Decision</th></tr></thead>
         <tbody>
@@ -187,6 +191,7 @@ export function ReviewScreen({ revisionId }: { revisionId: string }) {
       )}
       <section aria-label="Sign-off">
         <h2>Sign-off</h2>
+        <p><HelpTip topic="signoff" label="What is the registration number for?" /></p>
         {isChecker && !signed.has("gate2") && (
           <button type="button" onClick={() => act(async () => { await api.sign(revisionId, "gate2"); return "Gate 2 signed."; })}>
             Sign Gate 2 (checker)

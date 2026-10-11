@@ -7,6 +7,8 @@ contract matter, never assumed here). Spreadsheet cells we write that start like
 import io
 import math
 import re
+import unicodedata
+import zipfile
 from typing import Any
 from xml.sax.saxutils import escape
 
@@ -21,6 +23,7 @@ HEADER = ["System", "Terminal", "Space", "Design airflow (L/s)", "Measured airfl
 COL_MEASURED = 4
 MAX_IMPORT_BYTES = 5 * 1024 * 1024
 MAX_ROWS = 5000
+MAX_UNPACKED = 40 * 1024 * 1024
 CONTROL = re.compile("[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f]")
 BANNER = "COMMISSIONING SHEET: site readings are records, not compliance results"
 
@@ -33,9 +36,25 @@ def clean(v: Any) -> str:
     return CONTROL.sub("", str(v if v is not None else ""))
 
 
-def safe(v: Any) -> Any:
-    t = clean(v) if isinstance(v, str) else v
-    return "'" + t if isinstance(t, str) and t[:1] in ("=", "+", "-", "@", "\t", "\r") else t
+def norm(v: Any) -> str:
+    """One spelling of a tag or system on both sides of the round trip: control characters out, NFKC, trimmed."""
+    return unicodedata.normalize("NFKC", clean(v)).strip()
+
+
+def put_text(cell: Any, v: Any) -> None:
+    """Store text so a spreadsheet can never run it: a plain string cell with the quote prefix style, not a changed value."""
+    cell.value = clean(v) if isinstance(v, str) else v
+    if isinstance(cell.value, str):
+        cell.data_type = "s"
+        cell.quotePrefix = True
+
+
+def collisions(rows: list[dict[str, Any]]) -> list[str]:
+    seen: dict[tuple[str, str], int] = {}
+    for r in rows:
+        key = (norm(r["system"]), norm(r["terminal"]))
+        seen[key] = seen.get(key, 0) + 1
+    return [f"{s or '(no system)'} / {t}" for (s, t), n in sorted(seen.items()) if n > 1]
 
 
 def rows_of(terminals: list[dict[str, Any]], space_names: dict[str, str]) -> list[dict[str, Any]]:
@@ -62,8 +81,10 @@ def to_xlsx(rows: list[dict[str, Any]], revision_id: str) -> bytes:
         info.append([line])
     ws = wb.create_sheet(SHEET)
     ws.append(HEADER)
-    for r in rows:
-        ws.append([safe(r["system"]), safe(r["terminal"]), safe(r["space"]), r["design_ls"], None, None, None, None])
+    for n, r in enumerate(rows, start=2):
+        ws.append([None, None, None, r["design_ls"], None, None, None, None])
+        for col, key in ((1, "system"), (2, "terminal"), (3, "space")):
+            put_text(ws.cell(n, col), r[key])
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
@@ -110,50 +131,63 @@ def parse_import(data: bytes, rows: list[dict[str, Any]], tolerance_pct: float) 
     if not math.isfinite(tolerance_pct) or not 0 <= tolerance_pct <= 50:
         raise ImportRefused("the tolerance is a percentage between 0 and 50")
     try:
+        with zipfile.ZipFile(io.BytesIO(data)) as z:                               # a small file must not unpack to something huge
+            infos = z.infolist()
+            if len(infos) > 200 or sum(i.file_size for i in infos) > MAX_UNPACKED or any(i.file_size > 1000 * max(i.compress_size, 1) and i.file_size > 1_000_000 for i in infos):
+                raise ImportRefused("the workbook unpacks to far more than its size (refused)")
         wb = load_workbook(io.BytesIO(data), read_only=True, data_only=True)
         ws = wb[SHEET]
-        grid = list(ws.iter_rows(min_row=1, max_row=MAX_ROWS + 2, values_only=True))
+        grid = list(ws.iter_rows(min_row=1, max_row=MAX_ROWS + 2, max_col=len(HEADER), values_only=True))
+    except ImportRefused:
+        raise
     except Exception:  # noqa: BLE001 - any unreadable workbook is refused, not a crash
         raise ImportRefused("that is not a commissioning sheet from this app (no readable 'Terminals' sheet)") from None
     if not grid or [clean(c) for c in grid[0][: len(HEADER)]] != HEADER:
         raise ImportRefused("the header row was changed: use the sheet as downloaded")
     if len(grid) > MAX_ROWS + 1:
         raise ImportRefused(f"more than {MAX_ROWS} rows")
-    design = {r["terminal"]: r for r in rows}
-    seen: set[str] = set()
+    if collisions(rows):
+        raise ImportRefused("terminal tags collide within a system: " + ", ".join(collisions(rows)[:5]))
+    design = {(norm(r["system"]), norm(r["terminal"])): r for r in rows}
+    seen: set[tuple[str, str]] = set()
     out: list[dict[str, Any]] = []
     for g in grid[1:]:
         if not g or all(c is None or c == "" for c in g):
             continue
-        tag = clean(g[1]).strip()
-        d = design.get(tag)
-        base = {"terminal": tag, "system": clean(g[0]), "design_ls": None if d is None else d["design_ls"], "measured_ls": None, "variance_pct": None,
+        tag, system = norm(g[1]), norm(g[0])
+        key = (system, tag)
+        d = design.get(key)
+        base = {"terminal": tag, "system": system, "design_ls": None if d is None else d["design_ls"], "measured_ls": None, "variance_pct": None,
                 "tolerance_pct": tolerance_pct, "measured_on": clean(g[5])[:40], "measured_by": clean(g[6])[:80], "comment": clean(g[7])[:300]}
         if d is None:
             out.append({**base, "flag": "NOT_IN_DESIGN"})
             continue
-        if tag in seen:
+        if key in seen:
             out.append({**base, "flag": "DUPLICATE"})
             continue
-        seen.add(tag)
+        seen.add(key)
         try:
             sheet_design = float(g[3])
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             sheet_design = math.nan
-        if not math.isclose(sheet_design, d["design_ls"], rel_tol=1e-9, abs_tol=1e-9) or clean(g[0]) != d["system"]:
+        if not math.isclose(sheet_design, d["design_ls"], rel_tol=1e-9, abs_tol=1e-9):
             out.append({**base, "flag": "DESIGN_CHANGED"})
             continue
         m = g[COL_MEASURED]
         if m is None or m == "":
             out.append({**base, "flag": "NOT_MEASURED"})
             continue
-        if isinstance(m, bool) or not isinstance(m, int | float) or not math.isfinite(float(m)) or float(m) < 0:
+        try:
+            mv = float(m) if isinstance(m, int | float) and not isinstance(m, bool) else math.nan
+        except OverflowError:
+            mv = math.nan
+        if not math.isfinite(mv) or mv < 0:
             out.append({**base, "flag": "INVALID"})
             continue
-        var = (float(m) - d["design_ls"]) / d["design_ls"] * 100.0 if d["design_ls"] else math.nan
+        var = (mv - d["design_ls"]) / d["design_ls"] * 100.0 if d["design_ls"] else math.nan
         flag = "INVALID" if not math.isfinite(var) else ("WITHIN_TOLERANCE" if abs(var) <= tolerance_pct else "OUTSIDE_TOLERANCE")
-        out.append({**base, "measured_ls": float(m), "variance_pct": None if not math.isfinite(var) else round(var, 2), "flag": flag})
-    for tag in sorted(set(design) - seen - {r["terminal"] for r in out}):
-        out.append({"terminal": tag, "system": design[tag]["system"], "design_ls": design[tag]["design_ls"], "measured_ls": None, "variance_pct": None, "tolerance_pct": tolerance_pct,
+        out.append({**base, "measured_ls": mv, "variance_pct": None if not math.isfinite(var) else round(var, 2), "flag": flag})
+    for key in sorted(set(design) - seen):
+        out.append({"terminal": key[1], "system": design[key]["system"], "design_ls": design[key]["design_ls"], "measured_ls": None, "variance_pct": None, "tolerance_pct": tolerance_pct,
                     "measured_on": "", "measured_by": "", "comment": "", "flag": "MISSING_FROM_SHEET"})
     return out

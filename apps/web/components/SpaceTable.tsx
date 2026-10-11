@@ -1,4 +1,5 @@
 "use client";
+import { EmptyState } from "@/components/EmptyState";
 import { useState } from "react";
 import { rowState } from "@/lib/gate1";
 import type { SpaceInput, SpaceRow } from "@/lib/types";
@@ -39,6 +40,7 @@ export function SpaceTable({
   return (
     <section aria-label="Spaces">
       <h2>Spaces</h2>
+      {spaces.length === 0 && <EmptyState title="No spaces yet." next="Upload an architect model above, or add a space by manual trace, then confirm each one." />}
       <table>
         <thead>
           <tr>
@@ -92,9 +94,9 @@ export function ManualTraceForm({ onAdd }: { onAdd: (s: SpaceInput) => Promise<v
   return (
     <section aria-label="Manual trace">
       <h3>Manual trace (ingest health is low)</h3>
-      <input placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />{" "}
-      <input placeholder="Area (m2)" type="number" step="any" value={area} onChange={(e) => setArea(e.target.value)} />{" "}
-      <input placeholder="Storey" value={storey} onChange={(e) => setStorey(e.target.value)} />{" "}
+      <input aria-label="Name" placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />{" "}
+      <input aria-label="Area (m2)" placeholder="Area (m2)" type="number" step="any" value={area} onChange={(e) => setArea(e.target.value)} />{" "}
+      <input aria-label="Storey" placeholder="Storey" value={storey} onChange={(e) => setStorey(e.target.value)} />{" "}
       <button type="button" onClick={submit}>Add manual trace space</button>
       {error && <p role="alert" style={{ color: "#b91c1c" }}>{error}</p>}
     </section>

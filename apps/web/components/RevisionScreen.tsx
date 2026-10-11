@@ -1,4 +1,5 @@
 "use client";
+import { EmptyState } from "@/components/EmptyState";
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, api } from "@/lib/api";
 import type { Lineage, RevisionDiff, RevisionResults, SpaceDiffItem } from "@/lib/types";
@@ -115,7 +116,7 @@ export function RevisionScreen({ projectId, revisionId }: { projectId: string; r
 
       <section aria-label="Results">
         <h2>Results {results.source === "carried_from_parent" ? "(carried from the previous revision; not re-run yet)" : ""}</h2>
-        {results.results.length === 0 ? <p>No results yet.</p> : (
+        {results.results.length === 0 ? <EmptyState title="No results yet." next="Confirm the inputs and run the rules from Gate 1." href={gate1} linkText="Open Gate 1" /> : (
           <table>
             <thead><tr><th>Subject</th><th>Rule</th><th>Outcome</th><th></th><th></th></tr></thead>
             <tbody>{results.results.map((r) => (

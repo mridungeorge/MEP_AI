@@ -7,8 +7,9 @@ import { JoinFirm } from "./JoinFirm";
 import { useSession } from "@/lib/session";
 import { supabase } from "@/lib/supabase";
 import type { Me } from "@/lib/types";
+import { FeedbackButton } from "./FeedbackButton";
 
-const PUBLIC_PATHS = ["/login", "/terms", "/privacy"];
+const PUBLIC_PATHS = ["/login", "/terms", "/privacy", "/welcome", "/pricing"];
 
 /** Header with who is signed in and their role (a display: the server enforces every permission itself). */
 function Header({ email }: { email: string | undefined }) {
@@ -23,10 +24,12 @@ function Header({ email }: { email: string | undefined }) {
       <a href="/projects">Projects</a>
       <a href="/notifications">Notifications</a>
       <a href="/standards">Standards</a>
+      <a href="/help">Help</a>
       {me?.is_admin && <a href="/admin">Admin</a>}
       {me?.is_admin && <a href="/billing">Billing</a>}
       {me?.platform_admin && <a href="/platform">Registrations</a>}
       <span style={{ flex: 1 }} />
+      {me && <FeedbackButton />}
       <span data-testid="user-email">{email}</span>
       {me && me.independence_notice && <strong style={{ color: "#7f1d1d" }}>{me.independence_notice}</strong>}
       {me && (me.available_roles?.length ?? 0) > 1 ? (

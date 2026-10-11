@@ -10,6 +10,8 @@ from dataclasses import dataclass, field
 import psycopg
 import pytest
 
+os.environ.setdefault("MEP_RATELIMIT", "off")          # the attack tests make many requests as one client; the limiter has its own tests
+
 DB_URL = os.environ.get("MEP_TEST_DB_URL", "postgresql://postgres:postgres@127.0.0.1:54322/postgres")
 ROLES = ("designer", "checker", "approver")
 GATE_FOR = {"designer": "gate1", "checker": "gate2", "approver": "gate3"}

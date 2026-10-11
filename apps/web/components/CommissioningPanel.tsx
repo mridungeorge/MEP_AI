@@ -1,4 +1,5 @@
 "use client";
+import { HelpTip } from "@/components/HelpTip";
 import { useState } from "react";
 import { ApiError, api } from "@/lib/api";
 import type { CommissioningImport } from "@/lib/types";
@@ -16,6 +17,7 @@ export function CommissioningPanel({ revisionId }: { revisionId: string }) {
   return (
     <section aria-label="Commissioning">
       <h2>Commissioning sheets</h2>
+      <p><HelpTip topic="commissioning" label="About commissioning" /></p>
       <p>One row per terminal with its design airflow from the signed revision. Measured columns are blank for the technician.</p>
       <button type="button" onClick={() => save("xlsx")}>Download XLSX</button>{" "}<button type="button" onClick={() => save("pdf")}>Download PDF</button>
       <h3>Import measured values</h3>

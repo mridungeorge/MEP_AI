@@ -1,0 +1,45 @@
+name: security
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "17 3 * * 1"   # weekly, so a newly published advisory turns this red without a push
+jobs:
+  python-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          python-version: "3.12"
+      - name: export the locked requirements
+        run: uv export --locked --no-hashes --all-extras --no-emit-project -o requirements.audit.txt
+      - name: pip-audit against the lock (no resolution, no install)
+        run: uvx pip-audit -r requirements.audit.txt --no-deps --disable-pip
+  web-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm audit --audit-level high
+  image-scan:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: mep-api, dockerfile: deploy/api/Dockerfile }
+          - { name: mep-skill-worker, dockerfile: deploy/worker/Dockerfile }
+          - { name: mep-web, dockerfile: deploy/web/Dockerfile }
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f ${{ matrix.dockerfile }} -t ${{ matrix.name }}:ci .
+      # Every entry in .trivyignore must be explained in docs/allowlist-audit.md (it starts empty).
+      - uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ matrix.name }}:ci
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          ignore-unfixed: true
+          trivyignores: .trivyignore

@@ -1,4 +1,6 @@
 "use client";
+import { HelpTip } from "@/components/HelpTip";
+import { EmptyState } from "@/components/EmptyState";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ApiError, api } from "@/lib/api";
 import { prune, setPath } from "@/lib/specpath";
@@ -89,6 +91,7 @@ export function DraftingScreen({ projectId, revisionId }: { projectId: string; r
   return (
     <main>
       <h1>Drafting</h1>
+      <p><HelpTip topic="drafting" label="When are files released?" /></p>
       <p><a href={`/projects/${projectId}/revisions/${revisionId}/gate1`}>Gate 1</a> | <a href={`/projects/${projectId}/revisions/${revisionId}/diff`}>Diff &amp; results</a></p>
       <label>Skill{" "}
         <select aria-label="Skill" value={name} onChange={(e) => setName(e.target.value)}>
@@ -204,7 +207,7 @@ export function DraftingScreen({ projectId, revisionId }: { projectId: string; r
 
       <section aria-label="Earlier runs">
         <h2>Earlier runs</h2>
-        {runs.length === 0 ? <p>None yet.</p> : (
+        {runs.length === 0 ? <EmptyState title="No skill runs yet." next="Confirm a card above and build it; each run is listed here, released or not." /> : (
           <table data-testid="runs">
             <thead><tr><th>When</th><th>Skill</th><th>Outcome</th><th>Files</th></tr></thead>
             <tbody>{runs.map((r) => (

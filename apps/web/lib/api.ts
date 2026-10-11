@@ -2,7 +2,7 @@
 import { supabase } from "./supabase";
 import type {
   ApiErrorBody, BuildingPart, ConfirmResponse, Gate1State, ImportResponse, RowRef,
-  AdminOverview, BaseModelRow, StandardSlot, CommissioningImport, NswDeclaration, BillingOverview, SizingView, ClashView, Quantities, ServiceItem, VoidView, PerfOverview, FixesResponse, NewProject, NotificationPrefs, ProjectHistory, ProjectRow, PendingRegistration, MyInvitation, AgentNote, AgentReply, VisionJob, CardPreview, EvidenceResponse, Lineage, Me, ShortcutResult, SkillCard, SkillRunRow, SkillRunSummary, SkillSummary, Package, ShareLinkView, Worksheet, RevisionDiff, RevisionResults, RevisionSummary, RunRulesResponse, SpaceInput, SpaceRow, SystemInputInput, SystemInputRow, UploadResponse,
+  AdminOverview, BaseModelRow, FeedbackRow, PricingView, StandardSlot, CommissioningImport, NswDeclaration, BillingOverview, SizingView, ClashView, Quantities, ServiceItem, VoidView, PerfOverview, FixesResponse, NewProject, NotificationPrefs, ProjectHistory, ProjectRow, PendingRegistration, MyInvitation, AgentNote, AgentReply, VisionJob, CardPreview, EvidenceResponse, Lineage, Me, ShortcutResult, SkillCard, SkillRunRow, SkillRunSummary, SkillSummary, Package, ShareLinkView, Worksheet, RevisionDiff, RevisionResults, RevisionSummary, RunRulesResponse, SpaceInput, SpaceRow, SystemInputInput, SystemInputRow, UploadResponse,
 } from "./types";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -139,6 +139,9 @@ export const api = {
     return apiFetch<CommissioningImport>(`${rev(r)}/commissioning/import`, { method: "POST", body: fd });
   },
   standards: () => apiFetch<{ slots: StandardSlot[]; note: string }>("/standards"),
+  pricing: () => apiFetch<PricingView>("/public/pricing"),
+  sendFeedback: (kind: string, page: string, message: string) => apiFetch<{ thanks: boolean }>("/feedback", json("POST", { kind, page, message })),
+  adminFeedback: () => apiFetch<{ feedback: FeedbackRow[] }>("/admin/feedback"),
   shareLinks: (r: string) => apiFetch<ShareLinkView[]>(`${rev(r)}/share-links`),
   createShare: (r: string, days: number, label?: string) =>
     apiFetch<{ token: string; expires_at: string }>(`${rev(r)}/share-links`, json("POST", { days, label: label || null })),

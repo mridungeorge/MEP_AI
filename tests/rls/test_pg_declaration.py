@@ -31,7 +31,8 @@ def package(**over):
 
 
 def test_applicability_is_nsw_class_2_3_9c_signed_and_verified():
-    assert decl.build(package(), [])["applies_to"] == {"state": "NSW", "classes": ["2"]}
+    got = decl.build(package(), [])["applies_to"]
+    assert (got["state"], got["classes"]) == ("NSW", ["2"]) and got["basis"].startswith("TODO_FROM_SOURCE")
     assert decl.build(package(project={**package()["project"], "building_parts": [{"class": "9C", "storeys": 1, "area_m2": 5}, {"class": "5", "storeys": 1, "area_m2": 5}]}), [])["applies_to"]["classes"] == ["9c"]
     for bad, code in ((package(project={**package()["project"], "state": "VIC"}), "not_nsw"),
                       (package(project={**package()["project"], "building_parts": [{"class": "5", "storeys": 1, "area_m2": 5}]}), "class_not_covered"),
@@ -105,3 +106,19 @@ def test_standards_slots_through_the_api_say_licence_required(admin, client):
     per = client.get(f"/revisions/{f['revision']}/standards", headers=d).json()["slots"]
     assert all(s["results"] == [] and s["evaluated"] is False for s in per)
     assert client.get(f"/revisions/{h.seed(admin)['revision']}/standards", headers=d).status_code == 404
+
+
+def test_user_typed_text_is_labelled_and_the_checks_look_at_what_the_app_wrote():
+    d = decl.build(package(), [{"subject": "ahu-1", "rule_id": "R-2", "pathway": "PERFORMANCE_SOLUTION", "note": "I, J Smith, declare the design complies", "evidence": []}])
+    data = decl.to_pdf(d)
+    assert decl.validate_pdf(data, d)["passed"]                                 # their words are theirs; the app's own text has no declaration
+    text = " ".join("\n".join(p.extract_text() or "" for p in PdfReader(io.BytesIO(data)).pages).split())
+    assert "Entered by your team, not a statement of this app" in text and "not the practitioner's NSW registration" in text
+    pages = [" ".join((p.extract_text() or "").split()) for p in PdfReader(io.BytesIO(data)).pages]
+    assert all("DRAFT RULES: NOT ENGINEER-APPROVED" in p for p in pages) and all(BANNER in p for p in pages)
+    assert decl.DECLARATION_WORDS.search("We hereby certify") and decl.DECLARATION_WORDS.search("I declare that") and not decl.DECLARATION_WORDS.search("Result summary: PASS 3")
+    assert d["applies_to"]["basis"].startswith("TODO_FROM_SOURCE")
+    many = copy.deepcopy(package())
+    many["signoffs"] = [{**s, "registration_no": None} for s in many["signoffs"]]
+    d2 = decl.build(many, [])
+    assert decl.validate_pdf(decl.to_pdf(d2), d2)["passed"]

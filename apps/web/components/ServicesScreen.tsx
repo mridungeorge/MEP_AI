@@ -1,4 +1,6 @@
 "use client";
+import { HelpTip } from "@/components/HelpTip";
+import { EmptyState } from "@/components/EmptyState";
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, api, getToken } from "@/lib/api";
 import type { ClashView, Quantities, ServiceItem, SizingView, VoidView } from "@/lib/types";
@@ -36,11 +38,12 @@ export function ServicesScreen({ revisionId }: { revisionId: string }) {
   return (
     <main>
       <h1>Services, ceiling void and clashes</h1>
-      <p role="note">Warnings only. Nothing on this page is a compliance result.</p>
+      <p role="note">Warnings only. Nothing on this page is a compliance result. <HelpTip topic="services" label="About this page" /></p>
       {message && <p role="alert">{message}</p>}
 
       <section aria-label="Schedule">
         <h2>Proposed ducts</h2>
+        {items.length === 0 && <EmptyState title="No ducts yet." next="Add a duct below; sizing, quantities and clash checks use the ducts listed here." />}
         <table><thead><tr><th>Tag</th><th>Kind</th><th>Size (mm)</th><th>Length (m)</th><th>Insulation (mm)</th><th /></tr></thead>
           <tbody>{items.map((i) => (
             <tr key={i.id}><td>{i.tag}</td><td>{i.kind}</td>
@@ -56,6 +59,7 @@ export function ServicesScreen({ revisionId }: { revisionId: string }) {
 
       <section aria-label="Sizing">
         <h2>Duct sizing (equal friction)</h2>
+        {items.length === 0 && <EmptyState title="Nothing to size." next="Sizing appears once at least one duct is added." />}
         <p>{sizing?.note}</p>
         <table><thead><tr><th>Duct</th><th>Airflow (L/s)</th><th>Recommended</th><th>Velocity (m/s)</th><th>Velocity limit</th></tr></thead>
           <tbody>{sizing?.ducts.map((d) => (

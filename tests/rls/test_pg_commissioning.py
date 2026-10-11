@@ -37,8 +37,9 @@ def test_rows_one_per_unit_without_airflow_skipped_and_formulas_neutralised():
     rows = cx.rows_of(TERMINALS, {})
     assert [r["terminal"] for r in rows] == ["=EVIL()", "T1-1", "T1-2"] or [r["terminal"] for r in rows] == ["T1-1", "T1-2", "=EVIL()"]
     wb = load_workbook(io.BytesIO(cx.to_xlsx(rows, "rev-1")))
-    cells = [str(c.value) for row in wb[cx.SHEET].iter_rows(min_row=2) for c in row if c.value is not None]
-    assert not any(v.startswith(("=", "+", "@")) for v in cells) and any("EVIL" in v for v in cells)
+    cells = [c for row in wb[cx.SHEET].iter_rows(min_row=2) for c in row if c.value is not None]
+    assert all(c.data_type != "f" for c in cells)                                               # no cell is a formula
+    assert any(str(c.value) == "=EVIL()" and c.data_type == "s" and c.quotePrefix for c in cells)     # the text is kept, stored as text with the quote prefix
     assert wb[cx.SHEET]["E2"].value is None and wb[cx.SHEET]["H2"].value is None                       # blank measured columns
     pdf = cx.to_pdf(rows, "rev-1")
     text = " ".join("\n".join(p.extract_text() or "" for p in PdfReader(io.BytesIO(pdf)).pages).split())
@@ -125,3 +126,35 @@ def test_sheets_need_a_signed_revision_and_readings_are_recorded_not_resulted(ad
     assert admin.execute("select count(*) from rule_result where revision_id = %s and rule_id like 'COMM%%'", (rev,)).fetchone()[0] == 0
     other = h.seed(admin)
     assert client.get(f"/revisions/{rev}/commissioning/readings", headers=h.auth(other["designer"])).status_code == 404
+
+
+def test_round_trip_survives_formula_like_tags_and_unicode_and_hostile_files():
+    rows = cx.rows_of([{"tag": "+AC2", "system_tag": "=SA", "airflow_ls": 100, "quantity": 1, "space_id": None},
+                       {"tag": "T1", "system_tag": "SA", "airflow_ls": 50, "quantity": 2, "space_id": None},
+                       {"tag": "T1-1", "system_tag": "SB", "airflow_ls": 70, "quantity": 1, "space_id": None}], {})
+    sheet = filled(rows, {"+AC2": 99, "T1-2": 51, "T1-1": 70})
+    got = {(r["system"], r["terminal"]): r["flag"] for r in cx.parse_import(sheet, rows, 5)}
+    assert got[("=SA", "+AC2")] == "WITHIN_TOLERANCE" and got[("SA", "T1-2")] == "WITHIN_TOLERANCE" and got[("SB", "T1-1")] == "WITHIN_TOLERANCE"
+    assert all(f != "DESIGN_CHANGED" for f in got.values())
+    clash = [{"tag": "T1", "system_tag": "SA", "airflow_ls": 5, "quantity": 2, "space_id": None}, {"tag": "T1-1", "system_tag": "SA", "airflow_ls": 5, "quantity": 1, "space_id": None}]
+    assert cx.collisions(cx.rows_of(clash, {})) == ["SA / T1-1"]
+    with pytest.raises(cx.ImportRefused):
+        cx.parse_import(sheet, cx.rows_of(clash, {}), 5)
+    rows2 = cx.rows_of([TERMINALS[0]], {})
+    plain = filled(rows2, {"T1-1": 205, "T1-2": 200})
+    import zipfile as zf
+    src, out = zf.ZipFile(io.BytesIO(plain)), io.BytesIO()
+    with zf.ZipFile(out, "w", zf.ZIP_DEFLATED) as z:
+        for item in src.infolist():
+            data = src.read(item.filename)
+            if item.filename.startswith("xl/worksheets/"):
+                data = data.replace(b"<v>205</v>", b"<v>1" + b"0" * 400 + b"</v>")
+            z.writestr(item, data)
+    huge = out.getvalue()
+    assert {r["terminal"]: r["flag"] for r in cx.parse_import(huge, rows2, 5)}["T1-1"] == "INVALID"
+    import zipfile
+    bomb = io.BytesIO()
+    with zipfile.ZipFile(bomb, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("xl/workbook.xml", b"a" * 60_000_000)
+    with pytest.raises(cx.ImportRefused):
+        cx.parse_import(bomb.getvalue(), rows2, 5)
